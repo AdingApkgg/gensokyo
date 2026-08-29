@@ -1,0 +1,20 @@
+{
+  "name": "@gensokyo/shared",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@gensokyo/tsconfig": "workspace:*",
+    "typescript": "^7.0.2"
+  }
+}

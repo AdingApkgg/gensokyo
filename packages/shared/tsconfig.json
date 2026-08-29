@@ -1,0 +1,1 @@
+{ "extends": "@gensokyo/tsconfig/base.json", "include": ["src"] }
