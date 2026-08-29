@@ -18,5 +18,21 @@
   "action_upload": "Upload",
   "action_download": "Download",
   "action_search": "Search",
-  "home_api_status": "api status"
+  "home_api_status": "api status",
+  "auth_login": "Log in",
+  "auth_register": "Sign up",
+  "auth_email": "Email",
+  "auth_password": "Password",
+  "auth_name": "Display name",
+  "auth_no_account": "No account? Sign up",
+  "auth_have_account": "Have an account? Log in",
+  "auth_error_generic": "Something went wrong. Check your input and try again.",
+  "auth_logout": "Log out",
+  "nav_spellcard": "Spell Card",
+  "nav_music": "Music",
+  "footer_disclaimer": "A Touhou Project fan platform, unaffiliated with Team Shanghai Alice. Fan works follow the official derivative-work guidelines.",
+  "home_tagline": "Resource & data infrastructure for Touhou fans",
+  "home_enter": "Enter",
+  "wip_title": "Under construction",
+  "wip_desc": "This section is being built. Stay tuned."
 }

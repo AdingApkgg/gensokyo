@@ -18,5 +18,21 @@
   "action_upload": "上传资源",
   "action_download": "下载",
   "action_search": "检索",
-  "home_api_status": "api 状态"
+  "home_api_status": "api 状态",
+  "auth_login": "登录",
+  "auth_register": "注册",
+  "auth_email": "邮箱",
+  "auth_password": "密码",
+  "auth_name": "昵称",
+  "auth_no_account": "还没有账号？去注册",
+  "auth_have_account": "已有账号？去登录",
+  "auth_error_generic": "操作失败，请检查输入后重试",
+  "auth_logout": "登出",
+  "nav_spellcard": "符卡",
+  "nav_music": "音乐",
+  "footer_disclaimer": "本站为东方Project同人平台，与上海爱丽丝幻乐团无关；二次创作遵循官方二创指引。",
+  "home_tagline": "东方众的资源与数据基础设施",
+  "home_enter": "进入",
+  "wip_title": "建设中",
+  "wip_desc": "这个板块还在搭建，敬请期待。"
 }

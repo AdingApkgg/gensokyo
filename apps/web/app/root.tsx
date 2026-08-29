@@ -1,3 +1,4 @@
+import { createClient } from '@gensokyo/api-client'
 import {
   isRouteErrorResponse,
   Links,
@@ -7,8 +8,9 @@ import {
   Scripts,
   ScrollRestoration,
 } from 'react-router'
-
 import type { Route } from './+types/root'
+import { SiteFooter } from './components/site-footer'
+import { SiteHeader } from './components/site-header'
 import { getLocale } from './paraglide/runtime'
 import { paraglideMiddleware } from './paraglide/server'
 import './app.css'
@@ -64,8 +66,29 @@ export function Layout({ children }: { children: React.ReactNode }) {
   )
 }
 
-export default function App() {
-  return <Outlet />
+export async function loader({ request }: Route.LoaderArgs) {
+  const client = createClient(process.env.API_URL ?? 'http://localhost:3001', {
+    headers: { cookie: request.headers.get('cookie') ?? '' },
+  })
+  try {
+    const res = await client.api.me.$get()
+    const { user } = await res.json()
+    return { user }
+  } catch {
+    return { user: null }
+  }
+}
+
+export default function App({ loaderData }: Route.ComponentProps) {
+  return (
+    <div className="flex min-h-screen flex-col">
+      <SiteHeader user={loaderData.user} />
+      <div className="flex-1">
+        <Outlet />
+      </div>
+      <SiteFooter />
+    </div>
+  )
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {

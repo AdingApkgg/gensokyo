@@ -379,8 +379,10 @@ export default function UiShowcase() {
           </CardContent>
           <CardFooter className="gap-2">
             <Dialog>
-              <DialogTrigger render={<Button />}>
-                <Upload /> 提交
+              <DialogTrigger asChild>
+                <Button>
+                  <Upload /> 提交
+                </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>

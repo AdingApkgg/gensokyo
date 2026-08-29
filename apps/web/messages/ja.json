@@ -18,5 +18,21 @@
   "action_upload": "アップロード",
   "action_download": "ダウンロード",
   "action_search": "検索",
-  "home_api_status": "api ステータス"
+  "home_api_status": "api ステータス",
+  "auth_login": "ログイン",
+  "auth_register": "登録",
+  "auth_email": "メールアドレス",
+  "auth_password": "パスワード",
+  "auth_name": "ニックネーム",
+  "auth_no_account": "アカウントがない？登録へ",
+  "auth_have_account": "アカウントをお持ち？ログインへ",
+  "auth_error_generic": "操作に失敗しました。入力をご確認ください",
+  "auth_logout": "ログアウト",
+  "nav_spellcard": "スペルカード",
+  "nav_music": "音楽",
+  "footer_disclaimer": "当サイトは東方Projectの二次創作プラットフォームであり、上海アリス幻樂団とは関係ありません。二次創作は公式ガイドラインに従います。",
+  "home_tagline": "東方ファンのためのリソース＆データ基盤",
+  "home_enter": "入る",
+  "wip_title": "建設中",
+  "wip_desc": "このセクションは準備中です。お楽しみに。"
 }
