@@ -64,7 +64,7 @@ html.dark {
   --card-foreground: oklch(0.26 0.018 45);
   --popover: oklch(0.99 0.004 84);
   --popover-foreground: oklch(0.26 0.018 45);
-  --primary: oklch(0.54 0.185 27);
+  --primary: oklch(0.57 0.205 30);
   --primary-foreground: oklch(0.985 0.006 84);
   --secondary: oklch(0.93 0.022 25);
   --secondary-foreground: oklch(0.36 0.06 27);
@@ -75,21 +75,21 @@ html.dark {
   --destructive: oklch(0.5 0.19 25);
   --border: oklch(0.89 0.012 70);
   --input: oklch(0.89 0.012 70);
-  --ring: oklch(0.54 0.185 27);
-  --chart-1: oklch(0.54 0.185 27);
+  --ring: oklch(0.57 0.205 30);
+  --chart-1: oklch(0.57 0.205 30);
   --chart-2: oklch(0.74 0.12 88);
   --chart-3: oklch(0.65 0.1 230);
   --chart-4: oklch(0.55 0.14 300);
   --chart-5: oklch(0.6 0.1 150);
-  --radius: 0.5rem;
+  --radius: 0.375rem;
   --sidebar: oklch(0.96 0.008 84);
   --sidebar-foreground: oklch(0.26 0.018 45);
-  --sidebar-primary: oklch(0.54 0.185 27);
+  --sidebar-primary: oklch(0.57 0.205 30);
   --sidebar-primary-foreground: oklch(0.985 0.006 84);
   --sidebar-accent: oklch(0.92 0.045 92);
   --sidebar-accent-foreground: oklch(0.4 0.07 70);
   --sidebar-border: oklch(0.89 0.012 70);
-  --sidebar-ring: oklch(0.54 0.185 27);
+  --sidebar-ring: oklch(0.57 0.205 30);
 }
 
 /* 深夜幻想乡 —— 蓝墨夜 · 灯朱 · 金 */
@@ -100,7 +100,7 @@ html.dark {
   --card-foreground: oklch(0.92 0.012 84);
   --popover: oklch(0.21 0.017 285);
   --popover-foreground: oklch(0.92 0.012 84);
-  --primary: oklch(0.63 0.17 25);
+  --primary: oklch(0.65 0.19 30);
   --primary-foreground: oklch(0.985 0.006 84);
   --secondary: oklch(0.27 0.02 285);
   --secondary-foreground: oklch(0.92 0.012 84);
@@ -111,20 +111,20 @@ html.dark {
   --destructive: oklch(0.68 0.19 23);
   --border: oklch(0.95 0.01 84 / 10%);
   --input: oklch(0.95 0.01 84 / 14%);
-  --ring: oklch(0.63 0.17 25);
-  --chart-1: oklch(0.63 0.17 25);
+  --ring: oklch(0.65 0.19 30);
+  --chart-1: oklch(0.65 0.19 30);
   --chart-2: oklch(0.8 0.13 88);
   --chart-3: oklch(0.7 0.11 230);
   --chart-4: oklch(0.62 0.15 300);
   --chart-5: oklch(0.68 0.11 150);
   --sidebar: oklch(0.21 0.017 285);
   --sidebar-foreground: oklch(0.92 0.012 84);
-  --sidebar-primary: oklch(0.63 0.17 25);
+  --sidebar-primary: oklch(0.65 0.19 30);
   --sidebar-primary-foreground: oklch(0.985 0.006 84);
   --sidebar-accent: oklch(0.29 0.032 88);
   --sidebar-accent-foreground: oklch(0.85 0.09 92);
   --sidebar-border: oklch(0.95 0.01 84 / 10%);
-  --sidebar-ring: oklch(0.63 0.17 25);
+  --sidebar-ring: oklch(0.65 0.19 30);
 }
 
 @layer base {
