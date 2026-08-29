@@ -56,7 +56,8 @@ gensokyo/
 │  ├─ Caddyfile
 │  └─ .env.production.example
 ├─ docs/
-├─ compose.yml              # 开发依赖：postgres / redis / meilisearch
+├─ scripts/dev-services.sh  # 开发依赖（原生进程）：postgres / redis / meilisearch
+├─ deploy/compose.yml       # 生产栈（容器）
 ├─ turbo.json
 ├─ biome.json
 └─ package.json             # workspaces: apps/*, packages/*（legacy 不入 workspace）
@@ -113,7 +114,11 @@ meilisearch 不发布端口
 
 ## 开发环境
 
-`compose.yml` 只起 postgres/redis/meili；web 与 api 裸跑 `bun dev`（热更新），Vite 代理 `/api` → api 端口，与生产 Caddy 行为同构。
+**依赖服务跑原生进程，不用容器**（2026-08-30 决定）：`bun run services` → `scripts/dev-services.sh`，幂等地拉起 postgres / redis / meilisearch。web 与 api 同样裸跑 `bun dev`（热更新），Vite 代理 `/api` → api 端口，与生产 Caddy 行为同构。
+
+隔离策略：postgres 与 redis 复用 brew 的共享实例，gensokyo 只占独立的库（DB `gensokyo` @5432、redis `db1`），脚本只启动、从不停止它们；Meilisearch 跑专属实例（`~/.local/share/gensokyo/meili` @57700），因为它的数据库格式与引擎版本强绑定，与其他项目共用必然撞版本。
+
+**为什么 dev 不用容器**：Mac 上 Docker Desktop 又重又需登录（本项目已被它阻塞过一次），而 web/api 本就原生跑（容器里 HMR 会退化）；争议范围只剩三个后台服务，原生跑零开销、零依赖。生产仍是容器（`deploy/compose.yml`），那条决策不变。
 
 ## 里程碑
 

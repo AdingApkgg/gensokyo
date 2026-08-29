@@ -9,6 +9,9 @@
   ],
   "scripts": {
     "dev": "turbo run dev",
+    "services": "./scripts/dev-services.sh up",
+    "services:status": "./scripts/dev-services.sh status",
+    "services:down": "./scripts/dev-services.sh down",
     "build": "turbo run build",
     "check": "biome check .",
     "check:fix": "biome check --write .",

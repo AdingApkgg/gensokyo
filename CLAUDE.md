@@ -5,10 +5,10 @@
 - 运行时 Bun；monorepo：bun workspaces + turbo；lint/format 用 Biome（`bun run check:fix`）
 - 类型主轴：packages/shared 的 zod schema → api 校验 → AppType/hc → web
 - api 路由一律挂 `.basePath('/api')`，按模块链式 `.route()`（保 RPC 类型推导）
-- dev：`docker compose up -d` 起依赖（pg 55432 / redis 56379 / meili 57700），`bun run dev` 起应用（web 3000 / api 3001）
-- **本机当前实际配置**（Docker Desktop 未登录不可用）：postgres 用 brew `postgresql@18`（端口 5432，`.env` 已指向它）、redis 用 brew（6379）、Meilisearch 跑独立实例避开与其他项目的版本冲突：
-  `MEILI_MASTER_KEY=dev_master_key /opt/homebrew/opt/meilisearch/bin/meilisearch --db-path ~/.local/share/gensokyo/meili --http-addr 127.0.0.1:57700 &`
-- 镜像固定：有状态服务**绝不用 `:latest`**；postgres/redis 固定大版本，Meilisearch 固定次版本（跨次版本需迁移 DB）
+- **dev 依赖跑原生进程，不用容器**：`bun run services`（幂等，另有 `services:status` / `services:down`），然后 `bun run dev` 起应用（web 3000 / api 3001）
+  - postgres 与 redis 用 brew 的共享实例，gensokyo 只占独立的库（DB `gensokyo` @5432、redis `db1`）；脚本只启动、从不停止它们（其他项目在用）
+  - Meilisearch 跑 gensokyo 专属实例（`~/.local/share/gensokyo/meili` @57700）——它的数据库格式与引擎版本强绑定，共用必撞版本
+- 生产才用容器：`deploy/compose.yml`。有状态服务**绝不用 `:latest`**；postgres/redis 固定大版本，Meilisearch 固定次版本（跨次版本需迁移 DB）
 - i18n：Paraglide JS，消息在 `apps/web/messages/{zh,ja,en}.json`，代码里一律 `m.key()`，不写裸字符串；zh 无 URL 前缀，ja/en 走 `/ja` `/en`；路由用 `localizeHref()`
 - UI：shadcn `radix-nova`（Radix 底座，组合用 `asChild` 而非 `render`）；主题 token 在 `apps/web/app/app.css`（白玉楼 / 深夜幻想乡）
 - auth：better-auth 挂 `/api/auth/*`；SSR 取会话要手动转发 cookie（见 root loader 的 `createClient(url, { headers: { cookie } })`）；浏览器端 authClient 的 baseURL 必须在 window 存在时才拼 origin
