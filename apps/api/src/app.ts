@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { auth } from './auth'
 import { type AppEnv, sessionMiddleware } from './middleware/session'
+import { interactions } from './modules/interactions'
 import { kourindou } from './modules/kourindou'
 import { me } from './modules/me'
 import { uploads } from './modules/uploads'
@@ -14,5 +15,6 @@ export const app = new Hono<AppEnv>()
   .route('/me', me)
   .route('/uploads', uploads)
   .route('/kourindou', kourindou)
+  .route('/kourindou', interactions)
 
 export type AppType = typeof app

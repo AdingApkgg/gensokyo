@@ -3,6 +3,7 @@ import {
   changeLicenseSchema,
   changeStatusSchema,
   createResourceSchema,
+  createVersionSchema,
   listResourcesQuerySchema,
   updateResourceSchema,
 } from '@gensokyo/shared'
@@ -375,3 +376,120 @@ export const kourindou = new Hono<AppEnv>()
       return c.json({ license: input.license })
     },
   )
+
+  /** 新建版本并挂上分发链接 */
+  .post(
+    '/resources/:id/versions',
+    requireAuth,
+    zValidator('json', createVersionSchema),
+    async (c) => {
+      const actor = c.get('actor')
+      if (!actor) return fail(c, 'unauthorized', 401)
+      const id = c.req.param('id')
+      const input = c.req.valid('json')
+
+      const [row] = await db
+        .select()
+        .from(resource)
+        .where(and(eq(resource.id, id), isNull(resource.deletedAt)))
+        .limit(1)
+      if (!row) return fail(c, 'not_found', 404)
+      if (!isOwnerOrStaff(actor, row.uploaderId))
+        return fail(c, 'forbidden', 403)
+
+      const created = await db.transaction(async (tx) => {
+        // 新版本成为最新版，旧的先让位（isLatest 上有部分唯一索引）
+        await tx
+          .update(resourceVersion)
+          .set({ isLatest: 0 })
+          .where(eq(resourceVersion.resourceId, id))
+
+        const [version] = await tx
+          .insert(resourceVersion)
+          .values({
+            resourceId: id,
+            label: input.label,
+            changelog: input.changelog,
+            isLatest: 1,
+          })
+          .returning()
+        if (!version) throw new Error('insert failed')
+
+        const files = await tx
+          .insert(resourceFile)
+          .values(
+            input.files.map((f, i) => ({
+              versionId: version.id,
+              label: f.label,
+              url: f.url,
+              kind: f.mirrorKind,
+              extractCode: f.extractCode,
+              sizeBytes: f.sizeBytes,
+              note: f.note,
+              sortOrder: i,
+            })),
+          )
+          .returning()
+
+        return { version, files }
+      })
+
+      return c.json(created, 201)
+    },
+  )
+
+  /**
+   * 下载跳转。状态判断用白名单——写成 `!== 'delisted'` 会在新增状态时漏网。
+   * 外链本身不校验可达性（网盘普遍反爬），失效由用户举报 broken_link 处理。
+   */
+  .get('/resources/:slug/files/:fileId/download', async (c) => {
+    const { slug, fileId } = c.req.param()
+
+    const [row] = await db
+      .select({
+        id: resource.id,
+        status: resource.status,
+        deletedAt: resource.deletedAt,
+      })
+      .from(resource)
+      .where(eq(resource.slug, slug))
+      .limit(1)
+
+    // biome-ignore lint/complexity/useOptionalChain: 下载的安全闸门，三种拒绝情形显式写出比可选链更难读错
+    if (!row || row.status !== 'published' || row.deletedAt !== null) {
+      return fail(c, 'not_found', 404)
+    }
+
+    const [file] = await db
+      .select({ url: resourceFile.url, versionId: resourceFile.versionId })
+      .from(resourceFile)
+      .innerJoin(
+        resourceVersion,
+        eq(resourceVersion.id, resourceFile.versionId),
+      )
+      .where(
+        and(
+          eq(resourceFile.id, fileId),
+          eq(resourceVersion.resourceId, row.id),
+        ),
+      )
+      .limit(1)
+
+    if (!file) return fail(c, 'not_found', 404)
+
+    const actor = c.get('actor')
+    await db.transaction(async (tx) => {
+      // 原子自增，不是读改写——并发下载不会丢计数
+      await tx
+        .update(resource)
+        .set({ downloadCount: sql`${resource.downloadCount} + 1` })
+        .where(eq(resource.id, row.id))
+      await tx.insert(schema.downloadLog).values({
+        resourceId: row.id,
+        fileId,
+        userId: actor?.id ?? null,
+      })
+    })
+
+    return c.redirect(file.url, 302)
+  })
