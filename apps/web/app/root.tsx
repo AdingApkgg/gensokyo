@@ -2,13 +2,26 @@ import {
   isRouteErrorResponse,
   Links,
   Meta,
+  type MiddlewareFunction,
   Outlet,
   Scripts,
   ScrollRestoration,
 } from 'react-router'
 
 import type { Route } from './+types/root'
+import { getLocale } from './paraglide/runtime'
+import { paraglideMiddleware } from './paraglide/server'
 import './app.css'
+
+export const middleware: MiddlewareFunction[] = [
+  (ctx, next) => paraglideMiddleware(ctx.request, () => next()),
+]
+
+const htmlLang: Record<string, string> = {
+  zh: 'zh-CN',
+  ja: 'ja',
+  en: 'en',
+}
 
 export const links: Route.LinksFunction = () => [
   { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
@@ -19,7 +32,7 @@ export const links: Route.LinksFunction = () => [
   },
   {
     rel: 'stylesheet',
-    href: 'https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300..700&family=Noto+Serif+SC:wght@500..800&display=swap',
+    href: 'https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300..700&family=Noto+Serif+SC:wght@500..800&family=Noto+Sans+JP:wght@300..700&family=Noto+Serif+JP:wght@500..800&display=swap',
   },
 ]
 
@@ -33,7 +46,7 @@ const themeInit = `(() => {
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="zh-CN" suppressHydrationWarning>
+    <html lang={htmlLang[getLocale()] ?? 'zh-CN'} suppressHydrationWarning>
       <head>
         {/* biome-ignore lint/security/noDangerouslySetInnerHtml: 首帧前应用主题，防闪烁 */}
         <script dangerouslySetInnerHTML={{ __html: themeInit }} />

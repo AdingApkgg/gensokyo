@@ -1,0 +1,22 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "site_name": "Gensokyo",
+  "ui_title": "Gensokyo · Design System",
+  "ui_subtitle": "Hakugyokurou (light) / Midnight Gensokyo (dark) · vermillion × yamabuki gold × washi ink",
+  "theme_toggle": "Toggle theme",
+  "section_palette": "Palette",
+  "section_typography": "Typography",
+  "section_buttons": "Buttons",
+  "section_badges": "License badges",
+  "section_cards": "Resource cards",
+  "section_tabs": "Boards + table",
+  "section_form": "Upload form",
+  "section_loading": "Loading states",
+  "nav_kourindou": "Kourindou",
+  "nav_shrine": "Hakurei Shrine",
+  "nav_chronicle": "Chronicle",
+  "action_upload": "Upload",
+  "action_download": "Download",
+  "action_search": "Search",
+  "home_api_status": "api status"
+}

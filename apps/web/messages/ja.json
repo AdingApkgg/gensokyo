@@ -1,0 +1,22 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "site_name": "幻想郷",
+  "ui_title": "幻想郷 · デザインシステム",
+  "ui_subtitle": "白玉楼（ライト）／深夜幻想郷（ダーク） · 朱 × 山吹 × 和紙墨",
+  "theme_toggle": "テーマ切替",
+  "section_palette": "カラーパレット",
+  "section_typography": "タイポグラフィ",
+  "section_buttons": "ボタン",
+  "section_badges": "頒布許可バッジ",
+  "section_cards": "リソースカード",
+  "section_tabs": "ボード切替 + テーブル",
+  "section_form": "投稿フォーム",
+  "section_loading": "ローディング",
+  "nav_kourindou": "香霖堂",
+  "nav_shrine": "博麗神社",
+  "nav_chronicle": "求聞史紀",
+  "action_upload": "アップロード",
+  "action_download": "ダウンロード",
+  "action_search": "検索",
+  "home_api_status": "api ステータス"
+}

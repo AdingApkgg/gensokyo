@@ -29,6 +29,7 @@
 | 缓存/队列 | Redis；BullMQ（后置，音乐模块时引入） | |
 | 对象存储 | Backblaze B2（S3 兼容 + 预签名上传） | thdl 方案沿用，bucket `thdl-resources` 现成 |
 | 认证 | better-auth（挂在 api） | thdl 已验证；单一 origin 下 cookie 直接生效 |
+| i18n | Paraglide JS 2（inlang） | 编译型、类型安全（漏译=编译错误）、树摇、RR framework mode 一等支持；UI 三语 zh/ja/en，zh 基准无前缀，`/ja/*` `/en/*` 前缀路由；api 返回消息 key 由客户端本地化；业务表多语字段从首张表落实 |
 | Lint/Format | Biome + `tsc --noEmit` | 反馈环速度、单配置文件、AI 维护漂移最小 |
 | 测试 | `bun test`（web 组件测试需要时再局部引 vitest） | |
 | API 文档 | hono-openapi → Scalar（`/api/docs`，可选项） | 与校验、类型同源于 zod schema |

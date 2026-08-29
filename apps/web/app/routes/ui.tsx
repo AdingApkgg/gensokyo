@@ -1,4 +1,4 @@
-import { Moon, Search, Star, Sun, Upload } from 'lucide-react'
+import { Languages, Moon, Search, Star, Sun, Upload } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { Avatar, AvatarFallback } from '~/components/ui/avatar'
 import { Badge } from '~/components/ui/badge'
@@ -42,6 +42,8 @@ import {
 } from '~/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { Textarea } from '~/components/ui/textarea'
+import { m } from '~/paraglide/messages'
+import { getLocale, locales, setLocale } from '~/paraglide/runtime'
 
 export function meta() {
   return [{ title: '设计系统 · 幻想乡' }]
@@ -120,29 +122,42 @@ export default function UiShowcase() {
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-10">
-      <header className="flex items-center justify-between">
+      <header className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            幻想乡 · 设计系统
-          </h1>
+          <h1 className="text-3xl font-bold tracking-tight">{m.ui_title()}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            白玉楼（亮）／深夜幻想乡（暗） · 朱红 × 山吹金 × 和纸墨
+            {m.ui_subtitle()}
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={toggle}
-          aria-label="切换主题"
-        >
-          {dark ? <Sun /> : <Moon />}
-        </Button>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 rounded-lg border p-1">
+            <Languages className="ml-1 size-4 text-muted-foreground" />
+            {locales.map((l) => (
+              <Button
+                key={l}
+                variant={getLocale() === l ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setLocale(l)}
+              >
+                {l === 'zh' ? '中' : l === 'ja' ? '日' : 'EN'}
+              </Button>
+            ))}
+          </div>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={toggle}
+            aria-label={m.theme_toggle()}
+          >
+            {dark ? <Sun /> : <Moon />}
+          </Button>
+        </div>
       </header>
 
       <Separator className="my-8" />
 
       <section>
-        <h2 className="mb-4 text-xl font-semibold">色板</h2>
+        <h2 className="mb-4 text-xl font-semibold">{m.section_palette()}</h2>
         <div className="flex flex-wrap gap-3">
           {swatches.map(([name, cls]) => (
             <div key={name} className="text-center">
@@ -168,7 +183,7 @@ export default function UiShowcase() {
       <Separator className="my-8" />
 
       <section>
-        <h2 className="mb-4 text-xl font-semibold">排版</h2>
+        <h2 className="mb-4 text-xl font-semibold">{m.section_typography()}</h2>
         <h1 className="text-4xl font-bold">幻想郷は今日も平和</h1>
         <h2 className="mt-2 text-2xl font-semibold">
           博丽神社例大祭，第二十三回
@@ -185,7 +200,7 @@ export default function UiShowcase() {
       <Separator className="my-8" />
 
       <section>
-        <h2 className="mb-4 text-xl font-semibold">按钮</h2>
+        <h2 className="mb-4 text-xl font-semibold">{m.section_buttons()}</h2>
         <div className="flex flex-wrap items-center gap-3">
           <Button>
             <Upload /> 上传资源
@@ -205,7 +220,7 @@ export default function UiShowcase() {
       <Separator className="my-8" />
 
       <section>
-        <h2 className="mb-4 text-xl font-semibold">许可状态徽章</h2>
+        <h2 className="mb-4 text-xl font-semibold">{m.section_badges()}</h2>
         <div className="flex flex-wrap gap-2">
           {licenses.map(([name, variant]) => (
             <Badge key={name} variant={variant}>
@@ -218,7 +233,7 @@ export default function UiShowcase() {
       <Separator className="my-8" />
 
       <section>
-        <h2 className="mb-4 text-xl font-semibold">资源卡片</h2>
+        <h2 className="mb-4 text-xl font-semibold">{m.section_cards()}</h2>
         <div className="grid gap-4 md:grid-cols-3">
           {mockResources.map((r) => (
             <Card key={r.title}>
@@ -252,12 +267,12 @@ export default function UiShowcase() {
       <Separator className="my-8" />
 
       <section>
-        <h2 className="mb-4 text-xl font-semibold">板块切换 + 数据表</h2>
+        <h2 className="mb-4 text-xl font-semibold">{m.section_tabs()}</h2>
         <Tabs defaultValue="kourindou">
           <TabsList>
-            <TabsTrigger value="kourindou">香霖堂</TabsTrigger>
-            <TabsTrigger value="shrine">博丽神社</TabsTrigger>
-            <TabsTrigger value="chronicle">求闻史纪</TabsTrigger>
+            <TabsTrigger value="kourindou">{m.nav_kourindou()}</TabsTrigger>
+            <TabsTrigger value="shrine">{m.nav_shrine()}</TabsTrigger>
+            <TabsTrigger value="chronicle">{m.nav_chronicle()}</TabsTrigger>
           </TabsList>
           <TabsContent value="kourindou" className="mt-4">
             <Table>
@@ -312,7 +327,7 @@ export default function UiShowcase() {
       <Separator className="my-8" />
 
       <section>
-        <h2 className="mb-4 text-xl font-semibold">上传表单片段</h2>
+        <h2 className="mb-4 text-xl font-semibold">{m.section_form()}</h2>
         <Card className="max-w-xl">
           <CardHeader>
             <CardTitle>投稿到香霖堂</CardTitle>
@@ -388,7 +403,7 @@ export default function UiShowcase() {
       <Separator className="my-8" />
 
       <section className="pb-16">
-        <h2 className="mb-4 text-xl font-semibold">加载态</h2>
+        <h2 className="mb-4 text-xl font-semibold">{m.section_loading()}</h2>
         <div className="flex items-center gap-4">
           <Skeleton className="size-12 rounded-full" />
           <div className="grid gap-2">

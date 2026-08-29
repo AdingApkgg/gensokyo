@@ -1,0 +1,22 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "site_name": "幻想乡",
+  "ui_title": "幻想乡 · 设计系统",
+  "ui_subtitle": "白玉楼（亮）／深夜幻想乡（暗） · 朱红 × 山吹金 × 和纸墨",
+  "theme_toggle": "切换主题",
+  "section_palette": "色板",
+  "section_typography": "排版",
+  "section_buttons": "按钮",
+  "section_badges": "许可状态徽章",
+  "section_cards": "资源卡片",
+  "section_tabs": "板块切换 + 数据表",
+  "section_form": "上传表单片段",
+  "section_loading": "加载态",
+  "nav_kourindou": "香霖堂",
+  "nav_shrine": "博丽神社",
+  "nav_chronicle": "求闻史纪",
+  "action_upload": "上传资源",
+  "action_download": "下载",
+  "action_search": "检索",
+  "home_api_status": "api 状态"
+}

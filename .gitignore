@@ -118,3 +118,6 @@ dist
 # build outputs
 build/
 .react-router/
+
+# paraglide generated
+apps/web/app/paraglide/
