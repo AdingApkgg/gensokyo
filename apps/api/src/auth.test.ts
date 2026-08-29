@@ -23,6 +23,21 @@ describe('auth flow', () => {
     expect(body.user?.email).toBe(email)
   })
 
+  test('/api/me 未登录返回 null，登录后返回用户', async () => {
+    const anon = await app.request('/api/me')
+    expect(await anon.json()).toEqual({ user: null })
+
+    const signIn = await app.request('/api/auth/sign-in/email', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    })
+    const cookie = signIn.headers.get('set-cookie') ?? ''
+    const res = await app.request('/api/me', { headers: { cookie } })
+    const body = (await res.json()) as { user: { email: string } | null }
+    expect(body.user?.email).toBe(email)
+  })
+
   test('错误密码登录被拒', async () => {
     const res = await app.request('/api/auth/sign-in/email', {
       method: 'POST',
