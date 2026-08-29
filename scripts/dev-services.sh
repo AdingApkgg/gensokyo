@@ -7,8 +7,8 @@
 #
 # postgres 与 redis 是 brew 的共享服务（其他项目也在用），本脚本只会启动、
 # 从不停止它们；gensokyo 在共享实例里用独立的库（DB gensokyo / redis db1）。
-# Meilisearch 则跑一个专属实例，因为它的数据库格式与引擎版本强绑定，
-# 跟其他项目共用会撞版本。
+# Meilisearch 与 MinIO 则各跑一个专属实例：前者的数据库格式与引擎版本强绑定，
+# 后者存的是本项目自己的图片，都不该与别的项目共用。
 set -euo pipefail
 
 BREW_PREFIX="$(brew --prefix)"
@@ -18,6 +18,15 @@ MEILI_DB="$HOME/.local/share/gensokyo/meili"
 MEILI_LOG="$HOME/.local/share/gensokyo/meili.log"
 MEILI_PORT=57700
 MEILI_KEY="${MEILI_MASTER_KEY:-dev_master_key}"
+MINIO_BIN="$BREW_PREFIX/opt/minio/bin/minio"
+MC_BIN="$BREW_PREFIX/bin/mc"
+MINIO_DIR="$HOME/.local/share/gensokyo/minio"
+MINIO_LOG="$HOME/.local/share/gensokyo/minio.log"
+MINIO_PORT=59000
+MINIO_CONSOLE_PORT=59001
+MINIO_USER="${S3_ACCESS_KEY_ID:-gensokyo}"
+MINIO_PASS="${S3_SECRET_ACCESS_KEY:-gensokyo-dev-secret}"
+MINIO_BUCKET="${S3_BUCKET:-gensokyo}"
 
 green() { printf '\033[32m%s\033[0m\n' "$1"; }
 yellow() { printf '\033[33m%s\033[0m\n' "$1"; }
@@ -25,6 +34,10 @@ red() { printf '\033[31m%s\033[0m\n' "$1"; }
 
 meili_running() {
   curl -sf -m 2 "http://127.0.0.1:$MEILI_PORT/health" >/dev/null 2>&1
+}
+
+minio_running() {
+  curl -sf -m 2 "http://127.0.0.1:$MINIO_PORT/minio/health/live" >/dev/null 2>&1
 }
 
 up() {
@@ -81,6 +94,32 @@ up() {
     red "meili     ✗ 启动失败，见 $MEILI_LOG"
     exit 1
   fi
+
+  # --- minio（只存封面等小图，大资源走外链）---
+  if ! minio_running; then
+    yellow "启动 gensokyo 专属 MinIO…"
+    mkdir -p "$MINIO_DIR"
+    MINIO_ROOT_USER="$MINIO_USER" MINIO_ROOT_PASSWORD="$MINIO_PASS" \
+      nohup "$MINIO_BIN" server "$MINIO_DIR" \
+      --address "127.0.0.1:$MINIO_PORT" \
+      --console-address "127.0.0.1:$MINIO_CONSOLE_PORT" \
+      >"$MINIO_LOG" 2>&1 &
+    for _ in $(seq 1 40); do
+      minio_running && break
+      sleep 0.5
+    done
+  fi
+  if minio_running; then
+    # 建桶并设为匿名可读——存的是封面，本来就要给人看
+    "$MC_BIN" alias set gensokyo-dev "http://127.0.0.1:$MINIO_PORT" \
+      "$MINIO_USER" "$MINIO_PASS" >/dev/null 2>&1 || true
+    "$MC_BIN" mb --ignore-existing "gensokyo-dev/$MINIO_BUCKET" >/dev/null 2>&1 || true
+    "$MC_BIN" anonymous set download "gensokyo-dev/$MINIO_BUCKET" >/dev/null 2>&1 || true
+    green "minio     ✓ localhost:$MINIO_PORT bucket=$MINIO_BUCKET (console :$MINIO_CONSOLE_PORT)"
+  else
+    red "minio     ✗ 启动失败，见 $MINIO_LOG"
+    exit 1
+  fi
 }
 
 status() {
@@ -90,6 +129,8 @@ status() {
     && green "redis     ✓ localhost:6379 db1" || red "redis     ✗"
   meili_running \
     && green "meili     ✓ localhost:$MEILI_PORT" || red "meili     ✗"
+  minio_running \
+    && green "minio     ✓ localhost:$MINIO_PORT" || red "minio     ✗"
 }
 
 down() {
@@ -98,6 +139,11 @@ down() {
     green "已停止 gensokyo 的 Meilisearch"
   else
     yellow "Meilisearch 未在运行"
+  fi
+  if pkill -f "minio server $MINIO_DIR" 2>/dev/null; then
+    green "已停止 gensokyo 的 MinIO"
+  else
+    yellow "MinIO 未在运行"
   fi
   yellow "postgres / redis 是共享的 brew 服务，未停止（其他项目可能在用）"
 }

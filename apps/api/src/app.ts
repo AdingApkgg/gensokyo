@@ -3,6 +3,7 @@ import { auth } from './auth'
 import { type AppEnv, sessionMiddleware } from './middleware/session'
 import { kourindou } from './modules/kourindou'
 import { me } from './modules/me'
+import { uploads } from './modules/uploads'
 
 export const app = new Hono<AppEnv>()
   .basePath('/api')
@@ -11,6 +12,7 @@ export const app = new Hono<AppEnv>()
   .use('*', sessionMiddleware)
   .get('/health', (c) => c.json({ status: 'ok' }))
   .route('/me', me)
+  .route('/uploads', uploads)
   .route('/kourindou', kourindou)
 
 export type AppType = typeof app

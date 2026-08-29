@@ -14,6 +14,7 @@ export const ERROR_CODES = [
   'quota_exceeded',
   'invalid_state_transition',
   'invalid_url',
+  'file_too_large',
   'duplicate_slug',
   'self_action_forbidden',
   'internal',

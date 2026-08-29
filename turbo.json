@@ -6,12 +6,21 @@
     "MEILI_*",
     "API_URL",
     "PORT",
-    "BETTER_AUTH_*"
+    "BETTER_AUTH_*",
+    "S3_*"
   ],
   "tasks": {
-    "dev": { "cache": false, "persistent": true },
-    "build": { "dependsOn": ["^build"], "outputs": ["dist/**", "build/**"] },
-    "typecheck": { "dependsOn": ["^build"] },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", "build/**"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"]
+    },
     "test": {}
   }
 }

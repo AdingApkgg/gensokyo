@@ -6,9 +6,14 @@
 
 **Architecture:** zod 契约在 `@gensokyo/shared` → hono 校验与 `AppType` → RR8 loader/action。**分发走外链镜像**（网盘 + 提取码 / 直链 / 磁链），不自托管文件。评论从第一天就是 `topic + post`（M4 论坛共用同一份数据）。
 
-> **2026-08-30 范围变更：暂时去掉对象存储。** 原设计要求公开/私有双桶（B2）。改为**外链分发优先**——这既是中文同人圈的实际主流（网盘链接 + 提取码），也是产品文档原本写的"B2 对象 + 外链镜像混合"里的一半。影响：删掉 `storage_object` / `upload_intent` 两张表与整个 T4 上传链路；`resource_file` 改为存 url + mirrorKind + extractCode；封面与社团头像改为外链 URL。
+> **2026-08-30 范围变更：存储按体积分流。** 原设计要求 B2 公开/私有双桶托管一切，现改为混合方案：
 >
-> 加回自托管是**纯增量**：`MIRROR_KIND` 补一个 `'hosted'`、加回对象表、上传链路独立开发，已有的外链行不受影响。之所以能这么干脆地砍，正是因为库里没有数据——审查那条方法论纠正在这里再次成立。
+> - **大型资源走外链镜像**（网盘 + 提取码 / 直链 / 磁链）——托管 GB 级同人游戏既贵又有版权风险，而这本就是中文同人圈的实际分发方式
+> - **小图自建 MinIO**（封面、社团头像，≤5MB）——封面热链网盘图根本不可靠，这部分必须自托管
+>
+> 由此消掉：`storage_object` / `upload_intent` 两张表、预签名直传、双桶拓扑、分片上传。小图**经 API 代理上传**而非预签名——几 MB 的带宽可忽略，换来对象与响应在同一请求内产生：没有核销逻辑、没有越权挂载他人对象的洞、没有孤儿对象。图片 URL 直接存进已有的 `coverUrl` / `avatarUrl` 列，**schema 一列都不用加**。
+>
+> 未引用图片由 `apps/api/scripts/gc-images.ts` 巡检清理：白名单谓词 + 24 小时宽限期，幂等自愈。
 
 **Tech Stack:** Bun / hono / zod v4 / drizzle + PostgreSQL 18 / React Router v8 / Paraglide
 
@@ -27,7 +32,7 @@
 
 | 砍掉 | 理由 |
 |---|---|
-| 整条对象存储（含 multipart） | 见上方范围变更：M3 走外链分发，不碰 B2。连带消掉 aws-sdk、预签名、分片、GC 巡检、双桶拓扑 |
+| B2 双桶 / 预签名 / 分片上传 | 见上方范围变更：大资源走外链，小图走自建 MinIO 的代理上传。连带消掉 aws-sdk、intent 核销、双桶拓扑 |
 | `resource_translation` 侧表 | 一整套社区翻译子系统，却不打算给它任何写入口。改为 `description jsonb`，与 `title` 同形状 |
 | `touhou_work` / `convention` / `resource_work` 三张表 | M3 对它们的全部操作是"按它筛选 + 显示多语名"，与 `tag` 完全同构。并入 `tag` + `tag.kind` |
 | `thank`（感谢） | 与收藏高度重叠，产品上没有区分需求 |
