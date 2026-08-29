@@ -121,3 +121,6 @@ build/
 
 # paraglide generated
 apps/web/app/paraglide/
+
+# 审计 agent 的临时探测文件
+**/__probe*
