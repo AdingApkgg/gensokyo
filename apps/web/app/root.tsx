@@ -19,14 +19,24 @@ export const links: Route.LinksFunction = () => [
   },
   {
     rel: 'stylesheet',
-    href: 'https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap',
+    href: 'https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300..700&family=Noto+Serif+SC:wght@500..800&display=swap',
   },
 ]
 
+const themeInit = `(() => {
+  try {
+    const saved = localStorage.getItem('theme')
+    const dark = saved ? saved === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches
+    if (dark) document.documentElement.classList.add('dark')
+  } catch {}
+})()`
+
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="zh-CN" suppressHydrationWarning>
       <head>
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: 首帧前应用主题，防闪烁 */}
+        <script dangerouslySetInnerHTML={{ __html: themeInit }} />
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <Meta />

@@ -1,6 +1,12 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalPassThroughEnv": ["DATABASE_URL", "REDIS_URL", "MEILI_*", "API_URL", "PORT"],
+  "globalPassThroughEnv": [
+    "DATABASE_URL",
+    "REDIS_URL",
+    "MEILI_*",
+    "API_URL",
+    "PORT"
+  ],
   "tasks": {
     "dev": { "cache": false, "persistent": true },
     "build": { "dependsOn": ["^build"], "outputs": ["dist/**", "build/**"] },
