@@ -73,6 +73,7 @@
       "name": "@gensokyo/db",
       "version": "0.0.0",
       "dependencies": {
+        "@gensokyo/shared": "workspace:*",
         "drizzle-orm": "^0.45.2",
       },
       "devDependencies": {

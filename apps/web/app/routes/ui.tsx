@@ -274,7 +274,11 @@ export default function UiShowcase() {
             <TabsTrigger value="shrine">{m.nav_shrine()}</TabsTrigger>
             <TabsTrigger value="chronicle">{m.nav_chronicle()}</TabsTrigger>
           </TabsList>
-          <TabsContent value="kourindou" className="mt-4">
+          <TabsContent
+            value="kourindou"
+            className="mt-4"
+            data-density="compact"
+          >
             <Table>
               <TableHeader>
                 <TableRow>

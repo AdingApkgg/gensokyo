@@ -1,3 +1,5 @@
+# 生产栈的数据服务部分（alice 上跑）。本地开发不用这个文件——dev 依赖走原生进程，
+# 见 ../scripts/dev-services.sh。部署时还需补上 caddy / web / api / migrate 四个服务。
 services:
   postgres:
     image: postgres:18-alpine

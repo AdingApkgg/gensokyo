@@ -60,9 +60,20 @@ html.dark {
 :root {
   --background: oklch(0.975 0.006 84);
   --foreground: oklch(0.26 0.018 45);
-  --card: oklch(0.99 0.004 84);
+  --card: oklch(0.99 0.004 84 / 0.8);
   --card-foreground: oklch(0.26 0.018 45);
-  --popover: oklch(0.99 0.004 84);
+  --popover: oklch(0.99 0.004 84 / 0.94);
+  /* 青海波：日本传统纹样，同心弧铺成波浪。压到极低对比度，只当纸的肌理 */
+  --bg-pattern: radial-gradient(
+    circle at 50% 100%,
+    transparent 9px,
+    oklch(0.26 0.018 45 / 0.05) 9px 10px,
+    transparent 10px 15px,
+    oklch(0.26 0.018 45 / 0.05) 15px 16px,
+    transparent 16px 21px,
+    oklch(0.26 0.018 45 / 0.05) 21px 22px,
+    transparent 22px
+  );
   --popover-foreground: oklch(0.26 0.018 45);
   --primary: oklch(0.57 0.205 30);
   --primary-foreground: oklch(0.985 0.006 84);
@@ -96,9 +107,19 @@ html.dark {
 .dark {
   --background: oklch(0.17 0.016 285);
   --foreground: oklch(0.92 0.012 84);
-  --card: oklch(0.21 0.017 285);
+  --card: oklch(0.21 0.017 285 / 0.78);
   --card-foreground: oklch(0.92 0.012 84);
-  --popover: oklch(0.21 0.017 285);
+  --popover: oklch(0.21 0.017 285 / 0.94);
+  --bg-pattern: radial-gradient(
+    circle at 50% 100%,
+    transparent 9px,
+    oklch(0.92 0.012 84 / 0.055) 9px 10px,
+    transparent 10px 15px,
+    oklch(0.92 0.012 84 / 0.055) 15px 16px,
+    transparent 16px 21px,
+    oklch(0.92 0.012 84 / 0.055) 21px 22px,
+    transparent 22px
+  );
   --popover-foreground: oklch(0.92 0.012 84);
   --primary: oklch(0.65 0.19 30);
   --primary-foreground: oklch(0.985 0.006 84);
@@ -131,15 +152,55 @@ html.dark {
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
-  }
+  /* 底色放在 html 上：body 的背景会传播到画布，会盖住下面的底纹伪元素 */
   html {
-    @apply font-sans;
+    @apply bg-background font-sans;
+  }
+  body {
+    @apply text-foreground;
+    background: transparent;
   }
   h1,
   h2,
   h3 {
     font-family: var(--font-heading);
+  }
+
+  /* 背景层：同人站传统是「背景图 + 半透明内容卡」（TouhouDB、旧 thdl 都如此）。
+     这里只铺 CSS 画的青海波底纹；--bg-image 是留给授权图片的槽，默认不启用。 */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image: var(--bg-image, none), var(--bg-pattern);
+    background-size: cover, 44px 22px;
+    background-position: center, center;
+    background-repeat: no-repeat, repeat;
+  }
+
+  /* 内容卡半透明 + 背景模糊，让底纹透上来 */
+  [data-slot="card"],
+  [data-slot="popover-content"],
+  [data-slot="dropdown-menu-content"] {
+    backdrop-filter: blur(10px);
+  }
+}
+
+@layer utilities {
+  /* 数据密集区域：资源列表、数据表、搜索结果。
+     实测惯例——Moriya Shrine 每行 90px 塞 9 项元数据、TouhouDB 正文 12.8px；
+     内容站的列表视图必须比正文更紧，否则一屏放不下几条。
+     用后代选择器提高特异性，否则会被组件自带的 text-sm 工具类压过。 */
+  [data-density="compact"] :is(table, td, th, li, p) {
+    font-size: 0.8125rem;
+    line-height: 1.45;
+  }
+  [data-density="compact"] :is(td, th) {
+    padding-block: 0.4rem;
+  }
+  [data-density="compact"] :is(h2, h3) {
+    font-size: 0.9375rem;
   }
 }
