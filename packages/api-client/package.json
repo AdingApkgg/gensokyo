@@ -1,0 +1,21 @@
+{
+  "name": "@gensokyo/api-client",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@gensokyo/api": "workspace:*",
+    "hono": "^4.13.5"
+  },
+  "devDependencies": {
+    "@gensokyo/tsconfig": "workspace:*",
+    "typescript": "^7.0.2"
+  }
+}
