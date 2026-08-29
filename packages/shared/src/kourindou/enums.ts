@@ -1,0 +1,112 @@
+/**
+ * 香霖堂的枚举常量。这里是唯一事实来源：
+ * drizzle 的 pgEnum 与 zod 的 z.enum 都从这些数组派生，两边不会漂移。
+ */
+
+/** 资源状态。draft 只有作者可见；published 是唯一可下载的状态 */
+export const RESOURCE_STATUS = [
+  'draft',
+  'pending',
+  'published',
+  'delisted',
+] as const
+export type ResourceStatus = (typeof RESOURCE_STATUS)[number]
+
+/** 分发许可状态——版权生死线字段，投稿时必选 */
+export const LICENSE_STATUS = [
+  'allowed', // 社团明示允许
+  'unspecified', // 未标明
+  'out_of_print', // 已绝版
+  'licensed', // 授权转载
+] as const
+export type LicenseStatus = (typeof LICENSE_STATUS)[number]
+
+export const RESOURCE_KIND = [
+  'game',
+  'music',
+  'doujinshi',
+  'patch',
+  'tool',
+] as const
+export type ResourceKind = (typeof RESOURCE_KIND)[number]
+
+/** 标签维度。work/convention 不单独建表——M3 对它们的操作与 tag 完全同构 */
+export const TAG_KIND = ['work', 'convention', 'language', 'other'] as const
+export type TagKind = (typeof TAG_KIND)[number]
+
+export const USER_ROLE = ['user', 'moderator', 'admin'] as const
+export type UserRole = (typeof USER_ROLE)[number]
+
+export const REVIEW_DECISION = ['approve', 'reject'] as const
+export type ReviewDecision = (typeof REVIEW_DECISION)[number]
+
+/** 拒绝理由。copyright / illegal 会触发 strikeCount 递增，进而清零信任等级 */
+export const REJECT_REASON = [
+  'copyright',
+  'illegal',
+  'low_quality',
+  'duplicate',
+  'other',
+] as const
+export type RejectReason = (typeof REJECT_REASON)[number]
+
+/** 触发信任惩罚的拒绝理由 */
+export const STRIKE_REJECT_REASONS: readonly RejectReason[] = [
+  'copyright',
+  'illegal',
+]
+
+export const REPORT_REASON = [
+  'copyright',
+  'illegal',
+  'broken_link',
+  'wrong_info',
+  'other',
+] as const
+export type ReportReason = (typeof REPORT_REASON)[number]
+
+export const REPORT_STATUS = ['open', 'resolved', 'rejected'] as const
+export type ReportStatus = (typeof REPORT_STATUS)[number]
+
+export const TAKEDOWN_STATUS = ['open', 'accepted', 'rejected'] as const
+export type TakedownStatus = (typeof TAKEDOWN_STATUS)[number]
+
+export const CLAIM_STATUS = [
+  'open',
+  'approved',
+  'rejected',
+  'withdrawn',
+] as const
+export type ClaimStatus = (typeof CLAIM_STATUS)[number]
+
+export const TOPIC_KIND = ['resource', 'board'] as const
+export type TopicKind = (typeof TOPIC_KIND)[number]
+
+export const UPLOAD_KIND = ['cover', 'file'] as const
+export type UploadKind = (typeof UPLOAD_KIND)[number]
+
+export const UPLOAD_STATE = ['pending', 'uploaded', 'consumed'] as const
+export type UploadState = (typeof UPLOAD_STATE)[number]
+
+export const STORAGE_BUCKET = ['public', 'private'] as const
+export type StorageBucket = (typeof STORAGE_BUCKET)[number]
+
+export const RESOURCE_SORT = ['newest', 'downloads', 'rating'] as const
+export type ResourceSort = (typeof RESOURCE_SORT)[number]
+
+/** 跨实体审计动作 */
+export const MODERATION_ACTION = [
+  'review',
+  'status_change',
+  'license_change',
+  'report_resolve',
+  'takedown_resolve',
+  'trust_change',
+] as const
+export type ModerationAction = (typeof MODERATION_ACTION)[number]
+
+/** 即发即审门槛：通过 N 个资源且无违规记录 */
+export const TRUST_AUTO_PUBLISH_THRESHOLD = 3
+
+/** 单次预签名 PUT 的上限。S3 兼容存储的硬限制，也是不做 multipart 的依据 */
+export const MAX_UPLOAD_BYTES = 5 * 1024 ** 3
