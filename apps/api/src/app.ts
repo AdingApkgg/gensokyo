@@ -1,9 +1,11 @@
 import { Hono } from 'hono'
 import { auth } from './auth'
 import { type AppEnv, sessionMiddleware } from './middleware/session'
+import { content } from './modules/content'
 import { interactions } from './modules/interactions'
 import { kourindou } from './modules/kourindou'
 import { me } from './modules/me'
+import { moderation } from './modules/moderation'
 import { uploads } from './modules/uploads'
 
 export const app = new Hono<AppEnv>()
@@ -16,5 +18,7 @@ export const app = new Hono<AppEnv>()
   .route('/uploads', uploads)
   .route('/kourindou', kourindou)
   .route('/kourindou', interactions)
+  .route('/kourindou', content)
+  .route('/moderation', moderation)
 
 export type AppType = typeof app
