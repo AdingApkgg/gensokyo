@@ -19,6 +19,7 @@
   "devDependencies": {
     "@gensokyo/tsconfig": "workspace:*",
     "drizzle-kit": "^0.31.10",
+    "postgres": "^3.4.9",
     "typescript": "^7.0.2"
   }
 }
