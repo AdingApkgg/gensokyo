@@ -104,7 +104,7 @@ redis      不发布端口
 meilisearch 不发布端口
 ```
 
-入口：Cloudflare Tunnel（复用现有 tunnel，dashboard 加一条 hostname → `localhost:8300`）。数据服务一律不发布端口（修正音乐站时代 0.0.0.0 裸听的问题）。选 Caddy 而非 nginx：配置进仓库、6 行零雷（流式/WS/转发头默认正确）、LAN 直连可用（不被 CF 绑死）。
+入口：Cloudflare Tunnel，域名 **`th.saop.cc`**（复用现有 saop.cc tunnel `7f5c560b`，dashboard 加一条 `th.saop.cc` → `localhost:8300`）。数据服务一律不发布端口（修正音乐站时代 0.0.0.0 裸听的问题）。选 Caddy 而非 nginx：配置进仓库、6 行零雷（流式/WS/转发头默认正确）、LAN 直连可用（不被 CF 绑死）。
 
 **风险与退路**：RR8 SSR + Vite dev 跑 Bun 是全栈最新组合；若骨架阶段遇兼容问题，仅 web 容器退回 node 基础镜像（一行配置的切换，代码不动）。
 
@@ -123,6 +123,4 @@ meilisearch 不发布端口
 
 ## 未决事项
 
-- **域名**：`gensokyo.moe` 为首选候选（.moe → .app → .net 顺序试），尚未查册购买。不阻塞骨架与开发（dev 走 localhost，tunnel hostname 后配）。
-
-其余决策点均已确认。
+无。所有决策点均已确认（域名定为 `th.saop.cc`，2026-08-30）。
