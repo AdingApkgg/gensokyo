@@ -111,3 +111,10 @@ dist
 
 # TernJS port file
 .tern-port
+
+# Turbo
+.turbo/
+
+# build outputs
+build/
+.react-router/
