@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     restart: unless-stopped
     environment:
       POSTGRES_USER: gensokyo
@@ -18,14 +18,25 @@ services:
     restart: unless-stopped
     ports: ['127.0.0.1:56379:6379']
     volumes: [redisdata:/data]
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
   meilisearch:
-    image: getmeili/meilisearch:latest
+    # 固定到次版本：Meilisearch 跨次版本升级需要迁移数据库，浮动 tag 会导致启动失败
+    image: getmeili/meilisearch:v1.53
     restart: unless-stopped
     environment:
       MEILI_MASTER_KEY: dev_master_key
       MEILI_ENV: development
     ports: ['127.0.0.1:57700:7700']
     volumes: [meilidata:/meili_data]
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://localhost:7700/health']
+      interval: 5s
+      timeout: 3s
+      retries: 10
 volumes:
   pgdata:
   redisdata:

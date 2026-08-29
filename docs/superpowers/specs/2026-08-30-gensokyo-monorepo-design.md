@@ -24,7 +24,7 @@
 | UI | Tailwind v4 + shadcn/ui | 沿用两个前身项目的习惯 |
 | 后端 | hono | AI 熟悉度最高、中间件护栏、运行时可移植（对冲 bun 赌注）、hc RPC |
 | 契约 | zod v4（Standard Schema，可局部替换） | 生态链路最全（drizzle-zod / zod-validator / hono-openapi） |
-| 数据库 | PostgreSQL 17 + Drizzle ORM | 沿用习惯；单库、schema 按模块分文件 |
+| 数据库 | PostgreSQL 18 + Drizzle ORM（bun-sql 驱动） | 沿用习惯；单库、schema 按模块分文件 |
 | 搜索 | Meilisearch（中文 + 拼音） | 音乐站决策沿用 |
 | 缓存/队列 | Redis；BullMQ（后置，音乐模块时引入） | |
 | 对象存储 | Backblaze B2（S3 兼容 + 预签名上传） | thdl 方案沿用，bucket `thdl-resources` 现成 |
@@ -104,6 +104,8 @@ postgres   数据卷，不发布端口
 redis      不发布端口
 meilisearch 不发布端口
 ```
+
+**镜像固定策略**：postgres / redis 固定大版本（`18-alpine` / `8-alpine`，补丁自动跟进）；Meilisearch 固定次版本（`v1.53`）——它跨次版本升级需要迁移数据库，浮动 tag 会直接启动失败（2026-08-30 本机 brew 实例即因此挂掉：DB 1.42 vs 引擎 1.53）。有状态服务一律不用 `:latest`。
 
 入口：Cloudflare Tunnel，域名 **`th.saop.cc`**（复用现有 saop.cc tunnel `7f5c560b`，dashboard 加一条 `th.saop.cc` → `localhost:8300`）。数据服务一律不发布端口（修正音乐站时代 0.0.0.0 裸听的问题）。选 Caddy 而非 nginx：配置进仓库、6 行零雷（流式/WS/转发头默认正确）、LAN 直连可用（不被 CF 绑死）。
 
