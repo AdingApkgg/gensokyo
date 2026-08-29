@@ -1,0 +1,11 @@
+thdl.example.com {
+    encode zstd gzip
+    reverse_proxy 127.0.0.1:3000
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+    @static path *.js *.css *.woff2 *.png *.jpg *.webp *.svg
+    header @static Cache-Control "public, max-age=31536000, immutable"
+}

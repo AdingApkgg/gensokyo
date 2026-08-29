@@ -1,0 +1,12 @@
+{
+  "name": "东方资源站",
+  "short_name": "THDL",
+  "description": "东方Project 同人资源分享社区",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f0a14",
+  "theme_color": "#ec4899",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
