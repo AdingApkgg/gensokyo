@@ -1,0 +1,48 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: thm
+      POSTGRES_PASSWORD: thm
+      POSTGRES_DB: thm
+    ports:
+      - '55432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U thm -d thm']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - '56379:6379'
+    volumes:
+      - redisdata:/data
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.11
+    restart: unless-stopped
+    environment:
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-dev_master_key_change_me}
+      MEILI_ENV: development
+    ports:
+      - '57700:7700'
+    volumes:
+      - meilidata:/meili_data
+
+  meting-api:
+    build:
+      context: ./services/meting-api
+    restart: unless-stopped
+    ports:
+      - '58080:80'
+
+volumes:
+  pgdata:
+  redisdata:
+  meilidata:

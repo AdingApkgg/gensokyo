@@ -114,10 +114,14 @@ meilisearch 不发布端口
 
 ## 里程碑
 
-1. **骨架**：workspace + turbo + biome + 两个 app 启动 + compose 依赖 + hc 类型全链路 typecheck 通过 + thdl/touhou-project-music 迁入 `legacy/` → 提交并推送（完成仓库保底备份）
-2. **auth + 站点外壳**：better-auth、用户体系、RR8 布局与主题
-3. **香霖堂（资源模块）**：移植 thdl 的上传（B2 预签名/分片）、先发后审、评分评论举报、管理后台
-4. 之后按用户优先级排（shrine / chronicle / spellcard / music）
+产品方向与模块规划详见 `docs/product/2026-08-30-platform-direction.md`（已批准）。
+
+1. **M1 骨架**：workspace + turbo + biome + 两个 app 启动 + compose 依赖 + hc 类型全链路 typecheck 通过 + legacy 迁入 → 提交并推送
+2. **M1.5 UI 主题**：东方风 shadcn/ui 主题（参考 tweakcn 的 token 方式）+ `/ui` 设计系统展示页
+3. **M2 auth + 用户体系 + 站点外壳**
+4. **M3 香霖堂**（资源分发完整闭环）
+5. **M4 博丽神社**（版块论坛 + 资源评论统一）
+6. **M5+** chronicle（TouhouDB 中文层）→ music → 其余方向
 
 每个里程碑独立走 计划 → 实现 → 验证 流程。
 
