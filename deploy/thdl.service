@@ -1,0 +1,25 @@
+[Unit]
+Description=THDL - Touhou Doujin Library (Next.js)
+After=network.target postgresql.service redis-server.service
+Wants=postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=thdl
+Group=thdl
+WorkingDirectory=/var/www/thdl
+EnvironmentFile=/etc/thdl/thdl.env
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/www/thdl /var/log/thdl
+StandardOutput=append:/var/log/thdl/out.log
+StandardError=append:/var/log/thdl/err.log
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
