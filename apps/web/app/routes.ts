@@ -11,7 +11,7 @@ export default [
     route('ui', 'routes/ui.tsx'),
     route('login', 'routes/login.tsx'),
     route('register', 'routes/register.tsx'),
-    route('kourindou', 'routes/stub.tsx', { id: 'stub-kourindou' }),
+    route('kourindou', 'routes/kourindou/list.tsx'),
     route('shrine', 'routes/stub.tsx', { id: 'stub-shrine' }),
     route('chronicle', 'routes/stub.tsx', { id: 'stub-chronicle' }),
     route('spellcard', 'routes/stub.tsx', { id: 'stub-spellcard' }),
