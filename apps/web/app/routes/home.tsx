@@ -16,7 +16,9 @@ export default function Home({ loaderData }: Route.ComponentProps) {
     <main className="grid min-h-screen place-items-center">
       <div className="text-center">
         <h1 className="text-3xl font-bold">幻想乡 · Gensokyo</h1>
-        <p className="mt-2 text-sm opacity-70">api: {loaderData.health.status}</p>
+        <p className="mt-2 text-sm opacity-70">
+          api: {loaderData.health.status}
+        </p>
       </div>
     </main>
   )

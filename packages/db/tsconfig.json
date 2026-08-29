@@ -1,1 +1,4 @@
-{ "extends": "@gensokyo/tsconfig/base.json", "include": ["src", "drizzle.config.ts"] }
+{
+  "extends": "@gensokyo/tsconfig/base.json",
+  "include": ["src", "drizzle.config.ts"]
+}

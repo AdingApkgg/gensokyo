@@ -3,10 +3,10 @@
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!legacy", "!thdl", "!touhou-project-music"]
+    "includes": ["**", "!legacy", "!**/*.css"]
   },
   "formatter": { "enabled": true, "indentStyle": "space" },
-  "linter": { "enabled": true, "rules": { "recommended": true } },
+  "linter": { "enabled": true, "rules": { "preset": "recommended" } },
   "javascript": {
     "formatter": { "quoteStyle": "single", "semicolons": "asNeeded" }
   }
