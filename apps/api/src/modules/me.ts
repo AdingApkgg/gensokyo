@@ -1,9 +1,11 @@
 import { Hono } from 'hono'
-import { auth } from '../auth'
+import type { AppEnv } from '../middleware/session'
 
-export const me = new Hono().get('/', async (c) => {
-  const session = await auth.api.getSession({ headers: c.req.raw.headers })
-  if (!session) return c.json({ user: null })
-  const { id, name, email, image } = session.user
-  return c.json({ user: { id, name, email, image: image ?? null } })
+export const me = new Hono<AppEnv>().get('/', (c) => {
+  const actor = c.get('actor')
+  if (!actor) return c.json({ user: null })
+  const { id, name, email, role, approvedResourceCount, strikeCount } = actor
+  return c.json({
+    user: { id, name, email, role, approvedResourceCount, strikeCount },
+  })
 })

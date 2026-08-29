@@ -19,7 +19,9 @@ export type SessionUser = {
   id: string
   name: string
   email: string
-  image: string | null
+  role: 'user' | 'moderator' | 'admin'
+  approvedResourceCount: number
+  strikeCount: number
 }
 
 const nav = [
