@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  createFileSchema,
   createResourceSchema,
   entityIdSchema,
   listResourcesQuerySchema,
-  presignUploadSchema,
   reviewResourceSchema,
   slugIdSchema,
   userIdSchema,
@@ -82,23 +82,37 @@ describe('createResourceSchema', () => {
   })
 })
 
-describe('presignUploadSchema', () => {
-  const base = {
-    kind: 'file',
-    filename: 'th06.zip',
-    contentType: 'application/zip',
-  }
+describe('createFileSchema（外链分发）', () => {
+  const base = { label: '本体 v1.00a', mirrorKind: 'netdisk' as const }
 
-  test('接受 5GB 以内', () => {
-    expect(
-      presignUploadSchema.parse({ ...base, sizeBytes: 5 * 1024 ** 3 })
-        .sizeBytes,
-    ).toBe(5 * 1024 ** 3)
+  test('接受网盘链接与提取码', () => {
+    const f = createFileSchema.parse({
+      ...base,
+      url: 'https://pan.example.com/s/abc123',
+      extractCode: 'th06',
+    })
+    expect(f.extractCode).toBe('th06')
   })
 
-  test('拒绝超过单次 PUT 上限的文件', () => {
+  test('接受 magnet', () => {
+    expect(
+      createFileSchema.parse({
+        ...base,
+        mirrorKind: 'magnet',
+        url: 'magnet:?xt=urn:btih:0123456789abcdef',
+      }).mirrorKind,
+    ).toBe('magnet')
+  })
+
+  test('拒绝 javascript: 协议（XSS 防线）', () => {
     expect(() =>
-      presignUploadSchema.parse({ ...base, sizeBytes: 5 * 1024 ** 3 + 1 }),
+      createFileSchema.parse({ ...base, url: 'javascript:alert(1)' }),
+    ).toThrow()
+  })
+
+  test('拒绝相对路径', () => {
+    expect(() =>
+      createFileSchema.parse({ ...base, url: '/etc/passwd' }),
     ).toThrow()
   })
 })

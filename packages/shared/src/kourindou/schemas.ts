@@ -2,14 +2,13 @@ import { z } from 'zod'
 import { paginationQuerySchema } from '../pagination'
 import {
   LICENSE_STATUS,
-  MAX_UPLOAD_BYTES,
+  MIRROR_KIND,
   REJECT_REASON,
   REPORT_REASON,
   RESOURCE_KIND,
   RESOURCE_SORT,
   RESOURCE_STATUS,
   REVIEW_DECISION,
-  UPLOAD_KIND,
 } from './enums'
 import { LOCALES, localizedTextSchema } from './localized'
 
@@ -45,7 +44,7 @@ export const createResourceSchema = z.object({
   circleId: entityIdSchema.optional(),
   circleNameRaw: z.string().max(120).optional(),
   tagIds: z.array(slugIdSchema).max(12).default([]),
-  coverObjectId: entityIdSchema.optional(),
+  coverUrl: z.url().max(2000).optional(),
 })
 export type CreateResource = z.infer<typeof createResourceSchema>
 
@@ -76,27 +75,34 @@ export const changeLicenseSchema = z.object({
   reason: z.string().min(1).max(500),
 })
 
+// ---------- 分发链接 ----------
+
+/** 只收 http(s) 与 magnet，挡掉 javascript: 之类 */
+const downloadUrlSchema = z
+  .string()
+  .max(2000)
+  .refine((u) => /^(https?:\/\/|magnet:\?)/i.test(u), {
+    message: '只支持 http(s) 或 magnet 链接',
+  })
+
+export const createFileSchema = z.object({
+  label: z.string().min(1).max(255),
+  url: downloadUrlSchema,
+  mirrorKind: z.enum(MIRROR_KIND),
+  /** 网盘提取码 */
+  extractCode: z.string().max(32).optional(),
+  /** 投稿者自报的体积，仅供展示 */
+  sizeBytes: z.number().int().positive().optional(),
+  note: z.string().max(500).optional(),
+})
+export type CreateFile = z.infer<typeof createFileSchema>
+
 // ---------- 版本与文件 ----------
 
 export const createVersionSchema = z.object({
   label: z.string().min(1).max(64),
   changelog: z.string().max(4000).default(''),
-  objectIds: z.array(entityIdSchema).min(1).max(20),
-})
-
-// ---------- 上传 ----------
-
-export const presignUploadSchema = z.object({
-  kind: z.enum(UPLOAD_KIND),
-  filename: z.string().min(1).max(255),
-  contentType: z.string().min(1).max(150),
-  sizeBytes: z.number().int().positive().max(MAX_UPLOAD_BYTES),
-})
-export type PresignUpload = z.infer<typeof presignUploadSchema>
-
-export const confirmUploadSchema = z.object({
-  intentId: entityIdSchema,
-  checksum: z.string().max(128).optional(),
+  files: z.array(createFileSchema).min(1).max(20),
 })
 
 // ---------- 互动 ----------

@@ -2,17 +2,15 @@ import {
   CLAIM_STATUS,
   LICENSE_STATUS,
   type LocalizedText,
+  MIRROR_KIND,
   MODERATION_ACTION,
   REJECT_REASON,
   REPORT_REASON,
   REPORT_STATUS,
   RESOURCE_KIND,
   RESOURCE_STATUS,
-  STORAGE_BUCKET,
   TAG_KIND,
   TAKEDOWN_STATUS,
-  UPLOAD_KIND,
-  UPLOAD_STATE,
   USER_ROLE,
 } from '@gensokyo/shared'
 import { relations, sql } from 'drizzle-orm'
@@ -49,9 +47,7 @@ export const reportReason = pgEnum('report_reason', REPORT_REASON)
 export const reportStatus = pgEnum('report_status', REPORT_STATUS)
 export const takedownStatus = pgEnum('takedown_status', TAKEDOWN_STATUS)
 export const claimStatus = pgEnum('claim_status', CLAIM_STATUS)
-export const uploadKind = pgEnum('upload_kind', UPLOAD_KIND)
-export const uploadState = pgEnum('upload_state', UPLOAD_STATE)
-export const storageBucket = pgEnum('storage_bucket', STORAGE_BUCKET)
+export const mirrorKind = pgEnum('mirror_kind', MIRROR_KIND)
 export const moderationAction = pgEnum('moderation_action', MODERATION_ACTION)
 
 // ---------------------------------------------------------------- 用户扩展
@@ -78,64 +74,6 @@ export const userProfile = pgTable('user_profile', {
     .defaultNow()
     .$onUpdate(() => new Date()),
 })
-
-// ---------------------------------------------------------------- 存储
-
-/**
- * 统管所有 B2 对象（封面 / 资源文件 / 社团头像）。
- *
- * 单独一张表是为了让 GC 能用**白名单**谓词——"被已知引用表引用的保留"。
- * 取反的黑名单（"没被 resource_file 引用的删掉"）会连封面一起删光。
- */
-export const storageObject = pgTable(
-  'storage_object',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    bucket: storageBucket('bucket').notNull(),
-    key: text('key').notNull().unique(),
-    sizeBytes: bigint('size_bytes', { mode: 'number' }).notNull(),
-    contentType: varchar('content_type', { length: 150 }),
-    checksum: text('checksum'),
-    /** 置值即等待 GC 回收；null 表示在用 */
-    deleteAfter: timestamp('delete_after', { withTimezone: true }),
-    createdAt: timestamp('created_at', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-  },
-  (t) => [index('storage_object_delete_after_idx').on(t.deleteAfter)],
-)
-
-/**
- * 预签名直传的意向。confirm 时校验 intent 属于当前用户，
- * 否则任何人都能把别人上传的对象挂到自己的资源上。
- */
-export const uploadIntent = pgTable(
-  'upload_intent',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    ownerId: text('owner_id')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
-    kind: uploadKind('kind').notNull(),
-    state: uploadState('state').notNull().default('pending'),
-    bucket: storageBucket('bucket').notNull(),
-    key: text('key').notNull().unique(),
-    filename: varchar('filename', { length: 255 }).notNull(),
-    contentType: varchar('content_type', { length: 150 }).notNull(),
-    sizeBytes: bigint('size_bytes', { mode: 'number' }).notNull(),
-    objectId: uuid('object_id').references(() => storageObject.id, {
-      onDelete: 'set null',
-    }),
-    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-    createdAt: timestamp('created_at', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-  },
-  (t) => [
-    index('upload_intent_owner_idx').on(t.ownerId),
-    index('upload_intent_state_expires_idx').on(t.state, t.expiresAt),
-  ],
-)
 
 // ---------------------------------------------------------------- 分类与标签
 
@@ -179,10 +117,7 @@ export const circle = pgTable(
       .notNull()
       .default({}),
     websiteUrl: text('website_url'),
-    avatarObjectId: uuid('avatar_object_id').references(
-      () => storageObject.id,
-      { onDelete: 'set null' },
-    ),
+    avatarUrl: text('avatar_url'),
     /** 认领成功后指向社团本人的账号 */
     ownerId: text('owner_id').references(() => user.id, {
       onDelete: 'set null',
@@ -257,9 +192,7 @@ export const resource = pgTable(
     }),
     /** 社团未建档时的原始署名 */
     circleNameRaw: varchar('circle_name_raw', { length: 120 }),
-    coverObjectId: uuid('cover_object_id').references(() => storageObject.id, {
-      onDelete: 'set null',
-    }),
+    coverUrl: text('cover_url'),
     downloadCount: integer('download_count').notNull().default(0),
     ratingSum: integer('rating_sum').notNull().default(0),
     ratingCount: integer('rating_count').notNull().default(0),
@@ -324,6 +257,11 @@ export const resourceVersion = pgTable(
   ],
 )
 
+/**
+ * 分发链接。M3 只做外链——中文同人圈的实际主流是网盘 + 提取码。
+ * 自托管（B2 直传）是后续增量：加一个 mirrorKind='hosted' 与对象表即可，
+ * 现有行不受影响。
+ */
 export const resourceFile = pgTable(
   'resource_file',
   {
@@ -331,10 +269,14 @@ export const resourceFile = pgTable(
     versionId: uuid('version_id')
       .notNull()
       .references(() => resourceVersion.id, { onDelete: 'cascade' }),
-    objectId: uuid('object_id')
-      .notNull()
-      .references(() => storageObject.id, { onDelete: 'restrict' }),
-    displayName: varchar('display_name', { length: 255 }).notNull(),
+    label: varchar('label', { length: 255 }).notNull(),
+    url: text('url').notNull(),
+    kind: mirrorKind('kind').notNull(),
+    /** 网盘提取码 */
+    extractCode: varchar('extract_code', { length: 32 }),
+    /** 投稿者自报，仅供展示，不可信 */
+    sizeBytes: bigint('size_bytes', { mode: 'number' }),
+    note: varchar('note', { length: 500 }),
     sortOrder: integer('sort_order').notNull().default(0),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
@@ -509,10 +451,6 @@ export const resourceRelations = relations(resource, ({ one, many }) => ({
     fields: [resource.circleId],
     references: [circle.id],
   }),
-  cover: one(storageObject, {
-    fields: [resource.coverObjectId],
-    references: [storageObject.id],
-  }),
   versions: many(resourceVersion),
   tags: many(resourceTag),
   ratings: many(rating),
@@ -533,10 +471,6 @@ export const resourceFileRelations = relations(resourceFile, ({ one }) => ({
   version: one(resourceVersion, {
     fields: [resourceFile.versionId],
     references: [resourceVersion.id],
-  }),
-  object: one(storageObject, {
-    fields: [resourceFile.objectId],
-    references: [storageObject.id],
   }),
 }))
 

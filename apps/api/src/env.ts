@@ -12,20 +12,3 @@ export const env = z
     PORT: z.coerce.number().int().default(3001),
   })
   .parse(process.env)
-
-/**
- * B2 配置单独校验：dev 环境不配也能跑，只有真正用到存储时才要求。
- * 抛错时说清楚缺什么，不要留一个 undefined 传进 S3Client。
- */
-export function storageEnv() {
-  return z
-    .object({
-      B2_ENDPOINT: z.url(),
-      B2_REGION: z.string().min(1),
-      B2_ACCESS_KEY_ID: z.string().min(1),
-      B2_SECRET_ACCESS_KEY: z.string().min(1),
-      B2_BUCKET_PUBLIC: z.string().min(1),
-      B2_BUCKET_PRIVATE: z.string().min(1),
-    })
-    .parse(process.env)
-}

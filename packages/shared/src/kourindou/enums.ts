@@ -82,14 +82,18 @@ export type ClaimStatus = (typeof CLAIM_STATUS)[number]
 export const TOPIC_KIND = ['resource', 'board'] as const
 export type TopicKind = (typeof TOPIC_KIND)[number]
 
-export const UPLOAD_KIND = ['cover', 'file'] as const
-export type UploadKind = (typeof UPLOAD_KIND)[number]
-
-export const UPLOAD_STATE = ['pending', 'uploaded', 'consumed'] as const
-export type UploadState = (typeof UPLOAD_STATE)[number]
-
-export const STORAGE_BUCKET = ['public', 'private'] as const
-export type StorageBucket = (typeof STORAGE_BUCKET)[number]
+/**
+ * 分发方式。M3 先做外链——中文同人圈的实际主流是网盘链接，
+ * 自托管（B2 直传）是后续增量，加回来时这里补一个 'hosted'。
+ */
+export const MIRROR_KIND = [
+  'netdisk',
+  'direct',
+  'torrent',
+  'magnet',
+  'other',
+] as const
+export type MirrorKind = (typeof MIRROR_KIND)[number]
 
 export const RESOURCE_SORT = ['newest', 'downloads', 'rating'] as const
 export type ResourceSort = (typeof RESOURCE_SORT)[number]
@@ -107,6 +111,3 @@ export type ModerationAction = (typeof MODERATION_ACTION)[number]
 
 /** 即发即审门槛：通过 N 个资源且无违规记录 */
 export const TRUST_AUTO_PUBLISH_THRESHOLD = 3
-
-/** 单次预签名 PUT 的上限。S3 兼容存储的硬限制，也是不做 multipart 的依据 */
-export const MAX_UPLOAD_BYTES = 5 * 1024 ** 3

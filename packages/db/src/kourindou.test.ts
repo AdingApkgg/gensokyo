@@ -27,8 +27,6 @@ const EXPECTED_TABLES = [
   'account',
   'verification',
   'user_profile',
-  'storage_object',
-  'upload_intent',
   'resource_category',
   'tag',
   'circle',
@@ -73,7 +71,7 @@ beforeAll(async () => {
 })
 
 describe('schema', () => {
-  test('23 张表全部存在', async () => {
+  test('21 张表全部存在', async () => {
     const r = await rows(sql`
       select table_name from information_schema.tables
       where table_schema = 'public'

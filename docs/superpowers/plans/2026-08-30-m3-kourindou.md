@@ -4,9 +4,13 @@
 
 **Goal:** 香霖堂资源分发闭环可用：**上传 → 审核 → 分发 → 互动**，且两条版权生死线成立（每个资源有许可状态、下架通道走得通、pending 内容下载不到）。
 
-**Architecture:** zod 契约在 `@gensokyo/shared` → hono 校验与 `AppType` → RR8 loader/action。存储用 Bun 原生 `S3Client`（不引 aws-sdk），单次预签名 PUT。评论从第一天就是 `topic + post`（M4 论坛共用同一份数据）。
+**Architecture:** zod 契约在 `@gensokyo/shared` → hono 校验与 `AppType` → RR8 loader/action。**分发走外链镜像**（网盘 + 提取码 / 直链 / 磁链），不自托管文件。评论从第一天就是 `topic + post`（M4 论坛共用同一份数据）。
 
-**Tech Stack:** Bun / hono / zod v4 / drizzle + PostgreSQL 18 / React Router v8 / Paraglide / Backblaze B2
+> **2026-08-30 范围变更：暂时去掉对象存储。** 原设计要求公开/私有双桶（B2）。改为**外链分发优先**——这既是中文同人圈的实际主流（网盘链接 + 提取码），也是产品文档原本写的"B2 对象 + 外链镜像混合"里的一半。影响：删掉 `storage_object` / `upload_intent` 两张表与整个 T4 上传链路；`resource_file` 改为存 url + mirrorKind + extractCode；封面与社团头像改为外链 URL。
+>
+> 加回自托管是**纯增量**：`MIRROR_KIND` 补一个 `'hosted'`、加回对象表、上传链路独立开发，已有的外链行不受影响。之所以能这么干脆地砍，正是因为库里没有数据——审查那条方法论纠正在这里再次成立。
+
+**Tech Stack:** Bun / hono / zod v4 / drizzle + PostgreSQL 18 / React Router v8 / Paraglide
 
 **Spec:** `docs/superpowers/specs/2026-08-30-gensokyo-monorepo-design.md` · 产品文档 `docs/product/2026-08-30-platform-direction.md`
 **调研原始材料：** `docs/superpowers/research/2026-08-30-m3-kourindou/`（含 legacy 逐字段分析、B2 链路、两份对抗审查）
@@ -17,13 +21,13 @@
 
 审查里有一条方法论纠正必须写在最前面，它推翻了原方案大量论证：
 
-> **库里没有数据时，「现在不建表以后要迁移」这个论证不成立。** `rm -rf drizzle && generate && migrate` 是零成本的。真正不可逆的只有三样：**已上传到 B2 的对象布局（双桶）**、**已对外发出的 URL / slug**、**法律留痕**。除此之外的"预留"一律按 YAGNI 处理。
+> **库里没有数据时，「现在不建表以后要迁移」这个论证不成立。** `rm -rf drizzle && generate && migrate` 是零成本的。真正不可逆的只有三样：**已对外发出的 URL / slug**、**法律留痕**。除此之外的"预留"一律按 YAGNI 处理。
 
 据此砍掉（详见 `critiques-simplify.md` D1–D10、A1–A3）：
 
 | 砍掉 | 理由 |
 |---|---|
-| 整条 multipart 上传 | 单次预签名 PUT 上限 5 GB，覆盖同人游戏/图集/无损专辑的全部可预见体积。连带消掉 aws-sdk 依赖、CRC32 陷阱、分片清理 cron |
+| 整条对象存储（含 multipart） | 见上方范围变更：M3 走外链分发，不碰 B2。连带消掉 aws-sdk、预签名、分片、GC 巡检、双桶拓扑 |
 | `resource_translation` 侧表 | 一整套社区翻译子系统，却不打算给它任何写入口。改为 `description jsonb`，与 `title` 同形状 |
 | `touhou_work` / `convention` / `resource_work` 三张表 | M3 对它们的全部操作是"按它筛选 + 显示多语名"，与 `tag` 完全同构。并入 `tag` + `tag.kind` |
 | `thank`（感谢） | 与收藏高度重叠，产品上没有区分需求 |
@@ -39,8 +43,6 @@
 
 - **评论从第一天就是 `topic + post`** —— 产品文档第 1 号已批准决策（资源评论与论坛帖同源）。推到 M4 就要做数据迁移
 - **许可状态字段 + 变更留痕** —— 版权争议随时可能来，法务证据链没有补录的可能
-- **双桶（public / private）** —— 整桶 public 上线后再改要重传全部对象
-- **`upload_intent` 核销** —— 不做则上线首日就有越权挂载他人对象的洞
 - **`resource.uploaderId` 用 `set null` 而非 cascade** —— cascade 上线后误删一个用户即不可逆数据丢失
 
 ## Global Constraints
@@ -48,10 +50,8 @@
 沿用 M1/M2 全部约定（Bun、Biome、`.basePath('/api')`、链式 `.route()` 保 `AppType`、Paraglide 三语无裸字符串、`bun run services` 起依赖），另加：
 
 - **id schema 分三种**（`critiques-gaps.md` P0-3，已实测）：better-auth 的 `generateId` 产生 **32 位随机字母数字串，不是 UUID**。因此 `userIdSchema = z.string().min(1).max(64)`；业务实体用 `entityIdSchema = z.uuid()`（`Bun.randomUUIDv7()`）；查找表用 `slugIdSchema`。**任何地方写 `z.uuid()` 校验用户 id 都会对每个真实用户返回 400**
-- **GC 谓词一律用白名单**（"被已知引用表引用的对象保留"），绝不用取反黑名单——同 `critiques-gaps.md` P0-6，黑名单会删光全站封面
 - 数据库可破坏性重建（无存量数据）：删迁移重新 `generate`，不写增量迁移
-- 存储只用 `Bun.S3Client`，**不引入 `@aws-sdk/*`**
-- 上传时把 `Content-Disposition: attachment; filename*=UTF-8''…` 作为签名头写进对象元数据，之后任何签名 GET 自带正确文件名
+- **外链只收 http(s) 与 magnet**，`javascript:` 之类在 zod 层就挡掉（XSS 防线）
 - 每个 Task 结尾 `bun run check && typecheck && test` 通过再提交
 
 ---
@@ -60,7 +60,7 @@
 
 **Files:** Create `packages/shared/src/kourindou/{enums,localized,schemas}.ts`、`index.ts`、`localized.test.ts`；Modify `packages/shared/src/index.ts`
 
-**Interfaces:** Produces `RESOURCE_STATUS` / `LICENSE_STATUS` / `TAG_KIND` / `TRUST_LEVEL` / `REVIEW_DECISION` 等枚举常量；`localizedTextSchema`、`resolveLocalized()`；`entityIdSchema` / `userIdSchema` / `slugIdSchema`；`createResourceSchema` / `listResourcesQuerySchema` / `presignUploadSchema` / `rateSchema` / `createPostSchema` / `createReportSchema`
+**Interfaces:** Produces `RESOURCE_STATUS` / `LICENSE_STATUS` / `TAG_KIND` / `TRUST_LEVEL` / `REVIEW_DECISION` 等枚举常量；`localizedTextSchema`、`resolveLocalized()`；`entityIdSchema` / `userIdSchema` / `slugIdSchema`；`createResourceSchema` / `listResourcesQuerySchema` / `createFileSchema` / `rateSchema` / `createPostSchema` / `createReportSchema`
 
 - [ ] **Step 1: 枚举与 id schema**（唯一事实来源，DDL 与校验都从这里派生）
 
@@ -154,11 +154,12 @@ export const listResourcesQuerySchema = paginationQuerySchema.extend({
   sort: z.enum(['newest', 'downloads', 'rating']).default('newest'),
 })
 
-export const presignUploadSchema = z.object({
-  kind: z.enum(['cover', 'file']),
-  filename: z.string().min(1).max(255),
-  contentType: z.string().min(1).max(150),
-  sizeBytes: z.number().int().positive().max(5 * 1024 ** 3), // 单次 PUT 上限
+export const createFileSchema = z.object({
+  label: z.string().min(1).max(255),
+  url: downloadUrlSchema,          // 只收 http(s) / magnet
+  mirrorKind: z.enum(MIRROR_KIND), // netdisk / direct / torrent / magnet / other
+  extractCode: z.string().max(32).optional(),  // 网盘提取码
+  sizeBytes: z.number().int().positive().optional(),
 })
 ```
 
@@ -173,7 +174,7 @@ git add packages/shared && git commit -m "feat: kourindou contracts in @gensokyo
 
 **Files:** Create `packages/db/src/schema/kourindou.ts`、`content.ts`、`scripts/seed.ts`；Modify `packages/db/src/schema/index.ts`、`packages/db/package.json`
 
-**Interfaces:** Consumes T1 枚举。Produces 13 张表：`resource` `resource_version` `resource_file` `upload_intent` `storage_object` `circle` `circle_claim` `tag` `resource_tag` `resource_category`(查找) `rating` `favorite` `report` `takedown_request` `download_log` `user_profile` `moderation_log`，以及 `content.ts` 的 `topic` `post`
+**Interfaces:** Consumes T1 枚举。Produces 17 张表：`resource` `resource_version` `resource_file` `circle` `circle_claim` `tag` `resource_tag` `resource_category`(查找) `rating` `favorite` `report` `takedown_request` `download_log` `user_profile` `moderation_log`，以及 `content.ts` 的 `topic` `post`
 
 - [ ] **Step 1: 核心资源表**（枚举用 pgEnum，值从 T1 常量派生，保证两边不漂移）
 
@@ -210,18 +211,19 @@ export const resource = pgTable('resource', {
 ])
 ```
 
-- [ ] **Step 2: `storage_object` 统管所有 B2 对象**（封面/文件/头像同一张表，GC 才有白名单可用）
+- [ ] **Step 2: `resource_file` 存外链**（网盘 + 提取码是中文同人圈的实际分发方式）
 
 ```ts
-export const storageObject = pgTable('storage_object', {
+export const resourceFile = pgTable('resource_file', {
   id: uuid('id').primaryKey().defaultRandom(),
-  bucket: varchar('bucket', { length: 16 }).notNull(),      // 'public' | 'private'
-  key: text('key').notNull().unique(),
-  sizeBytes: bigint('size_bytes', { mode: 'number' }).notNull(),
-  contentType: varchar('content_type', { length: 150 }),
-  checksum: text('checksum'),
-  deleteAfter: timestamp('delete_after', { withTimezone: true }),  // 置值即等待 GC
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  versionId: uuid('version_id').notNull()
+    .references(() => resourceVersion.id, { onDelete: 'cascade' }),
+  label: varchar('label', { length: 255 }).notNull(),
+  url: text('url').notNull(),
+  kind: mirrorKind('kind').notNull(),
+  extractCode: varchar('extract_code', { length: 32 }),
+  sizeBytes: bigint('size_bytes', { mode: 'number' }),  // 投稿者自报，不可信
+  sortOrder: integer('sort_order').notNull().default(0),
 })
 ```
 
@@ -304,7 +306,7 @@ Run: `bun test` → 全绿，提交。
 
 **Interfaces:** Produces `env`（校验过的环境变量）；`fail(c, code, status)` 统一错误信封 `{ error: { code, fields? } }`（code 是 key，前端本地化）；`sessionMiddleware` 注入 `c.var.actor = { user, profile } | null`；`requireAuth` / `requireRole('moderator')` / `requireOwnerOrRole`
 
-- [ ] **Step 1: env 校验**（缺 B2 配置应在启动时炸，不是第一次上传时）
+- [ ] **Step 1: env 校验**（缺配置应在进程起来时炸，不是第一次请求时）
 
 ```ts
 // apps/api/src/env.ts
@@ -313,12 +315,7 @@ export const env = z.object({
   DATABASE_URL: z.string().min(1),
   BETTER_AUTH_SECRET: z.string().min(16),
   BETTER_AUTH_URL: z.string().url(),
-  B2_ENDPOINT: z.string().url(),
-  B2_REGION: z.string().min(1),
-  B2_ACCESS_KEY_ID: z.string().min(1),
-  B2_SECRET_ACCESS_KEY: z.string().min(1),
-  B2_BUCKET_PUBLIC: z.string().min(1),
-  B2_BUCKET_PRIVATE: z.string().min(1),
+  PORT: z.coerce.number().int().default(3001),
 }).parse(process.env)
 ```
 
@@ -342,40 +339,15 @@ export const fail = (c: Context, code: ErrorCode, status = 400) =>
 
 - [ ] **Step 4: 验证并提交**
 
-### T4: 存储与上传（intent → presign → confirm）
+### T4（已取消）：对象存储与上传
 
-**Files:** Create `apps/api/src/storage.ts`、`modules/uploads.ts`；Modify `app.ts`；Test `uploads.test.ts`
+见开头的范围变更。M3 不做自托管，本 Task 整体推迟到 B2 桶就绪后作为增量开发。
 
-**Interfaces:** Produces `POST /api/uploads/presign` → `{ intentId, url, headers }`；`POST /api/uploads/confirm` → `{ objectId }`。私有桶存资源文件、公开桶存封面
-
-- [ ] **Step 1: 存储封装**（Bun 原生，不引 aws-sdk）
-
-```ts
-// apps/api/src/storage.ts
-import { S3Client } from 'bun'
-const common = { endpoint: env.B2_ENDPOINT, region: env.B2_REGION,
-  accessKeyId: env.B2_ACCESS_KEY_ID, secretAccessKey: env.B2_SECRET_ACCESS_KEY }
-export const publicBucket = new S3Client({ ...common, bucket: env.B2_BUCKET_PUBLIC })
-export const privateBucket = new S3Client({ ...common, bucket: env.B2_BUCKET_PRIVATE })
-
-/** 上传即写入 Content-Disposition，之后任何签名 GET 自带正确文件名 */
-export const presignPut = (bucket: S3Client, key: string, contentType: string, filename: string) =>
-  bucket.presign(key, { method: 'PUT', expiresIn: 900, type: contentType,
-    // filename* 用 RFC 5987 编码，中日文件名才不会乱码
-  })
-```
-
-- [ ] **Step 2: 失败测试**（先写：未登录 401；超 5GB 返回 `file_too_large`；confirm 别人的 intent 返回 `upload_intent_invalid`）
-
-- [ ] **Step 3: 实现两个端点**。presign 建 `upload_intent`（含 `ownerId`、`state='pending'`、`expiresAt`）；confirm 校验 **intent 属于当前用户** 且对象确实存在（`HEAD`），然后建 `storage_object`、intent 置 `consumed`。**越权挂载他人对象的洞就堵在这一步**
-
-- [ ] **Step 4: 验证并提交**
-
-### T5: 下载（白名单 + 签名 URL + 并发安全计数）
+### T5: 下载跳转（白名单 + 并发安全计数）
 
 **Files:** Create `apps/api/src/modules/download.ts`；Test 扩展
 
-**Interfaces:** Produces `GET /api/kourindou/resources/:slug/files/:fileId/download` → 302 到签名 URL
+**Interfaces:** Produces `GET /api/kourindou/resources/:slug/files/:fileId/download` → 302 到外链
 
 - [ ] **Step 1: 失败测试**——**这是安全测试，必须先红**
 
@@ -392,6 +364,8 @@ test('delisted 资源的文件下载不到', async () => { /* 同上 */ })
 ```ts
 if (r.status !== 'published' || r.deletedAt !== null) return fail(c, 'not_found', 404)
 ```
+
+- [ ] **Step 2b: 302 到 `file.url`**，同时写 `download_log`。外链本身不校验可达性（网盘链接反爬），失效由用户举报 `broken_link` 处理
 
 - [ ] **Step 3: 计数用原子 SQL，不是读改写**
 
@@ -478,7 +452,7 @@ await db.update(resource).set({ downloadCount: sql`${resource.downloadCount} + 1
 
 **Files:** `apps/web/app/routes/kourindou/upload.tsx` + 组件
 
-- [ ] Step 1: 三步：① 基本信息（标题/类型/许可状态，**许可状态必选且带解释**）② 文件（拖拽 → presign → 直传 → confirm，带进度条）③ 确认提交
+- [ ] Step 1: 三步：① 基本信息（标题/类型/许可状态，**许可状态必选且带解释**）② 分发链接（网盘/直链/磁链 + 提取码，可加多条镜像）③ 确认提交
 - [ ] Step 2: 前端用同一份 zod schema 校验（`packages/shared`），错误就地显示
 - [ ] Step 3: 上传失败可重试单个文件，不丢已填表单
 - [ ] Step 4: 提交后按信任梯度提示"已发布"或"待审核"
@@ -510,6 +484,6 @@ Meilisearch 查询接管 · 社团页与认领审批 UI · 外链镜像上传 ·
 ## Self-Review 记录
 
 - Spec 覆盖：产品文档香霖堂全部机制（先发后审 ✓ T7、信任梯度 ✓ T7/T10、许可状态 ✓ T1/T2/T7、认领收单 ✓ T2 表就位、多维标签 ✓ T2 tag.kind、评分收藏举报 ✓ T8、下载统计 ✓ T5、资源评论=论坛帖 ✓ T2/T9）；Turnstile 推迟到 M3.5（M3 无用户，反滥用靠信任梯度 + 限流）
-- 采纳 `critiques-gaps.md` 全部 6 个 P0：id 三分（Global Constraints）、`user_profile` 进 T2、`storage_object` 统管对象、`moderation_log` 跨实体审计、`deletedAt` 软删、GC 白名单谓词
+- 采纳 `critiques-gaps.md` 全部 6 个 P0：id 三分（Global Constraints）、`user_profile` 进 T2、`moderation_log` 跨实体审计、`deletedAt` 软删（对象存储相关的两条随范围变更失效）
 - 采纳 `critiques-simplify.md` D1–D10 / A1–A3：13 张表、~30 条路由、无 multipart、无 aws-sdk、无 service 分层（除 content）
 - 类型一致性：T1 的 `entityIdSchema`/`userIdSchema`/`slugIdSchema` → T6/T7/T8 消费；T2 的 `storageObject` → T4/T5 消费；T2 的 `topic`/`post` → T9 消费；T3 的 `fail()`/`requireRole` → T4–T10 消费

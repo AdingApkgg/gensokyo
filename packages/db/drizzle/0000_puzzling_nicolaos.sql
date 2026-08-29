@@ -1,17 +1,15 @@
 CREATE TYPE "public"."topic_kind" AS ENUM('resource', 'board');--> statement-breakpoint
 CREATE TYPE "public"."claim_status" AS ENUM('open', 'approved', 'rejected', 'withdrawn');--> statement-breakpoint
 CREATE TYPE "public"."license_status" AS ENUM('allowed', 'unspecified', 'out_of_print', 'licensed');--> statement-breakpoint
+CREATE TYPE "public"."mirror_kind" AS ENUM('netdisk', 'direct', 'torrent', 'magnet', 'other');--> statement-breakpoint
 CREATE TYPE "public"."moderation_action" AS ENUM('review', 'status_change', 'license_change', 'report_resolve', 'takedown_resolve', 'trust_change');--> statement-breakpoint
 CREATE TYPE "public"."reject_reason" AS ENUM('copyright', 'illegal', 'low_quality', 'duplicate', 'other');--> statement-breakpoint
 CREATE TYPE "public"."report_reason" AS ENUM('copyright', 'illegal', 'broken_link', 'wrong_info', 'other');--> statement-breakpoint
 CREATE TYPE "public"."report_status" AS ENUM('open', 'resolved', 'rejected');--> statement-breakpoint
 CREATE TYPE "public"."resource_kind" AS ENUM('game', 'music', 'doujinshi', 'patch', 'tool');--> statement-breakpoint
 CREATE TYPE "public"."resource_status" AS ENUM('draft', 'pending', 'published', 'delisted');--> statement-breakpoint
-CREATE TYPE "public"."storage_bucket" AS ENUM('public', 'private');--> statement-breakpoint
 CREATE TYPE "public"."tag_kind" AS ENUM('work', 'convention', 'language', 'other');--> statement-breakpoint
 CREATE TYPE "public"."takedown_status" AS ENUM('open', 'accepted', 'rejected');--> statement-breakpoint
-CREATE TYPE "public"."upload_kind" AS ENUM('cover', 'file');--> statement-breakpoint
-CREATE TYPE "public"."upload_state" AS ENUM('pending', 'uploaded', 'consumed');--> statement-breakpoint
 CREATE TYPE "public"."user_role" AS ENUM('user', 'moderator', 'admin');--> statement-breakpoint
 CREATE TABLE "account" (
 	"id" text PRIMARY KEY NOT NULL,
@@ -95,7 +93,7 @@ CREATE TABLE "circle" (
 	"name" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"description" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"website_url" text,
-	"avatar_object_id" uuid,
+	"avatar_url" text,
 	"owner_id" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "circle_slug_unique" UNIQUE("slug")
@@ -176,7 +174,7 @@ CREATE TABLE "resource" (
 	"uploader_id" text,
 	"circle_id" uuid,
 	"circle_name_raw" varchar(120),
-	"cover_object_id" uuid,
+	"cover_url" text,
 	"download_count" integer DEFAULT 0 NOT NULL,
 	"rating_sum" integer DEFAULT 0 NOT NULL,
 	"rating_count" integer DEFAULT 0 NOT NULL,
@@ -196,8 +194,12 @@ CREATE TABLE "resource_category" (
 CREATE TABLE "resource_file" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"version_id" uuid NOT NULL,
-	"object_id" uuid NOT NULL,
-	"display_name" varchar(255) NOT NULL,
+	"label" varchar(255) NOT NULL,
+	"url" text NOT NULL,
+	"kind" "mirror_kind" NOT NULL,
+	"extract_code" varchar(32),
+	"size_bytes" bigint,
+	"note" varchar(500),
 	"sort_order" integer DEFAULT 0 NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -215,18 +217,6 @@ CREATE TABLE "resource_version" (
 	"changelog" text DEFAULT '' NOT NULL,
 	"is_latest" integer DEFAULT 0 NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "storage_object" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"bucket" "storage_bucket" NOT NULL,
-	"key" text NOT NULL,
-	"size_bytes" bigint NOT NULL,
-	"content_type" varchar(150),
-	"checksum" text,
-	"delete_after" timestamp with time zone,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "storage_object_key_unique" UNIQUE("key")
 );
 --> statement-breakpoint
 CREATE TABLE "tag" (
@@ -251,22 +241,6 @@ CREATE TABLE "takedown_request" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "upload_intent" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"owner_id" text NOT NULL,
-	"kind" "upload_kind" NOT NULL,
-	"state" "upload_state" DEFAULT 'pending' NOT NULL,
-	"bucket" "storage_bucket" NOT NULL,
-	"key" text NOT NULL,
-	"filename" varchar(255) NOT NULL,
-	"content_type" varchar(150) NOT NULL,
-	"size_bytes" bigint NOT NULL,
-	"object_id" uuid,
-	"expires_at" timestamp with time zone NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "upload_intent_key_unique" UNIQUE("key")
-);
---> statement-breakpoint
 CREATE TABLE "user_profile" (
 	"user_id" text PRIMARY KEY NOT NULL,
 	"role" "user_role" DEFAULT 'user' NOT NULL,
@@ -283,7 +257,6 @@ ALTER TABLE "post" ADD CONSTRAINT "post_author_id_user_id_fk" FOREIGN KEY ("auth
 ALTER TABLE "post" ADD CONSTRAINT "post_parent_id_post_id_fk" FOREIGN KEY ("parent_id") REFERENCES "public"."post"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "topic" ADD CONSTRAINT "topic_resource_id_resource_id_fk" FOREIGN KEY ("resource_id") REFERENCES "public"."resource"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "topic" ADD CONSTRAINT "topic_author_id_user_id_fk" FOREIGN KEY ("author_id") REFERENCES "public"."user"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "circle" ADD CONSTRAINT "circle_avatar_object_id_storage_object_id_fk" FOREIGN KEY ("avatar_object_id") REFERENCES "public"."storage_object"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "circle" ADD CONSTRAINT "circle_owner_id_user_id_fk" FOREIGN KEY ("owner_id") REFERENCES "public"."user"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "circle_claim" ADD CONSTRAINT "circle_claim_circle_id_circle_id_fk" FOREIGN KEY ("circle_id") REFERENCES "public"."circle"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "circle_claim" ADD CONSTRAINT "circle_claim_claimant_id_user_id_fk" FOREIGN KEY ("claimant_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -300,16 +273,12 @@ ALTER TABLE "report" ADD CONSTRAINT "report_resolved_by_user_id_fk" FOREIGN KEY 
 ALTER TABLE "resource" ADD CONSTRAINT "resource_category_id_resource_category_id_fk" FOREIGN KEY ("category_id") REFERENCES "public"."resource_category"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "resource" ADD CONSTRAINT "resource_uploader_id_user_id_fk" FOREIGN KEY ("uploader_id") REFERENCES "public"."user"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "resource" ADD CONSTRAINT "resource_circle_id_circle_id_fk" FOREIGN KEY ("circle_id") REFERENCES "public"."circle"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "resource" ADD CONSTRAINT "resource_cover_object_id_storage_object_id_fk" FOREIGN KEY ("cover_object_id") REFERENCES "public"."storage_object"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "resource_file" ADD CONSTRAINT "resource_file_version_id_resource_version_id_fk" FOREIGN KEY ("version_id") REFERENCES "public"."resource_version"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "resource_file" ADD CONSTRAINT "resource_file_object_id_storage_object_id_fk" FOREIGN KEY ("object_id") REFERENCES "public"."storage_object"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "resource_tag" ADD CONSTRAINT "resource_tag_resource_id_resource_id_fk" FOREIGN KEY ("resource_id") REFERENCES "public"."resource"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "resource_tag" ADD CONSTRAINT "resource_tag_tag_id_tag_id_fk" FOREIGN KEY ("tag_id") REFERENCES "public"."tag"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "resource_version" ADD CONSTRAINT "resource_version_resource_id_resource_id_fk" FOREIGN KEY ("resource_id") REFERENCES "public"."resource"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "takedown_request" ADD CONSTRAINT "takedown_request_resource_id_resource_id_fk" FOREIGN KEY ("resource_id") REFERENCES "public"."resource"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "takedown_request" ADD CONSTRAINT "takedown_request_handled_by_user_id_fk" FOREIGN KEY ("handled_by") REFERENCES "public"."user"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "upload_intent" ADD CONSTRAINT "upload_intent_owner_id_user_id_fk" FOREIGN KEY ("owner_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "upload_intent" ADD CONSTRAINT "upload_intent_object_id_storage_object_id_fk" FOREIGN KEY ("object_id") REFERENCES "public"."storage_object"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "user_profile" ADD CONSTRAINT "user_profile_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "account_userId_idx" ON "account" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "session_userId_idx" ON "session" USING btree ("user_id");--> statement-breakpoint
@@ -337,8 +306,5 @@ CREATE INDEX "resource_tag_tag_idx" ON "resource_tag" USING btree ("tag_id");-->
 CREATE INDEX "resource_version_resource_idx" ON "resource_version" USING btree ("resource_id","created_at" DESC NULLS LAST);--> statement-breakpoint
 CREATE UNIQUE INDEX "resource_version_label_uq" ON "resource_version" USING btree ("resource_id","label");--> statement-breakpoint
 CREATE UNIQUE INDEX "resource_version_latest_uq" ON "resource_version" USING btree ("resource_id") WHERE "resource_version"."is_latest" = 1;--> statement-breakpoint
-CREATE INDEX "storage_object_delete_after_idx" ON "storage_object" USING btree ("delete_after");--> statement-breakpoint
 CREATE INDEX "tag_kind_idx" ON "tag" USING btree ("kind","sort_order");--> statement-breakpoint
-CREATE INDEX "takedown_resource_idx" ON "takedown_request" USING btree ("resource_id");--> statement-breakpoint
-CREATE INDEX "upload_intent_owner_idx" ON "upload_intent" USING btree ("owner_id");--> statement-breakpoint
-CREATE INDEX "upload_intent_state_expires_idx" ON "upload_intent" USING btree ("state","expires_at");
+CREATE INDEX "takedown_resource_idx" ON "takedown_request" USING btree ("resource_id");
