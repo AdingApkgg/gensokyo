@@ -5,7 +5,8 @@
     "REDIS_URL",
     "MEILI_*",
     "API_URL",
-    "PORT"
+    "PORT",
+    "BETTER_AUTH_*"
   ],
   "tasks": {
     "dev": { "cache": false, "persistent": true },
