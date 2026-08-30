@@ -125,3 +125,6 @@ apps/web/app/paraglide/
 # 审计 agent 的临时探测文件
 **/*probe*
 **/zz*
+
+# 生产密钥，绝不进 git
+deploy/.env

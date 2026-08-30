@@ -1,0 +1,29 @@
+# 单入口反代。浏览器侧的 api 客户端与 better-auth 都按**同源**拼地址
+# （见 apps/web/app/lib/api.ts 与 auth-client.ts），所以 /api 必须和页面同域，
+# 不能把 api 单独暴露到另一个端口。
+#
+# 站点地址由 SITE_ADDRESS 注入：
+#   - 内网预览：`:80`（配合 compose 的端口映射，走明文 http）
+#   - 正式域名：`th.saop.cc`（Caddy 自动签证书）
+
+{$SITE_ADDRESS::80} {
+	encode zstd gzip
+
+	# 图片：MinIO 只在内网，对外一律经这里读，S3_PUBLIC_BASE_URL 指向 /img/<bucket>
+	handle_path /img/* {
+		reverse_proxy minio:9000
+	}
+
+	handle /api/* {
+		reverse_proxy api:3001
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}
