@@ -106,8 +106,34 @@ export const MODERATION_ACTION = [
   'report_resolve',
   'takedown_resolve',
   'trust_change',
+  'role_change',
+  'hard_delete',
+  'config_change',
 ] as const
 export type ModerationAction = (typeof MODERATION_ACTION)[number]
 
 /** 即发即审门槛：通过 N 个资源且无违规记录 */
 export const TRUST_AUTO_PUBLISH_THRESHOLD = 3
+
+/**
+ * 站点配置。键是白名单的——配置表是 admin 唯一能写的自由结构，
+ * 不限死键名等于给自己开一个任意写入口。
+ */
+export const SITE_CONFIG_KEYS = [
+  /** 是否开放注册 */
+  'registrationOpen',
+  /** 即发即审门槛：通过多少个资源后免审 */
+  'autoPublishThreshold',
+  /** 版权联系邮箱——「权利人能联系到你」是法律要求，不能只存在于代码注释里 */
+  'takedownEmail',
+  /** 站点公告，三语 */
+  'announcement',
+] as const
+export type SiteConfigKey = (typeof SITE_CONFIG_KEYS)[number]
+
+/** 公开可读的配置：前端要用来决定是否显示注册入口、下架联系方式等 */
+export const PUBLIC_CONFIG_KEYS: readonly SiteConfigKey[] = [
+  'registrationOpen',
+  'takedownEmail',
+  'announcement',
+]

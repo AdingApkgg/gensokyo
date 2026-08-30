@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { auth } from './auth'
 import { fail } from './errors'
 import { type AppEnv, sessionMiddleware } from './middleware/session'
+import { admin, publicConfig } from './modules/admin'
 import { content } from './modules/content'
 import { interactions } from './modules/interactions'
 import { kourindou } from './modules/kourindou'
@@ -21,6 +22,8 @@ export const app = new Hono<AppEnv>()
   .route('/kourindou', interactions)
   .route('/kourindou', content)
   .route('/moderation', moderation)
+  .route('/admin', admin)
+  .route('/config', publicConfig)
 
 /**
  * 兜底：任何未处理异常都要落进统一错误信封。

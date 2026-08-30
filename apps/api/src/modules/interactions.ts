@@ -2,7 +2,7 @@ import { db, schema } from '@gensokyo/db'
 import { createReportSchema, rateSchema } from '@gensokyo/shared'
 import { and, eq, isNull, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
-import { entityIdParam, fail, validate } from '../errors'
+import { fail, validate } from '../errors'
 import { requireAuth } from '../middleware/require'
 import type { AppEnv } from '../middleware/session'
 

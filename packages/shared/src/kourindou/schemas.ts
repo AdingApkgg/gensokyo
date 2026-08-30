@@ -169,6 +169,31 @@ export const createPostSchema = z.object({
 })
 export type CreatePost = z.infer<typeof createPostSchema>
 
+// ---------- 站长 ----------
+
+/**
+ * 授予角色。**故意不含 'admin'**：能通过 HTTP 发放 admin 的端点会成为全站
+ * 最值得攻击的目标，授予 admin 只走本地 grant-role 脚本。
+ */
+export const grantRoleSchema = z.object({
+  role: z.enum(['user', 'moderator']),
+  reason: z.string().min(1).max(500),
+})
+
+/** 硬删是不可逆的，因此理由必填且会写进审计 */
+export const deleteResourceSchema = z.object({
+  mode: z.enum(['soft', 'purge']),
+  reason: z.string().min(1).max(500),
+})
+
+export const siteConfigSchema = z.object({
+  registrationOpen: z.boolean().optional(),
+  autoPublishThreshold: z.number().int().min(0).max(1000).optional(),
+  takedownEmail: z.email().max(320).optional(),
+  announcement: localizedTextSchema.optional(),
+})
+export type SiteConfig = z.infer<typeof siteConfigSchema>
+
 // ---------- 审核 ----------
 
 export const reviewResourceSchema = z

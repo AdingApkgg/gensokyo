@@ -440,6 +440,22 @@ export const moderationLog = pgTable(
   ],
 )
 
+/**
+ * 站点配置。键值对而非固定列——配置项会随产品增减，
+ * 每加一个开关就改一次 schema 不划算。键名在 shared 里是白名单的。
+ */
+export const siteConfig = pgTable('site_config', {
+  key: varchar('key', { length: 64 }).primaryKey(),
+  value: jsonb('value').notNull(),
+  updatedBy: text('updated_by').references(() => user.id, {
+    onDelete: 'set null',
+  }),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+})
+
 // ---------------------------------------------------------------- relations
 
 export const resourceRelations = relations(resource, ({ one, many }) => ({

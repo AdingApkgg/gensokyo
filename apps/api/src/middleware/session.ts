@@ -1,5 +1,5 @@
 import { db, schema } from '@gensokyo/db'
-import { TRUST_AUTO_PUBLISH_THRESHOLD, type UserRole } from '@gensokyo/shared'
+import type { UserRole } from '@gensokyo/shared'
 import { eq } from 'drizzle-orm'
 import { createMiddleware } from 'hono/factory'
 import { auth } from '../auth'
@@ -56,7 +56,8 @@ export const sessionMiddleware = createMiddleware<AppEnv>(async (c, next) => {
 /**
  * 信任梯度：通过 N 个资源且无违规记录 → 即发即审。
  * strikeCount > 0 直接清零信任，这是唯一的惩罚机制。
+ *
+ * 门槛由站点配置决定（admin 可改），没配置时回落到编译期常量。
  */
-export const canAutoPublish = (actor: Actor) =>
-  actor.strikeCount === 0 &&
-  actor.approvedResourceCount >= TRUST_AUTO_PUBLISH_THRESHOLD
+export const canAutoPublish = (actor: Actor, threshold: number) =>
+  actor.strikeCount === 0 && actor.approvedResourceCount >= threshold

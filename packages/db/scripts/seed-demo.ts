@@ -182,8 +182,7 @@ async function main() {
           label: `${mirror.label} · ${a.name}`,
           url: `${mirror.host}/s/${row.slug}`,
           kind: mirror.kind,
-          extractCode:
-            i === 0 ? 'th' + String(1000 + (a.id % 9000)) : undefined,
+          extractCode: i === 0 ? `th${1000 + (a.id % 9000)}` : undefined,
           sortOrder: i,
         })),
       )

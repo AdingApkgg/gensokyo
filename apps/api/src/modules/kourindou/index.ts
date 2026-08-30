@@ -12,6 +12,7 @@ import { Hono } from 'hono'
 import { entityIdParam, fail, validate } from '../../errors'
 import { isOwnerOrStaff, requireAuth } from '../../middleware/require'
 import { type AppEnv, canAutoPublish } from '../../middleware/session'
+import { autoPublishThreshold } from '../../site-config'
 import { makeSlug } from './slug'
 import { canTransition, submitTarget } from './status'
 
@@ -293,7 +294,7 @@ export const kourindou = new Hono<AppEnv>()
     if (!row) return fail(c, 'not_found', 404)
     if (!isOwnerOrStaff(actor, row.uploaderId)) return fail(c, 'forbidden', 403)
 
-    const auto = canAutoPublish(actor)
+    const auto = canAutoPublish(actor, await autoPublishThreshold())
     const to = submitTarget(auto)
     if (
       !canTransition(row.status, to, {
@@ -337,7 +338,7 @@ export const kourindou = new Hono<AppEnv>()
         !canTransition(row.status, to, {
           role: actor.role,
           isOwner: actor.id === row.uploaderId,
-          canAutoPublish: canAutoPublish(actor),
+          canAutoPublish: canAutoPublish(actor, await autoPublishThreshold()),
         })
       ) {
         return fail(c, 'invalid_state_transition', 409)

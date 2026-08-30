@@ -1,4 +1,4 @@
-import { entityIdSchema } from '@gensokyo/shared'
+import { entityIdSchema, userIdSchema } from '@gensokyo/shared'
 import { zValidator as zv } from '@hono/zod-validator'
 import type { Context } from 'hono'
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
@@ -73,3 +73,9 @@ export const validate = ((
 
 /** 路径里的实体 id 必须先校验；直接喂给 uuid 列会让 Postgres 抛 22P02 → 500 */
 export const entityIdParam = validate('param', z.object({ id: entityIdSchema }))
+
+/**
+ * 用户 id 是 better-auth 的 32 位随机串，**不是 UUID**。
+ * 用 entityIdParam 卡用户路由会让端点对每个真实用户都返回 400。
+ */
+export const userIdParam = validate('param', z.object({ id: userIdSchema }))

@@ -52,6 +52,13 @@ type Mirror = {
   extractCode: string
 }
 
+/**
+ * 编辑期多带一个 key：镜像可以中途删除，拿下标当 React key 会让后一条
+ * 复用前一条的 DOM，正在输入的那格会跳焦点、打断中日文输入法的候选。
+ * key 只活在表单里，提交前剥掉，不进 payload。
+ */
+type MirrorDraft = Mirror & { key: string }
+
 /** 一次投稿是三个调用：建草稿 → 挂版本与链接 → 投递。中途失败要能说清停在哪 */
 export async function action({ request }: Route.ActionArgs) {
   const api = apiFor(request)
@@ -229,12 +236,17 @@ function LicensePicker({
   )
 }
 
-const emptyMirror = (): Mirror => ({
+let mirrorSeq = 0
+const emptyMirror = (): MirrorDraft => ({
+  key: `m${mirrorSeq++}`,
   label: '',
   url: '',
   mirrorKind: 'netdisk',
   extractCode: '',
 })
+
+/** 剥掉只在表单里用的 key，别让它进提交的 JSON */
+const toPayload = ({ key: _key, ...rest }: MirrorDraft): Mirror => rest
 
 const mirrorLabel = (k: MirrorKind) =>
   ({
@@ -257,7 +269,7 @@ export default function UploadWizard() {
   const [coverUrl, setCoverUrl] = useState('')
   const [license, setLicense] = useState<LicenseStatus | ''>('')
   const [licenseNote, setLicenseNote] = useState('')
-  const [mirrors, setMirrors] = useState<Mirror[]>([emptyMirror()])
+  const [mirrors, setMirrors] = useState<MirrorDraft[]>([emptyMirror()])
   const [errors, setErrors] = useState<string[]>([])
 
   const result = fetcher.data
@@ -339,7 +351,7 @@ export default function UploadWizard() {
         circleNameRaw: circle,
         coverUrl,
         description,
-        mirrors: JSON.stringify(usable),
+        mirrors: JSON.stringify(usable.map(toPayload)),
       },
       { method: 'post' },
     )
@@ -461,7 +473,7 @@ export default function UploadWizard() {
       {step === 2 && (
         <div className="grid gap-4">
           {mirrors.map((mi, i) => (
-            <Card key={`mirror-${i}-${mi.mirrorKind}`}>
+            <Card key={mi.key}>
               <CardContent className="grid gap-3 pt-5">
                 <div className="grid gap-2">
                   <Label>{m.upload_mirror_label()}</Label>
