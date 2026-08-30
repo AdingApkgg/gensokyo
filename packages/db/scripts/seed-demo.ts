@@ -31,18 +31,47 @@ const DEMO_USER = 'demo-importer'
 /** 官方社团：平台规定不碰官方作品本体 */
 const OFFICIAL = ['上海アリス幻樂団', 'Team Shanghai Alice', '黄昏フロンティア']
 
-const MIRRORS = [
-  {
-    host: 'https://cloud.lilywhite.cc',
-    label: '莉莉云',
-    kind: 'netdisk' as const,
-  },
-  {
-    host: 'https://cloud.touhou.re',
-    label: '车万云',
-    kind: 'netdisk' as const,
-  },
-]
+/**
+ * 分发链接来自 TouhouDB 编目自带的 webLinks，**不编造**。
+ *
+ * 早先这里拼的是 `${网盘域名}/s/${我们自己生成的 slug}`——那些地址一个都不存在。
+ * 而两个东方网盘站都没有同人专辑：莉莉云没有音乐目录，车万云的音乐只有
+ * 上海アリス幻樂団 的官方专辑本体，那是产品文档第一条生死线明令不碰的东西。
+ *
+ * 所以同人专辑一律链到**社团自己的发布/售卖页**（Booth / Melonbooks /
+ * Toranoana / Spotify）与资料页（THBWiki / VGMdb）。这与产品文档对官方作品
+ * 「链到发布者页面、不碰本体」的做法是同一个逻辑，也让 license=unspecified
+ * 这个标注不再自相矛盾——既然没确认过授权，就不该给出下载。
+ */
+const COMMERCIAL_LABEL: Record<string, string> = {
+  Booth: 'Booth',
+  Melonbooks: 'Melonbooks',
+  Toranoana: 'とらのあな',
+  Spotify: 'Spotify',
+  'Apple Music': 'Apple Music',
+}
+
+type WebLink = { url?: string; description?: string; category?: string }
+
+/** 购买/试听页排在前面，资料页兜底；两者都没有就不给链接 */
+function linksFor(wl: WebLink[]): {
+  label: string
+  url: string
+  kind: 'other'
+}[] {
+  const pick = (cat: string) =>
+    wl.filter((w) => w.category === cat && typeof w.url === 'string')
+  const out: { label: string; url: string; kind: 'other' }[] = []
+  for (const w of [...pick('Commercial'), ...pick('Reference')].slice(0, 3)) {
+    const desc = (w.description ?? '').trim()
+    out.push({
+      label: COMMERCIAL_LABEL[desc] ?? desc ?? '外部链接',
+      url: w.url as string,
+      kind: 'other',
+    })
+  }
+  return out
+}
 
 type TdbAlbum = {
   id: number
@@ -52,6 +81,7 @@ type TdbAlbum = {
   releaseEvent?: { name?: string }
   mainPicture?: { urlSmallThumb?: string; urlThumb?: string }
   artists?: { name: string; categories?: string }[]
+  webLinks?: WebLink[]
 }
 
 const slugify = (s: string) =>
@@ -75,7 +105,7 @@ function eventTag(name?: string): string | null {
 async function fetchAlbums(): Promise<TdbAlbum[]> {
   const out: TdbAlbum[] = []
   for (const sort of ['RatingAverage', 'ReleaseDate', 'AdditionDate']) {
-    const url = `${TDB}/albums?maxResults=40&sort=${sort}&fields=Artists,MainPicture,ReleaseEvent`
+    const url = `${TDB}/albums?maxResults=40&sort=${sort}&fields=Artists,MainPicture,ReleaseEvent,WebLinks`
     const res = await fetch(url, { headers: { accept: 'application/json' } })
     if (!res.ok) continue
     const body = (await res.json()) as { items?: TdbAlbum[] }
@@ -171,14 +201,15 @@ async function main() {
       })
       .returning({ id: resourceVersion.id })
 
-    if (version) {
+    // 没有可用链接的专辑就只做编目，不硬造一个下载入口
+    const links = linksFor(a.webLinks ?? [])
+    if (version && links.length) {
       await db.insert(resourceFile).values(
-        MIRRORS.map((mirror, i) => ({
+        links.map((l, i) => ({
           versionId: version.id,
-          label: `${mirror.label} · ${a.name}`,
-          url: `${mirror.host}/s/${row.slug}`,
-          kind: mirror.kind,
-          extractCode: i === 0 ? `th${1000 + (a.id % 9000)}` : undefined,
+          label: l.label,
+          url: l.url,
+          kind: l.kind,
           sortOrder: i,
         })),
       )

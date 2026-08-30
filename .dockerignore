@@ -1,0 +1,12 @@
+# 构建上下文只需要源码与清单。
+.git
+**/node_modules
+**/build
+**/.react-router
+**/.turbo
+apps/web/app/paraglide
+legacy
+docs
+dumps
+.env
+deploy/.env
