@@ -16,7 +16,9 @@
     "seed:demo": "bun run --env-file=../../.env scripts/seed-demo.ts",
     "seed:demo-tools": "bun run --env-file=../../.env scripts/seed-demo-tools.ts",
     "seed:demo-fanworks": "bun run --env-file=../../.env scripts/seed-demo-fanworks.ts",
-    "seed:demo-official": "bun run --env-file=../../.env scripts/seed-demo-official.ts"
+    "seed:demo-official": "bun run --env-file=../../.env scripts/seed-demo-official.ts",
+    "seed:demo-lilywhite": "bun run --env-file=../../.env scripts/seed-demo-lilywhite.ts",
+    "seed:demo-official-free": "bun run --env-file=../../.env scripts/seed-demo-official-free.ts"
   },
   "dependencies": {
     "@gensokyo/shared": "workspace:*",
