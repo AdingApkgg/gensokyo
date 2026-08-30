@@ -12,7 +12,8 @@
     "test": "bun test --env-file=../../.env",
     "generate": "drizzle-kit generate",
     "migrate": "bun --env-file=../../.env x drizzle-kit migrate",
-    "seed": "bun run --env-file=../../.env scripts/seed.ts"
+    "seed": "bun run --env-file=../../.env scripts/seed.ts",
+    "seed:demo": "bun run --env-file=../../.env scripts/seed-demo.ts"
   },
   "dependencies": {
     "@gensokyo/shared": "workspace:*",
