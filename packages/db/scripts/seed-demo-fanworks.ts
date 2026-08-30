@@ -27,11 +27,27 @@ import {
 } from './_shared/create-resource-topic'
 
 const DEMO_USER = 'demo-importer'
-const HOST = 'https://cloud.touhou.re'
-const BASE = '/国外分流2/东方狗/东方Project'
+/**
+ * 两个镜像存的是同一棵「东方狗」目录树（莉莉云的存储由车万云提供），
+ * 但可达性不同：
+ *
+ * - **莉莉云**走公开分享链接，免登录，路径已逐条对着分享索引核实存在
+ * - **车万云**要注册登录才能看到内容，但同人游戏只有它那边有
+ *   （莉莉云的 /同人游戏 是空的——它的 readme 写明这部分不转存）
+ *
+ * 所以补丁与魔改走莉莉云，同人游戏走车万云。
+ */
+const LILY_SHARE = 'https://cloud.lilywhite.cc/s/4ZUW'
+const TOUHOU_HOST = 'https://cloud.touhou.re'
+const TOUHOU_BASE = '/国外分流2/东方狗/东方Project'
 
+/** 莉莉云：分享链接 + path 查询参数 */
+const lilyLink = (...segs: string[]) =>
+  `${LILY_SHARE}?path=${encodeURIComponent(`/东方Project/${segs.join('/')}`)}`
+
+/** 车万云：路径直接进 URL */
 const link = (...segs: string[]) =>
-  `${HOST}${[...BASE.split('/').filter(Boolean), ...segs]
+  `${TOUHOU_HOST}${[...TOUHOU_BASE.split('/').filter(Boolean), ...segs]
     .map(encodeURIComponent)
     .map((s) => `/${s}`)
     .join('')}`
@@ -73,26 +89,22 @@ const PATCHES: { name: string; note: string; tag?: string }[] = [
 ]
 
 /** 魔改版：基于官作的同人改造，属于二次创作 */
+/**
+ * 魔改作品。**只收补丁式的，不收整包。**
+ *
+ * 实测镜像上这批文件的体积泾渭分明：补丁式改造器不足 7MB（要你自己有正版
+ * 才能用），而「魔改版」整包是 22–655MB——那里面装着官方本体。
+ * 收后者等于分发官方游戏，踩产品文档第一条生死线与站规第一条第 1 项。
+ * 被排除的：永夜抄魔改版(80/655MB)、天流宫×辉针城(493MB)、随机天空璋/绀珠传
+ * (各 71MB)、励志传(74MB)、八倍弹幕(112MB)、滑稽殿(22MB)、地灵殿PH(59MB)。
+ */
 const MODS = [
-  { name: '[th08] th08ultra(25倍弹幕).exe', note: '永夜抄 25 倍弹幕版' },
   {
-    name: '[th08] 东方永夜抄 (魔改版)-ogg.zip',
-    note: '永夜抄魔改版（OGG 音源）',
+    name: '[th08] th08ultra(25倍弹幕).exe',
+    note: '永夜抄 25 倍弹幕版。补丁式，需自备正版',
   },
-  {
-    name: '[th14] 东方天流宫×东方辉针城.zip',
-    note: '辉针城 × 东方天流宫 联动魔改',
-  },
-  { name: '[th15] 车万相对论.rar', note: '绀珠传魔改' },
-  {
-    name: 'Subterranean Hatred 1.0(地灵殿PH) .zip',
-    note: '地灵殿 Phantasmagoria 改造',
-  },
-  { name: 'th15东方励志传1.3.dat', note: '绀珠传魔改版' },
-  { name: 'th18_八倍弹幕.dat', note: '虹龙洞 8 倍弹幕' },
-  { name: '东方滑稽殿v1.1.rar', note: '地灵殿恶搞魔改' },
-  { name: '随机天空璋.zip', note: '天空璋符卡随机化' },
-  { name: '随机绀珠传.zip', note: '绀珠传符卡随机化' },
+  { name: '[th15] randomD.exe', note: '绀珠传符卡随机化。补丁式，需自备正版' },
+  { name: '[th15] 车万相对论.rar', note: '绀珠传魔改。补丁式，需自备正版' },
 ]
 
 const slugify = (s: string) =>
@@ -133,7 +145,7 @@ const entries: Entry[] = [
       kind: 'patch',
       category: 'patch',
       desc: p.note,
-      url: link('补丁', p.name),
+      url: lilyLink('补丁', p.name),
       tags: p.tag ? [p.tag] : [],
     }),
   ),
@@ -143,7 +155,7 @@ const entries: Entry[] = [
       kind: 'game',
       category: 'game',
       desc: `${mod.note}。基于官方作品的同人改造。`,
-      url: link('游戏魔改', mod.name),
+      url: lilyLink('游戏魔改', mod.name),
       tags: [],
     }),
   ),

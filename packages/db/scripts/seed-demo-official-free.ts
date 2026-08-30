@@ -30,9 +30,15 @@ import {
 
 const DEMO_USER = 'demo-importer'
 const ZUN = 'https://www16.big.or.jp/~zun/html'
-/** 车万云「东方狗」的官方游戏目录，PC-98 作品在此流通 */
+/**
+ * PC-98 五作（th01–05）的镜像。1997–98 年发售、从未上架 Steam，按已绝版收。
+ *
+ * 指向莉莉云分享里那个**具体文件**而不是目录——原先指的是车万云的
+ * 「官方游戏」目录，那既要登录、又会把人带到旁边的 th06+ 商业本体上。
+ * 这个路径已对着分享索引逐字核实存在。
+ */
 const PC98_MIRROR =
-  'https://cloud.touhou.re/%E5%9B%BD%E5%A4%96%E5%88%86%E6%B5%812/%E4%B8%9C%E6%96%B9%E7%8B%97/%E4%B8%9C%E6%96%B9Project/%E5%AE%98%E6%96%B9%E6%B8%B8%E6%88%8F'
+  'https://cloud.lilywhite.cc/s/4ZUW?path=%2F%E4%B8%9C%E6%96%B9Project%2F%E5%AE%98%E6%96%B9%E6%B8%B8%E6%88%8F%2F%E6%95%B4%E6%95%B0%E4%BD%9C%2F%5Bth01-05%5D%20%E6%97%A7%E4%BA%94%E4%BD%9C%20%28%E6%A8%A1%E6%8B%9F%E5%99%A8%2B%E6%B1%89%E5%8C%96%E7%89%88%2B%E6%97%A5%E6%96%87%E7%89%88%29.rar'
 
 /** PC-98 时代五作。1997–98 年发售，早已绝版 */
 const PC98 = [
