@@ -33,7 +33,12 @@ export const reports = new Hono<AppEnv>().post(
     const input = c.req.valid('json')
 
     const rate = await assertRate(actor, 'report')
-    if (!rate.ok) return fail(c, 'rate_limited', 429)
+    if (!rate.ok) {
+      // 与 shrine 的 blocked() 一致：不带 Retry-After 的话，
+      // 「等 15 秒」和「等一小时」在界面上是同一句话
+      c.header('Retry-After', String(rate.retryAfterSeconds))
+      return fail(c, 'rate_limited', 429)
+    }
 
     /**
      * 两个分支都要设防：不过滤可见性的话，对任意 uuid 举报的成败就成了
