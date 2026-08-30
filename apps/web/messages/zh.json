@@ -208,5 +208,13 @@
   "admin_cancel": "取消",
   "admin_registration_closed": "已关闭注册",
   "report_reason_spam": "灌水或广告",
-  "report_reason_harassment": "骚扰或人身攻击"
+  "report_reason_harassment": "骚扰或人身攻击",
+  "err_generic": "操作没有成功，请稍后再试。",
+  "err_rate_limited": "发得太快了，稍等一会儿再发。",
+  "err_link_not_allowed": "新账号暂时不能发站外链接。等账号满 3 天，或有一份投稿通过审核后即可。",
+  "err_mention_limit_exceeded": "一条内容里最多提及 10 个人。",
+  "err_validation_failed": "内容格式不对，请检查后重试。",
+  "err_unauthorized": "请先登录。",
+  "err_forbidden": "你没有权限做这件事。",
+  "err_not_found": "对象不存在，或已被删除。"
 }

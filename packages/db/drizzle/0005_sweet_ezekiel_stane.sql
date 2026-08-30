@@ -3,8 +3,10 @@
 -- ① topic_kind_shape：两个分支各自闭合另一侧的列。原来 board 分支对
 --    resource_id 只字未提，一条同时带 title 与资源束的行是合法的——
 --    而那种行谁也删不掉（DELETE /topics/:id 见 resourceId 非 null 就 409）。
---    现网数据先查过：675 条 resource 主题 board_slug 全 NULL，
---    5 条 board 主题 resource_id 全 NULL，这条 CHECK 不会卡住任何现有行。
+--    **两个库都查过，违反行数都是 0，这条 CHECK 卡不住任何现有行**：
+--      · 开发库 680 条（675 resource / 5 board）
+--      · 生产库 103 条（103 resource / 0 board）
+--    ADD CONSTRAINT 会全表扫描并持 ACCESS EXCLUSIVE 锁；这个量级下瞬时完成。
 --
 -- ② topic_latest_idx：补 `nulls last` 与末列 id。PG 的 DESC 默认 NULLS FIRST，
 --    与路由的 `pinned_at desc nulls last` 不同，于是它根本不会被用于该排序。

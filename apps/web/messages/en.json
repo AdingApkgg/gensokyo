@@ -208,5 +208,13 @@
   "admin_cancel": "Cancel",
   "admin_registration_closed": "Registration closed",
   "report_reason_spam": "Spam or advertising",
-  "report_reason_harassment": "Harassment"
+  "report_reason_harassment": "Harassment",
+  "err_generic": "That didn't go through. Please try again in a moment.",
+  "err_rate_limited": "You're posting too quickly. Wait a moment and try again.",
+  "err_link_not_allowed": "New accounts cannot post external links yet. This lifts once your account is 3 days old, or one of your uploads is approved.",
+  "err_mention_limit_exceeded": "You can mention at most 10 people in one post.",
+  "err_validation_failed": "That doesn't look right. Please check it and try again.",
+  "err_unauthorized": "Please sign in first.",
+  "err_forbidden": "You don't have permission to do that.",
+  "err_not_found": "That no longer exists, or has been removed."
 }

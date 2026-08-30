@@ -208,5 +208,13 @@
   "admin_cancel": "キャンセル",
   "admin_registration_closed": "新規登録を停止中",
   "report_reason_spam": "スパム・宣伝",
-  "report_reason_harassment": "嫌がらせ・個人攻撃"
+  "report_reason_harassment": "嫌がらせ・個人攻撃",
+  "err_generic": "処理に失敗しました。しばらくしてからもう一度お試しください。",
+  "err_rate_limited": "投稿の間隔が短すぎます。少し待ってからお試しください。",
+  "err_link_not_allowed": "新しいアカウントは外部リンクを投稿できません。登録から3日経つか、投稿が1件承認されると解除されます。",
+  "err_mention_limit_exceeded": "1件のメンションは10人までです。",
+  "err_validation_failed": "入力の形式が正しくありません。ご確認ください。",
+  "err_unauthorized": "ログインしてください。",
+  "err_forbidden": "この操作を行う権限がありません。",
+  "err_not_found": "対象が存在しないか、削除されています。"
 }

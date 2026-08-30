@@ -16,6 +16,7 @@ import { Input } from '~/components/ui/input'
 import { Separator } from '~/components/ui/separator'
 import { Textarea } from '~/components/ui/textarea'
 import { apiFor } from '~/lib/api'
+import { apiErrorCode, errorMessage } from '~/lib/api-error'
 import {
   averageRating,
   displayTitle,
@@ -75,11 +76,21 @@ export async function action({ request, params }: Route.ActionArgs) {
     const body = String(form.get('bodyMd') ?? '').trim()
     const topicId = String(form.get('topicId') ?? '')
     if (!body || !topicId) return { ok: false as const }
-    await api.api.shrine.topics[':id'].posts.$post({
+    /**
+     * **必须读响应。** hc 客户端对 4xx/5xx 不抛异常，`await` 完就返回
+     * `{ ok: true }` 的写法会让限流、外链禁令、@ 上限的拒绝变成
+     * 「评论凭空消失」——表单清空、没有新楼层、没有任何提示。
+     * 这条路由是全站唯一在跑的发帖入口，静默丢内容的代价最高。
+     */
+    const res = await api.api.shrine.topics[':id'].posts.$post({
       param: { id: topicId },
       json: { bodyMd: body },
     })
-    return { ok: true as const }
+    const code = await apiErrorCode(res)
+    // 失败时把原文还回去，别让用户重新打一遍
+    return code
+      ? { ok: false as const, code, draft: body }
+      : { ok: true as const }
   }
 
   if (intent === 'rate') {
@@ -126,9 +137,15 @@ const mirrorLabel = (k: MirrorKind) =>
 
 export default function ResourceDetail({
   loaderData,
+  actionData,
   matches,
 }: Route.ComponentProps) {
   const { resource, circle, tags, versions, discussion, topicId } = loaderData
+  // 评论被拒时才有值；拿到 code 才渲染错误行，别用 `!ok` —— 其它 intent 也返回它
+  const commentError =
+    actionData && 'code' in actionData ? actionData.code : undefined
+  const commentDraft =
+    actionData && 'draft' in actionData ? actionData.draft : undefined
   const posts = discussion?.posts ?? []
   const nav = useNavigation()
   const user = matches[0]?.loaderData?.user
@@ -293,8 +310,22 @@ export default function ResourceDetail({
               name="bodyMd"
               rows={3}
               placeholder={m.detail_comment_placeholder()}
+              // 被拒时把原文填回去，否则用户要重打一遍
+              defaultValue={commentDraft}
+              key={commentDraft ?? ''}
               required
+              aria-invalid={commentError ? true : undefined}
+              aria-describedby={commentError ? 'comment-error' : undefined}
             />
+            {commentError ? (
+              <p
+                id="comment-error"
+                role="alert"
+                className="text-sm text-destructive"
+              >
+                {errorMessage(commentError)}
+              </p>
+            ) : null}
             <Button
               type="submit"
               className="justify-self-end"
