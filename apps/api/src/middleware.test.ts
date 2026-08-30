@@ -29,6 +29,8 @@ async function signUp(name: string) {
   return { cookie, userId: trackUser(body.user?.id) }
 }
 
+afterAll(cleanupTracked)
+
 describe('会话中间件', () => {
   test('未登录时 actor 为 null', async () => {
     const res = await probe.request('/open')

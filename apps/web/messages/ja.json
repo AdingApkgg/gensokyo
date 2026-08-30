@@ -206,5 +206,7 @@
   "admin_takedown_email": "権利者向け連絡先",
   "admin_takedown_hint": "権利者が削除を依頼するために公開表示されます。",
   "admin_cancel": "キャンセル",
-  "admin_registration_closed": "新規登録を停止中"
+  "admin_registration_closed": "新規登録を停止中",
+  "report_reason_spam": "スパム・宣伝",
+  "report_reason_harassment": "嫌がらせ・個人攻撃"
 }

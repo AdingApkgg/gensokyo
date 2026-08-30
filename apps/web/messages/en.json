@@ -206,5 +206,7 @@
   "admin_takedown_email": "Takedown contact",
   "admin_takedown_hint": "Shown publicly so rights holders can request a takedown.",
   "admin_cancel": "Cancel",
-  "admin_registration_closed": "Registration closed"
+  "admin_registration_closed": "Registration closed",
+  "report_reason_spam": "Spam or advertising",
+  "report_reason_harassment": "Harassment"
 }

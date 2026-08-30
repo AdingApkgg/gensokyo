@@ -56,9 +56,16 @@ export const STRIKE_REJECT_REASONS: readonly RejectReason[] = [
   'illegal',
 ]
 
+/**
+ * 举报理由。前五值是资源语义，M4 加的 spam / harassment 是论坛最高频的两类——
+ * 不加的话论坛举报只能选 'other'，队列会退化成一堆无法按紧急度排序的 other。
+ * 加完 typecheck 会在 dash/reports.tsx 的映射表上强制补两条文案。
+ */
 export const REPORT_REASON = [
   'copyright',
   'illegal',
+  'spam',
+  'harassment',
   'broken_link',
   'wrong_info',
   'other',
@@ -79,8 +86,7 @@ export const CLAIM_STATUS = [
 ] as const
 export type ClaimStatus = (typeof CLAIM_STATUS)[number]
 
-export const TOPIC_KIND = ['resource', 'board'] as const
-export type TopicKind = (typeof TOPIC_KIND)[number]
+// TOPIC_KIND 已迁到 ../shrine/enums.ts —— 它描述的是内容层，不是香霖堂
 
 /**
  * 分发方式。M3 先做外链——中文同人圈的实际主流是网盘链接，

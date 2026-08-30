@@ -1,5 +1,9 @@
 import { z } from 'zod'
+// id 三分与 handle 在 ../ids（M4 从这里上提——shrine 与 notifications 都要用）
+import { anyIdSchema, entityIdSchema, slugIdSchema, userIdSchema } from '../ids'
+import { LOCALES, localizedTextSchema } from '../localized'
 import { paginationQuerySchema } from '../pagination'
+import { REPORT_TARGET_KIND } from '../shrine/enums'
 import {
   LICENSE_STATUS,
   MIRROR_KIND,
@@ -10,20 +14,6 @@ import {
   RESOURCE_STATUS,
   REVIEW_DECISION,
 } from './enums'
-import { LOCALES, localizedTextSchema } from './localized'
-
-/**
- * id 分三种，不可混用。
- *
- * better-auth 的 generateId 产生 32 位随机字母数字串（实测 1.7.2），**不是 UUID**——
- * 用 z.uuid() 校验用户 id 会对每一个真实用户返回 400。
- */
-export const entityIdSchema = z.uuid()
-export const userIdSchema = z.string().min(1).max(64)
-export const slugIdSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/)
-
-/** 举报目标是多态的（资源/帖子/用户），只能用最宽的形状，存在性交给应用层 */
-export const anyIdSchema = z.string().min(1).max(64)
 
 export const resourceSlugSchema = z
   .string()
@@ -155,19 +145,14 @@ export const createVersionSchema = z.object({
 export const rateSchema = z.object({ score: z.number().int().min(1).max(5) })
 
 export const createReportSchema = z.object({
-  targetKind: z.enum(['resource', 'post']),
+  targetKind: z.enum(REPORT_TARGET_KIND),
   targetId: anyIdSchema,
   reason: z.enum(REPORT_REASON),
   detail: z.string().max(2000).default(''),
 })
 
-// ---------- 内容（评论 = 论坛楼层，M4 共用） ----------
-
-export const createPostSchema = z.object({
-  bodyMd: z.string().min(1).max(20000),
-  parentId: entityIdSchema.optional(),
-})
-export type CreatePost = z.infer<typeof createPostSchema>
+// createPostSchema 已迁到 ../shrine/schemas.ts：楼层是神社的东西，
+// 香霖堂的评论区只是它的第二个视图。
 
 // ---------- 站长 ----------
 

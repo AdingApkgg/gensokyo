@@ -37,6 +37,8 @@ const reasonLabel = (r: ReportReason) =>
   ({
     copyright: m.report_reason_copyright(),
     illegal: m.report_reason_illegal(),
+    spam: m.report_reason_spam(),
+    harassment: m.report_reason_harassment(),
     broken_link: m.report_reason_broken_link(),
     wrong_info: m.report_reason_wrong_info(),
     other: m.report_reason_other(),

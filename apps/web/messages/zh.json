@@ -206,5 +206,7 @@
   "admin_takedown_email": "版权联系邮箱",
   "admin_takedown_hint": "公开显示，供权利人提出下架请求。",
   "admin_cancel": "取消",
-  "admin_registration_closed": "已关闭注册"
+  "admin_registration_closed": "已关闭注册",
+  "report_reason_spam": "灌水或广告",
+  "report_reason_harassment": "骚扰或人身攻击"
 }

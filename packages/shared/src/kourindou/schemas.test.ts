@@ -2,12 +2,9 @@ import { describe, expect, test } from 'bun:test'
 import {
   createFileSchema,
   createResourceSchema,
-  entityIdSchema,
   listResourcesQuerySchema,
   reviewResourceSchema,
-  slugIdSchema,
   updateResourceSchema,
-  userIdSchema,
 } from './schemas'
 
 /**
@@ -15,29 +12,9 @@ import {
  * 用 z.uuid() 校验用户 id 会对每一个真实用户返回 400 —— 这组测试钉住这个区别。
  */
 const REAL_BETTER_AUTH_ID = 'k3Nf8QxZ2mLpVwR7bTyH4jCd6sGaE1uO'
-const REAL_UUID = '01931f6e-8c4a-7000-8000-9a1b2c3d4e5f'
 
-describe('id schema 三分', () => {
-  test('userIdSchema 接受 better-auth 的 32 位串', () => {
-    expect(userIdSchema.parse(REAL_BETTER_AUTH_ID)).toBe(REAL_BETTER_AUTH_ID)
-  })
-
-  test('entityIdSchema 拒绝 better-auth 的 id（它不是 UUID）', () => {
-    expect(() => entityIdSchema.parse(REAL_BETTER_AUTH_ID)).toThrow()
-  })
-
-  test('entityIdSchema 接受 uuid', () => {
-    expect(entityIdSchema.parse(REAL_UUID)).toBe(REAL_UUID)
-  })
-
-  test('slugIdSchema 接受查找表的 slug，拒绝大写与空格', () => {
-    expect(slugIdSchema.parse('th06')).toBe('th06')
-    expect(slugIdSchema.parse('c105')).toBe('c105')
-    expect(() => slugIdSchema.parse('TH06')).toThrow()
-    expect(() => slugIdSchema.parse('th 06')).toThrow()
-  })
-
-  test('列表筛选用真实用户 id 不报错（P0 回归点）', () => {
+describe('列表筛选（P0 回归点）', () => {
+  test('用真实的 better-auth 用户 id 不报错', () => {
     const parsed = listResourcesQuerySchema.parse({
       uploaderId: REAL_BETTER_AUTH_ID,
     })
