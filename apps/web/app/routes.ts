@@ -1,5 +1,6 @@
 import {
   index,
+  layout,
   prefix,
   type RouteConfig,
   route,
@@ -18,5 +19,9 @@ export default [
     route('chronicle', 'routes/stub.tsx', { id: 'stub-chronicle' }),
     route('spellcard', 'routes/stub.tsx', { id: 'stub-spellcard' }),
     route('music', 'routes/stub.tsx', { id: 'stub-music' }),
+    layout('routes/dash/layout.tsx', [
+      route('dash', 'routes/dash/queue.tsx'),
+      route('dash/reports', 'routes/dash/reports.tsx'),
+    ]),
   ]),
 ] satisfies RouteConfig

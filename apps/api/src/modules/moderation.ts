@@ -25,6 +25,7 @@ export const moderation = new Hono<AppEnv>()
         id: resource.id,
         slug: resource.slug,
         titleOriginal: resource.titleOriginal,
+        titleOriginalLocale: resource.titleOriginalLocale,
         title: resource.title,
         kind: resource.kind,
         license: resource.license,

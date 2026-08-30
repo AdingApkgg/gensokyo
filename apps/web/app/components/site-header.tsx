@@ -84,6 +84,11 @@ export function SiteHeader({ user }: { user: SessionUser | null }) {
                   </span>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                {(user.role === 'moderator' || user.role === 'admin') && (
+                  <DropdownMenuItem asChild>
+                    <Link to={localizeHref('/dash')}>{m.dash()}</Link>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem onClick={logout}>
                   {m.auth_logout()}
                 </DropdownMenuItem>
