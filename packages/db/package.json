@@ -9,10 +9,10 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "bun test",
+    "test": "bun test --env-file=../../.env",
     "generate": "drizzle-kit generate",
-    "migrate": "drizzle-kit migrate",
-    "seed": "bun run scripts/seed.ts"
+    "migrate": "bun --env-file=../../.env x drizzle-kit migrate",
+    "seed": "bun run --env-file=../../.env scripts/seed.ts"
   },
   "dependencies": {
     "@gensokyo/shared": "workspace:*",

@@ -7,10 +7,10 @@
     ".": "./src/app.ts"
   },
   "scripts": {
-    "dev": "bun run --hot src/index.ts",
+    "dev": "bun run --hot --env-file=../../.env src/index.ts",
     "typecheck": "tsc --noEmit",
-    "test": "bun test",
-    "gc:images": "bun run scripts/gc-images.ts"
+    "test": "bun test --env-file=../../.env",
+    "gc:images": "bun run --env-file=../../.env scripts/gc-images.ts"
   },
   "dependencies": {
     "@gensokyo/db": "workspace:*",
