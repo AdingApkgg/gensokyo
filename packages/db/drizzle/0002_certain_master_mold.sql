@@ -1,0 +1,1 @@
+ALTER TYPE "public"."moderation_action" ADD VALUE 'soft_delete' BEFORE 'hard_delete';

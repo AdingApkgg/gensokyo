@@ -19,16 +19,27 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 const tabs = [
-  { to: '/dash', label: () => m.dash_queue(), end: true },
-  { to: '/dash/reports', label: () => m.dash_reports(), end: false },
+  { to: '/dash', label: () => m.dash_queue(), end: true, admin: false },
+  {
+    to: '/dash/reports',
+    label: () => m.dash_reports(),
+    end: false,
+    admin: false,
+  },
+  { to: '/dash/users', label: () => m.admin_users(), end: false, admin: true },
+  { to: '/dash/trash', label: () => m.admin_trash(), end: false, admin: true },
+  { to: '/dash/site', label: () => m.admin_site(), end: false, admin: true },
 ]
 
-export default function DashLayout() {
+export default function DashLayout({ loaderData }: Route.ComponentProps) {
+  const isAdmin = loaderData.user.role === 'admin'
+  const visible = tabs.filter((t) => !t.admin || isAdmin)
+
   return (
     <main className="mx-auto max-w-4xl px-4 py-10">
       <h1 className="font-heading text-2xl font-bold">{m.dash()}</h1>
-      <nav className="mt-4 flex gap-1 border-b">
-        {tabs.map((t) => (
+      <nav className="mt-4 flex flex-wrap gap-1 border-b">
+        {visible.map((t) => (
           <NavLink
             key={t.to}
             to={localizeHref(t.to)}

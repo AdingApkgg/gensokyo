@@ -1,9 +1,18 @@
 import type { MirrorKind } from '@gensokyo/shared'
 import { Download, Star } from 'lucide-react'
-import { data, Form, Link, useNavigation } from 'react-router'
+import { useState } from 'react'
+import {
+  data,
+  Form,
+  Link,
+  redirect,
+  useFetcher,
+  useNavigation,
+} from 'react-router'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
+import { Input } from '~/components/ui/input'
 import { Separator } from '~/components/ui/separator'
 import { Textarea } from '~/components/ui/textarea'
 import { apiFor } from '~/lib/api'
@@ -78,6 +87,21 @@ export async function action({ request, params }: Route.ActionArgs) {
       param: { slug },
     })
     return { ok: true as const }
+  }
+
+  /**
+   * 下架入口放在这里，因为收到下架请求时站长正看着这个页面。
+   * 只做软删：硬删要先看得见「删了什么」，那是回收站的事。
+   */
+  if (intent === 'trash') {
+    const reason = String(form.get('reason') ?? '').trim()
+    if (!reason) return { ok: false as const }
+    const res = await api.api.admin.resources[':id'].$delete({
+      param: { id: String(form.get('id')) },
+      json: { mode: 'soft', reason },
+    })
+    if (res.ok) throw redirect(localizeHref('/dash/trash'))
+    return { ok: false as const }
   }
 
   return { ok: false as const }
@@ -306,7 +330,54 @@ export default function ResourceDetail({
           </ol>
         )}
       </section>
+
+      {user?.role === 'admin' && <AdminZone id={resource.id} />}
     </main>
+  )
+}
+
+/** 站长在资源页上的唯一动作：撤下并移入回收站。彻底删除在回收站里做。 */
+function AdminZone({ id }: { id: string }) {
+  const fetcher = useFetcher<typeof action>()
+  const [reason, setReason] = useState('')
+  const busy = fetcher.state !== 'idle'
+
+  return (
+    <section className="mx-auto mt-10 max-w-3xl px-4 pb-10">
+      <div className="rounded-lg border border-destructive/40 p-4">
+        <h2 className="font-heading text-sm font-semibold text-destructive">
+          {m.admin_danger_zone()}
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {m.admin_soft_delete_hint()}
+        </p>
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+          <Input
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder={m.admin_reason()}
+            aria-label={m.admin_reason()}
+          />
+          <Button
+            variant="destructive"
+            disabled={busy || !reason.trim()}
+            onClick={() =>
+              fetcher.submit(
+                { intent: 'trash', id, reason },
+                { method: 'post' },
+              )
+            }
+          >
+            {m.admin_soft_delete()}
+          </Button>
+        </div>
+        {fetcher.data?.ok === false && (
+          <p className="mt-2 text-xs text-destructive">
+            {m.admin_reason_required()}
+          </p>
+        )}
+      </div>
+    </section>
   )
 }
 

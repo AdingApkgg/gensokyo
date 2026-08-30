@@ -4,8 +4,9 @@ import {
   grantRoleSchema,
   PUBLIC_CONFIG_KEYS,
   siteConfigSchema,
+  userSearchSchema,
 } from '@gensokyo/shared'
-import { desc, eq, inArray, isNotNull } from 'drizzle-orm'
+import { desc, eq, ilike, inArray, isNotNull, or } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { entityIdParam, fail, userIdParam, validate } from '../errors'
 import { requireRole } from '../middleware/require'
@@ -24,7 +25,17 @@ export const admin = new Hono<AppEnv>()
   .use('*', requireRole('admin'))
 
   // ------------------------------------------------------------ 提权
-  .get('/users', async (c) => {
+  .get('/users', validate('query', userSearchSchema), async (c) => {
+    const { q } = c.req.valid('query')
+
+    /**
+     * 不带 q 只列现任 staff。全站用户列表对站长没有用处，却是一份现成的
+     * 邮箱清单——默认不吐。要提的人还是普通用户，得靠 q 按邮箱/昵称找。
+     */
+    const where = q
+      ? or(ilike(user.email, `%${q}%`), ilike(user.name, `%${q}%`))
+      : inArray(userProfile.role, ['moderator', 'admin'])
+
     const rows = await db
       .select({
         id: user.id,
@@ -36,7 +47,8 @@ export const admin = new Hono<AppEnv>()
       })
       .from(userProfile)
       .innerJoin(user, eq(user.id, userProfile.userId))
-      .where(inArray(userProfile.role, ['moderator', 'admin']))
+      .where(where)
+      .limit(50)
     return c.json({ items: rows })
   })
 
@@ -114,7 +126,7 @@ export const admin = new Hono<AppEnv>()
          */
         await tx.insert(moderationLog).values({
           actorId: actor.id,
-          action: mode === 'purge' ? 'hard_delete' : 'status_change',
+          action: mode === 'purge' ? 'hard_delete' : 'soft_delete',
           subjectKind: 'resource',
           subjectId: id,
           fromValue: { slug: row.slug, title: row.titleOriginal },

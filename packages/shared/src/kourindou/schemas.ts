@@ -180,6 +180,15 @@ export const grantRoleSchema = z.object({
   reason: z.string().min(1).max(500),
 })
 
+/**
+ * 用户检索。不带 q 时只列出 moderator 和 admin——全站用户列表对站长没用，
+ * 而且是一份现成的邮箱清单，没有理由默认吐出来。
+ * 要提权的人此刻还是普通用户，只能靠邮箱或昵称找，所以 q 必须能搜到全体。
+ */
+export const userSearchSchema = z.object({
+  q: z.string().trim().min(1).max(200).optional(),
+})
+
 /** 硬删是不可逆的，因此理由必填且会写进审计 */
 export const deleteResourceSchema = z.object({
   mode: z.enum(['soft', 'purge']),

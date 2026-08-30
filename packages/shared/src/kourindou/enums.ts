@@ -107,6 +107,9 @@ export const MODERATION_ACTION = [
   'takedown_resolve',
   'trust_change',
   'role_change',
+  // 软删与例行下架分开记：审计日志要能回答「站长撤下过什么」，
+  // 混进 status_change 就得跟每一次普通的上下架一起翻。
+  'soft_delete',
   'hard_delete',
   'config_change',
 ] as const
