@@ -31,6 +31,35 @@ export const resourceSlugSchema = z
   .max(128)
   .regex(/^[a-z0-9][a-z0-9-]*$/)
 
+/**
+ * URL 校验：真正解析一遍再看协议，不能只做前缀正则。
+ * 前缀正则放得过去 `https://x\r\nX: y` 这种含控制字符的串，
+ * 存进库之后每次访问都在 c.redirect 里抛 500。
+ */
+const safeUrl = (protocols: string[], max = 2000) =>
+  z
+    .string()
+    .max(max)
+    .transform((raw, ctx) => {
+      let u: URL
+      try {
+        u = new URL(raw.trim())
+      } catch {
+        ctx.addIssue({ code: 'custom', message: 'invalid_url' })
+        return z.NEVER
+      }
+      if (!protocols.includes(u.protocol)) {
+        ctx.addIssue({ code: 'custom', message: 'unsupported_protocol' })
+        return z.NEVER
+      }
+      // 归一化后存 href：顺带剔除控制字符与畸形写法
+      return u.href
+    })
+
+const downloadUrlSchema = safeUrl(['http:', 'https:', 'magnet:'])
+/** 封面只能是 http(s)——javascript:/data:/file: 一律拒 */
+const imageUrlSchema = safeUrl(['http:', 'https:'])
+
 // ---------- 资源 ----------
 
 export const createResourceSchema = z.object({
@@ -44,17 +73,41 @@ export const createResourceSchema = z.object({
   circleId: entityIdSchema.optional(),
   circleNameRaw: z.string().max(120).optional(),
   tagIds: z.array(slugIdSchema).max(12).default([]),
-  coverUrl: z.url().max(2000).optional(),
+  coverUrl: imageUrlSchema.optional(),
 })
 export type CreateResource = z.infer<typeof createResourceSchema>
 
-export const updateResourceSchema = createResourceSchema.partial()
+/**
+ * 不能写成 `createResourceSchema.partial()`：`.partial()` 只把字段变 optional，
+ * **不会移除 `.default()`**，于是没传的 title/description/tagIds 会被补成
+ * `{}`/`[]` 并原样写库——改一次标题就清空全部译名和标签。
+ * 这里逐字段重建，未传即 undefined。
+ */
+export const updateResourceSchema = z.object({
+  titleOriginal: z.string().min(1).max(200).optional(),
+  titleOriginalLocale: z.enum(LOCALES).optional(),
+  title: localizedTextSchema.optional(),
+  description: localizedTextSchema.optional(),
+  kind: z.enum(RESOURCE_KIND).optional(),
+  license: z.enum(LICENSE_STATUS).optional(),
+  licenseNote: z.string().max(500).optional(),
+  circleId: entityIdSchema.optional(),
+  circleNameRaw: z.string().max(120).optional(),
+  tagIds: z.array(slugIdSchema).max(12).optional(),
+  coverUrl: imageUrlSchema.optional(),
+})
 export type UpdateResource = z.infer<typeof updateResourceSchema>
 
 export const listResourcesQuerySchema = paginationQuerySchema.extend({
   kind: z.enum(RESOURCE_KIND).optional(),
   license: z.enum(LICENSE_STATUS).optional(),
-  tag: z.array(slugIdSchema).max(6).optional(),
+  // Hono 的单值 query 是 string，不升维的话「点一个标签」100% 400
+  tag: z
+    .preprocess(
+      (v) => (v === undefined ? undefined : Array.isArray(v) ? v : [v]),
+      z.array(slugIdSchema).max(6),
+    )
+    .optional(),
   circleId: entityIdSchema.optional(),
   uploaderId: userIdSchema.optional(),
   q: z.string().max(100).optional(),
@@ -76,14 +129,6 @@ export const changeLicenseSchema = z.object({
 })
 
 // ---------- 分发链接 ----------
-
-/** 只收 http(s) 与 magnet，挡掉 javascript: 之类 */
-const downloadUrlSchema = z
-  .string()
-  .max(2000)
-  .refine((u) => /^(https?:\/\/|magnet:\?)/i.test(u), {
-    message: '只支持 http(s) 或 magnet 链接',
-  })
 
 export const createFileSchema = z.object({
   label: z.string().min(1).max(255),

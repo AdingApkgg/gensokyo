@@ -8,7 +8,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "bun test"
+    "test": "bun test --env-file=../../.env"
   },
   "dependencies": {
     "@gensokyo/api": "workspace:*",

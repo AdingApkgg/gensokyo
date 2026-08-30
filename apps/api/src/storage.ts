@@ -25,12 +25,14 @@ const cfg = () =>
     .parse(process.env)
 
 let client: S3Client | undefined
-let publicBase = ''
+
+/** 独立求值，不依赖 s3() 是否被调用过——GC 的白名单谓词依赖它 */
+export const publicBaseUrl = () =>
+  (process.env.S3_PUBLIC_BASE_URL ?? '').replace(/\/$/, '')
 
 function s3() {
   if (!client) {
     const c = cfg()
-    publicBase = c.S3_PUBLIC_BASE_URL.replace(/\/$/, '')
     client = new S3Client({
       endpoint: c.S3_ENDPOINT,
       region: c.S3_REGION,
@@ -42,12 +44,39 @@ function s3() {
   return client
 }
 
-/** 只收这几种图片；键是扩展名，值是文件头魔数 */
-const IMAGE_TYPES: Record<string, { ext: string; magic: number[][] }> = {
-  'image/jpeg': { ext: 'jpg', magic: [[0xff, 0xd8, 0xff]] },
-  'image/png': { ext: 'png', magic: [[0x89, 0x50, 0x4e, 0x47]] },
-  'image/webp': { ext: 'webp', magic: [[0x52, 0x49, 0x46, 0x46]] }, // RIFF
-  'image/avif': { ext: 'avif', magic: [[0x00, 0x00, 0x00]] }, // ftyp box 长度前缀
+const ascii = (b: Uint8Array, at: number, s: string) =>
+  [...s].every((ch, i) => b[at + i] === ch.charCodeAt(0))
+
+/**
+ * 只收这几种图片，逐类按真实结构判定。
+ *
+ * 之前 webp 只查 'RIFF'（wav/avi 同头）、avif 查「前三字节为零」——
+ * 等于任何 ≤5MB 文件都能过，把站点变成匿名网盘。
+ */
+const IMAGE_TYPES: Record<
+  string,
+  { ext: string; ok: (b: Uint8Array) => boolean }
+> = {
+  'image/jpeg': {
+    ext: 'jpg',
+    ok: (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff,
+  },
+  'image/png': {
+    ext: 'png',
+    ok: (b) =>
+      b[0] === 0x89 && ascii(b, 1, 'PNG') && b[4] === 0x0d && b[5] === 0x0a,
+  },
+  // RIFF....WEBP：必须同时命中头尾两段
+  'image/webp': {
+    ext: 'webp',
+    ok: (b) => ascii(b, 0, 'RIFF') && ascii(b, 8, 'WEBP'),
+  },
+  // ISO-BMFF：4 字节 box 长度 + 'ftyp' + 品牌以 'avif'/'avis' 开头
+  'image/avif': {
+    ext: 'avif',
+    ok: (b) =>
+      ascii(b, 4, 'ftyp') && (ascii(b, 8, 'avif') || ascii(b, 8, 'avis')),
+  },
 }
 
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024
@@ -57,8 +86,8 @@ export type ImagePurpose = 'cover' | 'avatar'
 /** Content-Type 可以伪造，所以核对文件头 */
 function sniff(bytes: Uint8Array, contentType: string) {
   const spec = IMAGE_TYPES[contentType]
-  if (!spec) return false
-  return spec.magic.some((sig) => sig.every((b, i) => bytes[i] === b))
+  if (!spec || bytes.length < 16) return false
+  return spec.ok(bytes)
 }
 
 export type PutImageResult =
@@ -82,12 +111,18 @@ export async function putImage(
   const key = `${purpose}/${Bun.randomUUIDv7()}.${spec.ext}`
   await s3().write(key, buf, { type: file.type })
 
-  return { ok: true, url: `${publicBase}/${key}`, key, size: buf.byteLength }
+  return {
+    ok: true,
+    url: `${publicBaseUrl()}/${key}`,
+    key,
+    size: buf.byteLength,
+  }
 }
 
 /** GC 用：判断一个 URL 是否指向我们自己的桶 */
 export function isManagedUrl(url: string) {
-  return publicBase !== '' && url.startsWith(`${publicBase}/`)
+  const base = publicBaseUrl()
+  return base !== '' && url.startsWith(`${base}/`)
 }
 
 export async function deleteObject(key: string) {

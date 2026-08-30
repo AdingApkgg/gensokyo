@@ -11,11 +11,14 @@ const ALLOWED: Record<ResourceStatus, ResourceStatus[]> = {
   delisted: ['published'],
 }
 
-/** 只有 staff 能碰的跃迁：审核结论与上下架 */
+/**
+ * published->delisted 刻意不在此列：作者发现自己传的东西侵权时必须能自助下架，
+ * 「下架通道必须可用」是产品的硬约束。反向的 delisted->published 保持 staff-only，
+ * 所以作者撤不回来——下架是单向的。
+ */
 const STAFF_ONLY: ReadonlyArray<`${ResourceStatus}->${ResourceStatus}`> = [
   'pending->published',
   'pending->draft',
-  'published->delisted',
   'delisted->published',
 ]
 

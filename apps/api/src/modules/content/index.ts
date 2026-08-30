@@ -1,9 +1,8 @@
 import { db, schema } from '@gensokyo/db'
 import { createPostSchema, paginationQuerySchema } from '@gensokyo/shared'
-import { zValidator } from '@hono/zod-validator'
 import { and, eq, isNull } from 'drizzle-orm'
 import { Hono } from 'hono'
-import { fail } from '../../errors'
+import { entityIdParam, fail, validate } from '../../errors'
 import { isOwnerOrStaff, requireAuth } from '../../middleware/require'
 import type { AppEnv } from '../../middleware/session'
 import {
@@ -40,7 +39,7 @@ async function publishedTopic(slug: string) {
 export const content = new Hono<AppEnv>()
   .get(
     '/resources/:slug/posts',
-    zValidator('query', paginationQuerySchema),
+    validate('query', paginationQuerySchema),
     async (c) => {
       const t = await publishedTopic(c.req.param('slug'))
       if (!t) return fail(c, 'not_found', 404)
@@ -52,7 +51,7 @@ export const content = new Hono<AppEnv>()
   .post(
     '/resources/:slug/posts',
     requireAuth,
-    zValidator('json', createPostSchema),
+    validate('json', createPostSchema),
     async (c) => {
       const actor = c.get('actor')
       if (!actor) return fail(c, 'unauthorized', 401)
@@ -76,7 +75,7 @@ export const content = new Hono<AppEnv>()
     },
   )
 
-  .delete('/posts/:id', requireAuth, async (c) => {
+  .delete('/posts/:id', entityIdParam, requireAuth, async (c) => {
     const actor = c.get('actor')
     if (!actor) return fail(c, 'unauthorized', 401)
     const row = await findPost(c.req.param('id'))

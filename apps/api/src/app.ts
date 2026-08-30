@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { auth } from './auth'
+import { fail } from './errors'
 import { type AppEnv, sessionMiddleware } from './middleware/session'
 import { content } from './modules/content'
 import { interactions } from './modules/interactions'
@@ -20,5 +21,18 @@ export const app = new Hono<AppEnv>()
   .route('/kourindou', interactions)
   .route('/kourindou', content)
   .route('/moderation', moderation)
+
+/**
+ * 兜底：任何未处理异常都要落进统一错误信封。
+ * 没有它的话，一个非 UUID 的 :id 会让 Postgres 抛 22P02，
+ * Hono 默认回 `text/plain` 的 "Internal Server Error"——
+ * 前端按 { error: { code } } 解析会直接崩，三语本地化更无从谈起。
+ */
+app.onError((err, c) => {
+  console.error('[api] unhandled', err)
+  return fail(c, 'internal', 500)
+})
+
+app.notFound((c) => fail(c, 'not_found', 404))
 
 export type AppType = typeof app

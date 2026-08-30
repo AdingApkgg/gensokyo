@@ -213,8 +213,32 @@ describe('投稿与信任梯度', () => {
 })
 
 describe('状态流转', () => {
-  test('普通用户下不了架', async () => {
+  test('作者可以自助下架，但撤不回来（下架是单向的）', async () => {
     const veteran = await signUp('作者2')
+    await makeTrusted(veteran)
+    const { resource } = await createResource(veteran)
+    await app.request(`/api/kourindou/resources/${resource?.id}/submit`, {
+      method: 'POST',
+      headers: { cookie: veteran.cookie },
+    })
+
+    // 发现自己传的东西侵权时必须能自己撤下来，不必等唯一的审核员
+    const down = await app.request(
+      `/api/kourindou/resources/${resource?.id}/status`,
+      json(veteran, { to: 'delisted', reason: '自查后发现社团禁止转载' }),
+    )
+    expect(down.status).toBe(200)
+
+    // 但重新上架只有 staff 能做
+    const up = await app.request(
+      `/api/kourindou/resources/${resource?.id}/status`,
+      json(veteran, { to: 'published' }),
+    )
+    expect(up.status).toBe(409)
+  })
+
+  test('陌生人下不了别人的架', async () => {
+    const veteran = await signUp('作者2b')
     await makeTrusted(veteran)
     const { resource } = await createResource(veteran)
     await app.request(`/api/kourindou/resources/${resource?.id}/submit`, {
@@ -224,7 +248,7 @@ describe('状态流转', () => {
 
     const res = await app.request(
       `/api/kourindou/resources/${resource?.id}/status`,
-      json(veteran, { to: 'delisted' }),
+      json(stranger, { to: 'delisted' }),
     )
     expect(res.status).toBe(409)
   })
@@ -331,5 +355,117 @@ describe('列表筛选', () => {
   test('分页参数非法被拒', async () => {
     const res = await app.request('/api/kourindou/resources?pageSize=9999')
     expect(res.status).toBe(400)
+  })
+})
+
+describe('审计回归：PATCH 不再毁数据', () => {
+  test('只改标题不会清空译名、简介和标签', async () => {
+    const { resource } = await createResource(author, {
+      title: { zh: '中文名', ja: '日本語名' },
+      description: { zh: '简介' },
+      tagIds: ['th06', 'th07'],
+    })
+
+    const res = await app.request(`/api/kourindou/resources/${resource?.id}`, {
+      method: 'PATCH',
+      headers: { cookie: author.cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ titleOriginal: '改个错别字' }),
+    })
+    expect(res.status).toBe(200)
+
+    // 回查字段——之前的测试只断言 200，正是这条漏了才让 bug 活下来
+    const after = await app.request(
+      `/api/kourindou/resources/${resource?.slug}`,
+      { headers: { cookie: author.cookie } },
+    )
+    const body = (await after.json()) as {
+      resource: {
+        title: Record<string, string>
+        description: Record<string, string>
+      }
+      tags: { id: string }[]
+    }
+    expect(body.resource.title).toEqual({ zh: '中文名', ja: '日本語名' })
+    expect(body.resource.description).toEqual({ zh: '简介' })
+    expect(body.tags.map((t) => t.id).sort()).toEqual(['th06', 'th07'])
+  })
+
+  test('显式传空数组才清空标签', async () => {
+    const { resource } = await createResource(author, { tagIds: ['th06'] })
+    await app.request(`/api/kourindou/resources/${resource?.id}`, {
+      method: 'PATCH',
+      headers: { cookie: author.cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ tagIds: [] }),
+    })
+    const after = await app.request(
+      `/api/kourindou/resources/${resource?.slug}`,
+      { headers: { cookie: author.cookie } },
+    )
+    const body = (await after.json()) as { tags: unknown[] }
+    expect(body.tags).toHaveLength(0)
+  })
+
+  test('licenseNote 改不动——它必须走 /license 留痕', async () => {
+    const { resource } = await createResource(author, {
+      licenseNote: '原始说明',
+    })
+    await app.request(`/api/kourindou/resources/${resource?.id}`, {
+      method: 'PATCH',
+      headers: { cookie: author.cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ licenseNote: '社团邮件确认授权，2024-03-11' }),
+    })
+    const after = await app.request(
+      `/api/kourindou/resources/${resource?.slug}`,
+      { headers: { cookie: author.cookie } },
+    )
+    const body = (await after.json()) as {
+      resource: { licenseNote: string | null }
+    }
+    expect(body.resource.licenseNote).toBe('原始说明')
+  })
+})
+
+describe('审计回归：错误信封', () => {
+  test('非 UUID 的 :id 返回 400 信封而不是纯文本 500', async () => {
+    const res = await app.request('/api/kourindou/resources/not-a-uuid', {
+      method: 'PATCH',
+      headers: { cookie: author.cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ titleOriginal: 'x' }),
+    })
+    expect(res.status).toBe(400)
+    expect(res.headers.get('content-type')).toContain('application/json')
+    const body = (await res.json()) as { error: { code: string } }
+    expect(body.error.code).toBe('validation_failed')
+  })
+
+  test('body 校验失败也走同一个信封，并指出字段', async () => {
+    const res = await app.request(
+      '/api/kourindou/resources',
+      json(author, {
+        titleOriginal: '',
+        titleOriginalLocale: 'zh',
+        kind: 'game',
+        license: 'allowed',
+      }),
+    )
+    expect(res.status).toBe(400)
+    const body = (await res.json()) as {
+      error: { code: string; fields?: string[] }
+    }
+    expect(body.error.code).toBe('validation_failed')
+    expect(body.error.fields).toContain('titleOriginal')
+  })
+
+  test('未知路由返回 404 信封', async () => {
+    const res = await app.request('/api/nope')
+    expect(res.status).toBe(404)
+    expect(await res.json()).toEqual({ error: { code: 'not_found' } })
+  })
+})
+
+describe('审计回归：单标签筛选', () => {
+  test('?tag=th06 单个标签不再 400', async () => {
+    const res = await app.request('/api/kourindou/resources?tag=th06')
+    expect(res.status).toBe(200)
   })
 })

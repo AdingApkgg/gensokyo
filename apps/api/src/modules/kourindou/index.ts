@@ -7,10 +7,9 @@ import {
   listResourcesQuerySchema,
   updateResourceSchema,
 } from '@gensokyo/shared'
-import { zValidator } from '@hono/zod-validator'
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
-import { fail } from '../../errors'
+import { entityIdParam, fail, validate } from '../../errors'
 import { isOwnerOrStaff, requireAuth } from '../../middleware/require'
 import { type AppEnv, canAutoPublish } from '../../middleware/session'
 import { makeSlug } from './slug'
@@ -27,74 +26,67 @@ const publicOnly = and(
 
 export const kourindou = new Hono<AppEnv>()
   // ---------------------------------------------------------------- 读
-  .get(
-    '/resources',
-    zValidator('query', listResourcesQuerySchema),
-    async (c) => {
-      const q = c.req.valid('query')
-      const filters = [publicOnly]
-      if (q.kind) filters.push(eq(resource.kind, q.kind))
-      if (q.license) filters.push(eq(resource.license, q.license))
-      if (q.circleId) filters.push(eq(resource.circleId, q.circleId))
-      if (q.uploaderId) filters.push(eq(resource.uploaderId, q.uploaderId))
-      if (q.q) {
-        filters.push(
-          sql`(${resource.titleOriginal} ilike ${`%${q.q}%`} or ${resource.title}::text ilike ${`%${q.q}%`})`,
-        )
-      }
-      if (q.tag?.length) {
-        filters.push(
-          sql`exists (select 1 from ${resourceTag} rt where rt.resource_id = ${resource.id} and rt.tag_id in ${q.tag})`,
-        )
-      }
+  .get('/resources', validate('query', listResourcesQuerySchema), async (c) => {
+    const q = c.req.valid('query')
+    const filters = [publicOnly]
+    if (q.kind) filters.push(eq(resource.kind, q.kind))
+    if (q.license) filters.push(eq(resource.license, q.license))
+    if (q.circleId) filters.push(eq(resource.circleId, q.circleId))
+    if (q.uploaderId) filters.push(eq(resource.uploaderId, q.uploaderId))
+    if (q.q) {
+      filters.push(
+        sql`(${resource.titleOriginal} ilike ${`%${q.q}%`} or ${resource.title}::text ilike ${`%${q.q}%`})`,
+      )
+    }
+    if (q.tag?.length) {
+      filters.push(
+        sql`exists (select 1 from ${resourceTag} rt where rt.resource_id = ${resource.id} and rt.tag_id in ${q.tag})`,
+      )
+    }
 
-      const order =
-        q.sort === 'downloads'
-          ? desc(resource.downloadCount)
-          : q.sort === 'rating'
-            ? desc(sql`case when ${resource.ratingCount} = 0 then 0
+    const order =
+      q.sort === 'downloads'
+        ? desc(resource.downloadCount)
+        : q.sort === 'rating'
+          ? desc(sql`case when ${resource.ratingCount} = 0 then 0
               else ${resource.ratingSum}::float / ${resource.ratingCount} end`)
-            : desc(resource.createdAt)
+          : desc(resource.createdAt)
 
-      const where = and(...filters)
-      const [items, [count]] = await Promise.all([
-        // 列表不 select description：长文走 TOAST，列表页用不上
-        db
-          .select({
-            id: resource.id,
-            slug: resource.slug,
-            titleOriginal: resource.titleOriginal,
-            titleOriginalLocale: resource.titleOriginalLocale,
-            title: resource.title,
-            kind: resource.kind,
-            license: resource.license,
-            coverUrl: resource.coverUrl,
-            circleId: resource.circleId,
-            circleNameRaw: resource.circleNameRaw,
-            downloadCount: resource.downloadCount,
-            ratingSum: resource.ratingSum,
-            ratingCount: resource.ratingCount,
-            createdAt: resource.createdAt,
-          })
-          .from(resource)
-          .where(where)
-          .orderBy(order)
-          .limit(q.pageSize)
-          .offset((q.page - 1) * q.pageSize),
-        db
-          .select({ n: sql<number>`count(*)::int` })
-          .from(resource)
-          .where(where),
-      ])
+    const where = and(...filters)
+    const [items, [count]] = await Promise.all([
+      // 列表不 select description：长文走 TOAST，列表页用不上
+      db
+        .select({
+          id: resource.id,
+          slug: resource.slug,
+          titleOriginal: resource.titleOriginal,
+          titleOriginalLocale: resource.titleOriginalLocale,
+          title: resource.title,
+          kind: resource.kind,
+          license: resource.license,
+          coverUrl: resource.coverUrl,
+          circleId: resource.circleId,
+          circleNameRaw: resource.circleNameRaw,
+          downloadCount: resource.downloadCount,
+          ratingSum: resource.ratingSum,
+          ratingCount: resource.ratingCount,
+          createdAt: resource.createdAt,
+        })
+        .from(resource)
+        .where(where)
+        .orderBy(order)
+        .limit(q.pageSize)
+        .offset((q.page - 1) * q.pageSize),
+      db.select({ n: sql<number>`count(*)::int` }).from(resource).where(where),
+    ])
 
-      return c.json({
-        items,
-        page: q.page,
-        pageSize: q.pageSize,
-        total: count?.n ?? 0,
-      })
-    },
-  )
+    return c.json({
+      items,
+      page: q.page,
+      pageSize: q.pageSize,
+      total: count?.n ?? 0,
+    })
+  })
 
   .get('/resources/:slug', async (c) => {
     const slug = c.req.param('slug')
@@ -164,7 +156,7 @@ export const kourindou = new Hono<AppEnv>()
   .post(
     '/resources',
     requireAuth,
-    zValidator('json', createResourceSchema),
+    validate('json', createResourceSchema),
     async (c) => {
       const actor = c.get('actor')
       if (!actor) return fail(c, 'unauthorized', 401)
@@ -216,8 +208,9 @@ export const kourindou = new Hono<AppEnv>()
 
   .patch(
     '/resources/:id',
+    entityIdParam,
     requireAuth,
-    zValidator('json', updateResourceSchema),
+    validate('json', updateResourceSchema),
     async (c) => {
       const actor = c.get('actor')
       if (!actor) return fail(c, 'unauthorized', 401)
@@ -233,16 +226,30 @@ export const kourindou = new Hono<AppEnv>()
       if (!isOwnerOrStaff(actor, row.uploaderId))
         return fail(c, 'forbidden', 403)
 
-      // 许可状态改动必须走 /license（那里强制留痕）
-      const { license: _license, tagIds, ...rest } = input
-      const [updated] = await db
-        .update(resource)
-        .set(rest)
-        .where(eq(resource.id, id))
-        .returning()
+      // 已下架的资源不允许继续编辑：下架是治理动作，不该被绕过
+      if (row.status === 'delisted') {
+        return fail(c, 'invalid_state_transition', 409)
+      }
 
-      if (tagIds) {
-        await db.transaction(async (tx) => {
+      /**
+       * license 与 licenseNote 都必须走 /license——那里强制给理由并写
+       * moderationLog。licenseNote 是许可状态的自由文本载体，从这里漏过去
+       * 等于让版权处置的证据链断掉。
+       */
+      const { license: _license, licenseNote: _note, tagIds, ...rest } = input
+
+      const updated = await db.transaction(async (tx) => {
+        // 只改标签时 rest 是空对象，drizzle 的 .set({}) 会抛错
+        const [r] = Object.keys(rest).length
+          ? await tx
+              .update(resource)
+              .set(rest)
+              .where(eq(resource.id, id))
+              .returning()
+          : await tx.select().from(resource).where(eq(resource.id, id)).limit(1)
+
+        // 只有显式传了 tagIds 才动标签；传空数组是「清空」，不传是「不管」
+        if (tagIds !== undefined) {
           await tx.delete(resourceTag).where(eq(resourceTag.resourceId, id))
           if (tagIds.length) {
             await tx
@@ -250,15 +257,30 @@ export const kourindou = new Hono<AppEnv>()
               .values(tagIds.map((t) => ({ resourceId: id, tagId: t })))
               .onConflictDoNothing()
           }
-        })
-      }
+        }
+
+        // 已发布内容被改动要留痕，否则「审核一次之后随意换货」无从追溯
+        if (row.status === 'published') {
+          await tx.insert(schema.moderationLog).values({
+            actorId: actor.id,
+            action: 'status_change',
+            subjectKind: 'resource',
+            subjectId: id,
+            fromValue: { edited: 'published_resource' },
+            toValue: { fields: Object.keys(rest) },
+            reason: '已发布资源被编辑',
+          })
+        }
+
+        return r
+      })
 
       return c.json({ resource: updated })
     },
   )
 
   /** 投稿：信任达标直接发布，否则进审核队列 */
-  .post('/resources/:id/submit', requireAuth, async (c) => {
+  .post('/resources/:id/submit', entityIdParam, requireAuth, async (c) => {
     const actor = c.get('actor')
     if (!actor) return fail(c, 'unauthorized', 401)
     const id = c.req.param('id')
@@ -295,8 +317,9 @@ export const kourindou = new Hono<AppEnv>()
   /** staff 的状态流转（上下架、审核结论） */
   .post(
     '/resources/:id/status',
+    entityIdParam,
     requireAuth,
-    zValidator('json', changeStatusSchema),
+    validate('json', changeStatusSchema),
     async (c) => {
       const actor = c.get('actor')
       if (!actor) return fail(c, 'unauthorized', 401)
@@ -340,8 +363,9 @@ export const kourindou = new Hono<AppEnv>()
   /** 许可状态变更：必须给理由，且一定留痕——版权争议时这是证据链 */
   .patch(
     '/resources/:id/license',
+    entityIdParam,
     requireAuth,
-    zValidator('json', changeLicenseSchema),
+    validate('json', changeLicenseSchema),
     async (c) => {
       const actor = c.get('actor')
       if (!actor) return fail(c, 'unauthorized', 401)
@@ -380,8 +404,9 @@ export const kourindou = new Hono<AppEnv>()
   /** 新建版本并挂上分发链接 */
   .post(
     '/resources/:id/versions',
+    entityIdParam,
     requireAuth,
-    zValidator('json', createVersionSchema),
+    validate('json', createVersionSchema),
     async (c) => {
       const actor = c.get('actor')
       if (!actor) return fail(c, 'unauthorized', 401)

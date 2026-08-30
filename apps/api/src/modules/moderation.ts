@@ -5,10 +5,9 @@ import {
   reviewResourceSchema,
   STRIKE_REJECT_REASONS,
 } from '@gensokyo/shared'
-import { zValidator } from '@hono/zod-validator'
 import { and, asc, eq, isNull, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
-import { fail } from '../errors'
+import { entityIdParam, fail, validate } from '../errors'
 import { requireRole } from '../middleware/require'
 import type { AppEnv } from '../middleware/session'
 import { canTransition } from './kourindou/status'
@@ -19,7 +18,7 @@ export const moderation = new Hono<AppEnv>()
   .use('*', requireRole('moderator'))
 
   /** 审核队列。低信任的排前面——他们更可能出问题，也更需要及时反馈 */
-  .get('/queue', zValidator('query', paginationQuerySchema), async (c) => {
+  .get('/queue', validate('query', paginationQuerySchema), async (c) => {
     const { page, pageSize } = c.req.valid('query')
     const items = await db
       .select({
@@ -62,7 +61,8 @@ export const moderation = new Hono<AppEnv>()
    */
   .post(
     '/resources/:id/review',
-    zValidator('json', reviewResourceSchema),
+    entityIdParam,
+    validate('json', reviewResourceSchema),
     async (c) => {
       const actor = c.get('actor')
       if (!actor) return fail(c, 'unauthorized', 401)
@@ -75,6 +75,10 @@ export const moderation = new Hono<AppEnv>()
         .where(and(eq(resource.id, id), isNull(resource.deletedAt)))
         .limit(1)
       if (!row) return fail(c, 'not_found', 404)
+      // 审核只作用于队列中的资源；否则可以 approve 一个从未投稿的草稿
+      if (row.status !== 'pending') {
+        return fail(c, 'invalid_state_transition', 409)
+      }
 
       const to = input.decision === 'approve' ? 'published' : 'draft'
       if (
@@ -127,7 +131,7 @@ export const moderation = new Hono<AppEnv>()
     },
   )
 
-  .get('/reports', zValidator('query', paginationQuerySchema), async (c) => {
+  .get('/reports', validate('query', paginationQuerySchema), async (c) => {
     const { page, pageSize } = c.req.valid('query')
     const items = await db
       .select()
@@ -141,7 +145,8 @@ export const moderation = new Hono<AppEnv>()
 
   .post(
     '/reports/:id/resolve',
-    zValidator('json', resolveReportSchema),
+    entityIdParam,
+    validate('json', resolveReportSchema),
     async (c) => {
       const actor = c.get('actor')
       if (!actor) return fail(c, 'unauthorized', 401)
