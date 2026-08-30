@@ -1,11 +1,11 @@
 import { afterAll, describe, expect, test } from 'bun:test'
 import { db, schema } from '@gensokyo/db'
+import { cleanupTracked, trackUser } from '@gensokyo/db/testing'
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { app } from './app'
 import { requireAuth, requireRole } from './middleware/require'
 import { type AppEnv, sessionMiddleware } from './middleware/session'
-import { cleanupTracked, trackUser } from './test-support'
 
 /**
  * 中间件挂在一个本地 app 上测，不往生产 app 里塞测试路由。

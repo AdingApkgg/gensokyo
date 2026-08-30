@@ -12,15 +12,19 @@
  *
  * 数据在此固化，重跑不需要登录那个网盘。
  */
+
 import { db } from '../src/client'
 import {
   resource,
   resourceFile,
   resourceTag,
   resourceVersion,
-  topic,
-  user,
 } from '../src/schema'
+import {
+  createResourceTopic,
+  ensureSeedUser,
+  seedHandle,
+} from './_shared/create-resource-topic'
 
 const DEMO_USER = 'demo-importer'
 const HOST = 'https://cloud.touhou.re'
@@ -146,15 +150,12 @@ const entries: Entry[] = [
 ]
 
 async function main() {
-  await db
-    .insert(user)
-    .values({
-      id: DEMO_USER,
-      name: '编目机器人',
-      email: 'demo-importer@example.invalid',
-      emailVerified: false,
-    })
-    .onConflictDoNothing()
+  await ensureSeedUser({
+    id: DEMO_USER,
+    name: '编目机器人',
+    email: 'demo-importer@example.invalid',
+    handle: seedHandle(DEMO_USER),
+  })
 
   let created = 0
   for (const e of entries) {
@@ -184,12 +185,7 @@ async function main() {
         .onConflictDoNothing()
     }
 
-    await db.insert(topic).values({
-      kind: 'resource',
-      resourceId: row.id,
-      authorId: DEMO_USER,
-      title: e.title,
-    })
+    await createResourceTopic(row.id, DEMO_USER)
 
     const [version] = await db
       .insert(resourceVersion)

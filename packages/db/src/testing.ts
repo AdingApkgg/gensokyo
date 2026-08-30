@@ -1,5 +1,6 @@
-import { db, schema } from '@gensokyo/db'
 import { inArray } from 'drizzle-orm'
+import { db } from './client'
+import * as schema from './schema'
 
 /**
  * 测试残留清理。
@@ -17,6 +18,7 @@ import { inArray } from 'drizzle-orm'
  */
 const users: string[] = []
 const resources: string[] = []
+const topics: string[] = []
 
 export function trackUser(id: string | undefined): string {
   if (id) users.push(id)
@@ -28,7 +30,21 @@ export function trackResource<T extends { id: string }>(r: T): T {
   return r
 }
 
+/**
+ * 只用于直接建的**版块**主题。资源主题不用记：它随 resource 级联删。
+ */
+export function trackTopic(id: string): string {
+  topics.push(id)
+  return id
+}
+
 export async function cleanupTracked() {
+  // 版块主题不挂在任何资源下，删资源带不走它们
+  if (topics.length > 0) {
+    await db
+      .delete(schema.topic)
+      .where(inArray(schema.topic.id, topics.splice(0)))
+  }
   if (resources.length > 0) {
     await db
       .delete(schema.resource)

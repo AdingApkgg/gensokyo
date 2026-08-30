@@ -9,15 +9,19 @@
  *
  * 官方补丁是另一回事——ZUN 自己免费发布的更新，可以正常指向官方下载。
  */
+
 import { db } from '../src/client'
 import {
   resource,
   resourceFile,
   resourceTag,
   resourceVersion,
-  topic,
-  user,
 } from '../src/schema'
+import {
+  createResourceTopic,
+  ensureSeedUser,
+  seedHandle,
+} from './_shared/create-resource-topic'
 
 const DEMO_USER = 'demo-importer'
 const ZUN_SITE = 'https://www16.big.or.jp/~zun/'
@@ -63,15 +67,12 @@ const NOTE =
 const slugify = (id: string) => `official-${id}`
 
 async function main() {
-  await db
-    .insert(user)
-    .values({
-      id: DEMO_USER,
-      name: '编目机器人',
-      email: 'demo-importer@example.invalid',
-      emailVerified: false,
-    })
-    .onConflictDoNothing()
+  await ensureSeedUser({
+    id: DEMO_USER,
+    name: '编目机器人',
+    email: 'demo-importer@example.invalid',
+    handle: seedHandle(DEMO_USER),
+  })
 
   let created = 0
   for (const [tagId, ja, zh, year] of OFFICIAL) {
@@ -108,12 +109,7 @@ async function main() {
       ])
       .onConflictDoNothing()
 
-    await db.insert(topic).values({
-      kind: 'resource',
-      resourceId: row.id,
-      authorId: DEMO_USER,
-      title: ja,
-    })
+    await createResourceTopic(row.id, DEMO_USER)
 
     const [version] = await db
       .insert(resourceVersion)

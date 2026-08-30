@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, test } from 'bun:test'
+import { cleanupTracked, trackUser } from '@gensokyo/db/testing'
 import { app } from './app'
-import { cleanupTracked, trackUser } from './test-support'
 
 const email = `test-${Date.now()}@example.com`
 const password = 'hakurei-reimu-514'

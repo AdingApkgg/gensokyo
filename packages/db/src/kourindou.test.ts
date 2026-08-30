@@ -1,8 +1,9 @@
-import { beforeAll, describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
 import { db } from './client'
 import { rating, resource, resourceVersion, user } from './schema'
 import { post, topic } from './schema/content'
+import { cleanupTracked, trackResource, trackTopic, trackUser } from './testing'
 
 const rows = async (q: ReturnType<typeof sql>) => {
   const r = await db.execute(q)
@@ -68,7 +69,11 @@ beforeAll(async () => {
     })
     .returning({ id: resource.id })
   rid = r?.id as string
+  trackUser(uid)
+  if (r) trackResource(r)
 })
+
+afterAll(cleanupTracked)
 
 describe('schema', () => {
   test('21 张表全部存在', async () => {
@@ -148,8 +153,9 @@ describe('约束（legacy 缺失的那些）', () => {
   test('post.parentId 有外键，插不进孤儿回复', async () => {
     const [t] = await db
       .insert(topic)
-      .values({ kind: 'board', boardSlug: 'shrine', title: 'x' })
+      .values({ kind: 'board', boardSlug: 'meta', title: '外键测试' })
       .returning({ id: topic.id })
+    if (t) trackTopic(t.id)
     const orphan = await rejects(() =>
       db.insert(post).values({
         topicId: t?.id as string,
@@ -182,6 +188,9 @@ describe('删除语义', () => {
         uploaderId: tmpId,
       })
       .returning({ id: resource.id })
+    // 这个用例故意删掉 user 来验证 set null，资源会留下来变成孤儿——
+    // 所以资源要单独记，否则每跑一次就多一条无主资源
+    if (r) trackResource(r)
 
     await db.delete(user).where(sql`${user.id} = ${tmpId}`)
 

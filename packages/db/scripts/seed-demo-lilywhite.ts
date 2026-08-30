@@ -13,15 +13,19 @@
  * 许可状态一律 unspecified：这些是社区流通的同人作品，未见明确的再分发授权。
  * 秋霜玉近年有商业再版，条目保留但备注提示需要复核。
  */
+
 import { db } from '../src/client'
 import {
   resource,
   resourceFile,
   resourceTag,
   resourceVersion,
-  topic,
-  user,
 } from '../src/schema'
+import {
+  createResourceTopic,
+  ensureSeedUser,
+  seedHandle,
+} from './_shared/create-resource-topic'
 
 const DEMO_USER = 'demo-importer'
 const SHARE = 'https://cloud.lilywhite.cc/s/4ZUW'
@@ -123,15 +127,12 @@ const BASE_NOTE =
   '社区流通的同人作品，未见作者对再分发的明确授权。如权利人有异议，请通过举报下架。'
 
 async function main() {
-  await db
-    .insert(user)
-    .values({
-      id: DEMO_USER,
-      name: '编目机器人',
-      email: 'demo-importer@example.invalid',
-      emailVerified: false,
-    })
-    .onConflictDoNothing()
+  await ensureSeedUser({
+    id: DEMO_USER,
+    name: '编目机器人',
+    email: 'demo-importer@example.invalid',
+    handle: seedHandle(DEMO_USER),
+  })
 
   let created = 0
   for (const w of WORKS) {
@@ -164,12 +165,7 @@ async function main() {
       .values([{ resourceId: row.id, tagId: 'lang-ja' }])
       .onConflictDoNothing()
 
-    await db.insert(topic).values({
-      kind: 'resource',
-      resourceId: row.id,
-      authorId: DEMO_USER,
-      title: w.title,
-    })
+    await createResourceTopic(row.id, DEMO_USER)
 
     const [version] = await db
       .insert(resourceVersion)

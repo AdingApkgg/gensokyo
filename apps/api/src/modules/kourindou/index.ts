@@ -192,12 +192,18 @@ export const kourindou = new Hono<AppEnv>()
             .onConflictDoNothing()
         }
 
-        // 评论区从第一天就是论坛主题（M4 共用同一份数据）
+        /**
+         * 评论区从第一天就是论坛主题（M4 共用同一份数据）。
+         *
+         * **不写 title**：资源标题是 titleOriginal + 三语 jsonb 一束，
+         * 存快照既不随资源 PATCH 更新、又只能存下其中一种语言。
+         * 显示时从 resource 现取。DB 侧由 topic_kind_shape 兜底。
+         */
         await tx.insert(schema.topic).values({
           kind: 'resource',
           resourceId: row.id,
           authorId: actor.id,
-          title: row.titleOriginal,
+          lastPostAt: new Date(),
         })
 
         return row

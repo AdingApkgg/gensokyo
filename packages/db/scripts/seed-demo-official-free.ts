@@ -13,6 +13,7 @@
  * - **Windows 完整版**（见 seed-demo-official.ts，license=licensed）：同人店、
  *   DLsite、Steam 均在售，只收录条目不提供文件。
  */
+
 import { db } from '../src/client'
 import {
   resource,
@@ -20,9 +21,12 @@ import {
   resourceTag,
   resourceVersion,
   tag,
-  topic,
-  user,
 } from '../src/schema'
+import {
+  createResourceTopic,
+  ensureSeedUser,
+  seedHandle,
+} from './_shared/create-resource-topic'
 
 const DEMO_USER = 'demo-importer'
 const ZUN = 'https://www16.big.or.jp/~zun/html'
@@ -57,15 +61,12 @@ const TRIALS = [
 ] as const
 
 async function main() {
-  await db
-    .insert(user)
-    .values({
-      id: DEMO_USER,
-      name: '编目机器人',
-      email: 'demo-importer@example.invalid',
-      emailVerified: false,
-    })
-    .onConflictDoNothing()
+  await ensureSeedUser({
+    id: DEMO_USER,
+    name: '编目机器人',
+    email: 'demo-importer@example.invalid',
+    handle: seedHandle(DEMO_USER),
+  })
 
   // 原作标签此前只种到 th06，补上 PC-98 五作
   await db
@@ -124,12 +125,7 @@ async function main() {
       ])
       .onConflictDoNothing()
 
-    await db.insert(topic).values({
-      kind: 'resource',
-      resourceId: row.id,
-      authorId: DEMO_USER,
-      title: opts.titleOriginal,
-    })
+    await createResourceTopic(row.id, DEMO_USER)
 
     const [v] = await db
       .insert(resourceVersion)

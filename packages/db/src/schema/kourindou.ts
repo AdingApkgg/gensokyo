@@ -1,5 +1,6 @@
 import {
   CLAIM_STATUS,
+  HANDLE_RE,
   LICENSE_STATUS,
   type LocalizedText,
   MIRROR_KIND,
@@ -7,6 +8,7 @@ import {
   REJECT_REASON,
   REPORT_REASON,
   REPORT_STATUS,
+  RESERVED_HANDLES,
   RESOURCE_KIND,
   RESOURCE_STATUS,
   TAG_KIND,
@@ -53,27 +55,79 @@ export const moderationAction = pgEnum('moderation_action', MODERATION_ACTION)
 // ---------------------------------------------------------------- 用户扩展
 
 /**
- * 角色与信任梯度。不动 better-auth 生成的 user 表，避免它升级时冲突。
+ * CHECK 里的字面量从常量派生，不在 SQL 里再抄一遍。
+ *
+ * ⚠️ 必须用 `sql.raw` 内联。写成 `sql`${v}`` 的话 drizzle-kit 会把它参数化成
+ * `$1, $2, …`，而 **DDL 不能用绑定参数**——生成的迁移一跑就报
+ * 「there is no parameter $1」。值来自本仓的编译期常量，不是用户输入；
+ * 出现引号就说明有人把常量改成了不该内联的东西，宁可在构建期炸。
  */
-export const userProfile = pgTable('user_profile', {
-  userId: text('user_id')
-    .primaryKey()
-    .references(() => user.id, { onDelete: 'cascade' }),
-  role: userRole('role').notNull().default('user'),
-  /** 通过审核的资源数，达阈值后即发即审 */
-  approvedResourceCount: integer('approved_resource_count')
-    .notNull()
-    .default(0),
-  /** 违规记录数，> 0 直接清零信任等级 */
-  strikeCount: integer('strike_count').notNull().default(0),
-  createdAt: timestamp('created_at', { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true })
-    .notNull()
-    .defaultNow()
-    .$onUpdate(() => new Date()),
-})
+const assertInlinable = (v: string) => {
+  if (/['\\]/.test(v)) throw new Error(`不可内联的字面量: ${v}`)
+  return v
+}
+const sqlLiteral = (v: string) => sql.raw(`'${assertInlinable(v)}'`)
+const sqlLiteralList = (values: readonly string[]) =>
+  sql.raw(values.map((v) => `'${assertInlinable(v)}'`).join(', '))
+
+/**
+ * 角色与信任梯度。不动 better-auth 生成的 user 表，避免它升级时冲突。
+ *
+ * ⚠️ 这张表原本**没有第二参数**。加表级 CHECK 必须同时把它从
+ * `pgTable(name, {...})` 改成 `pgTable(name, {...}, (t) => [...])`——
+ * 忘了第二参数的话 CHECK 会**静默不生成**，migrate 照样成功。
+ */
+export const userProfile = pgTable(
+  'user_profile',
+  {
+    userId: text('user_id')
+      .primaryKey()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    role: userRole('role').notNull().default('user'),
+    /**
+     * 稳定标识：进 /u/:handle，也进已发布帖子的正文（@xxx）。
+     * **M4 唯一同时命中两条不可逆红线的字段**——改它等于死链 + 重写历史正文。
+     *
+     * NOT NULL 是一条不变量：sessionMiddleware 惰性建档时从 user.id 派生，
+     * 迁移里给所有缺行的 user 补了 profile。可空的话「没有 handle 的用户」
+     * 会出现在 @解析 / /u/:handle / 通知渲染三条路径的每个分支里。
+     */
+    handle: varchar('handle', { length: 20 }).notNull().unique(),
+    /** 「自选一次后锁定」的状态位：只在它为 NULL 时接受 PUT /me/handle */
+    handleSetAt: timestamp('handle_set_at', { withTimezone: true }),
+    /** 通过审核的资源数，达阈值后即发即审 */
+    approvedResourceCount: integer('approved_resource_count')
+      .notNull()
+      .default(0),
+    /** 违规记录数，> 0 直接清零信任等级 */
+    strikeCount: integer('strike_count').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    /**
+     * 正则由 HANDLE_RE 的**同一个字面量**派生，并有测试断言两者一致。
+     * 两处各写一遍正则必然漂移。
+     */
+    check(
+      'user_profile_handle_fmt',
+      sql`${t.handle} ~ ${sqlLiteral(HANDLE_RE.source)}`,
+    ),
+    /**
+     * 保留字只写在 zod 里的话，绕过 API 就没了——而这里绕过的后果是
+     * **不可逆冒充**：@admin 一旦被注册并出现在已发布的正文里，改不回来。
+     */
+    check(
+      'user_profile_handle_not_reserved',
+      sql`${t.handle} NOT IN (${sqlLiteralList(RESERVED_HANDLES)})`,
+    ),
+  ],
+)
 
 // ---------------------------------------------------------------- 分类与标签
 
@@ -380,6 +434,14 @@ export const report = pgTable(
   (t) => [
     index('report_status_created_idx').on(t.status, t.createdAt),
     index('report_target_idx').on(t.targetKind, t.targetId),
+    /**
+     * 同一个人对同一个对象只能有一条未结案的举报。
+     * solo 运营下举报队列是论坛唯一的「审」的入口——被同一个人的重复提交
+     * 埋掉，等于关掉整个治理通道。形状与上面的 circle_claim_open_uq 逐字相同。
+     */
+    uniqueIndex('report_open_uq')
+      .on(t.reporterId, t.targetKind, t.targetId)
+      .where(sql`${t.status} = 'open'`),
   ],
 )
 

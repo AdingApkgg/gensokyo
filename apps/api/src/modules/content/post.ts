@@ -69,17 +69,17 @@ export async function createPost(input: {
     return await db.transaction(async (tx) => {
       /**
        * 楼层号来自对 topic 行的原子自增：UPDATE 会持有行锁，
-       * 并发发帖因此被串行化，不会读到同一个 postCount。
+       * 并发发帖因此被串行化，不会读到同一个 floorSeq。
        * post_topic_floor_uq 是最后一道兜底。
        */
       const [t] = await tx
         .update(topic)
         .set({
-          postCount: sql`${topic.postCount} + 1`,
+          floorSeq: sql`${topic.floorSeq} + 1`,
           lastPostAt: new Date(),
         })
         .where(and(eq(topic.id, input.topicId), isNull(topic.deletedAt)))
-        .returning({ floor: topic.postCount })
+        .returning({ floor: topic.floorSeq })
 
       if (!t) return { ok: false, reason: 'topic_missing' } as const
 

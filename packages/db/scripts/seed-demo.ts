@@ -10,6 +10,7 @@
  *   这也顺带让"未标明"的警示徽章在界面上真实出现
  * - 镜像链接指向东方圈现有的网盘站，用于演示外链分发的展示效果
  */
+
 import { db } from '../src/client'
 import {
   resource,
@@ -17,9 +18,12 @@ import {
   resourceTag,
   resourceVersion,
   tag,
-  topic,
-  user,
 } from '../src/schema'
+import {
+  createResourceTopic,
+  ensureSeedUser,
+  seedHandle,
+} from './_shared/create-resource-topic'
 
 const TDB = 'https://touhoudb.com/api'
 const DEMO_USER = 'demo-importer'
@@ -94,15 +98,12 @@ async function main() {
     process.exit(1)
   }
 
-  await db
-    .insert(user)
-    .values({
-      id: DEMO_USER,
-      name: '编目机器人',
-      email: 'demo-importer@example.invalid',
-      emailVerified: false,
-    })
-    .onConflictDoNothing()
+  await ensureSeedUser({
+    id: DEMO_USER,
+    name: '编目机器人',
+    email: 'demo-importer@example.invalid',
+    handle: seedHandle(DEMO_USER),
+  })
 
   const knownTags = new Set(
     (await db.select({ id: tag.id }).from(tag)).map((t) => t.id),
@@ -158,12 +159,7 @@ async function main() {
         .onConflictDoNothing()
     }
 
-    await db.insert(topic).values({
-      kind: 'resource',
-      resourceId: row.id,
-      authorId: DEMO_USER,
-      title: a.name,
-    })
+    await createResourceTopic(row.id, DEMO_USER)
 
     const [version] = await db
       .insert(resourceVersion)

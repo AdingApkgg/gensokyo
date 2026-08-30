@@ -10,15 +10,19 @@
  * 刻意不收录的：官方游戏本体（平台规则），以及 Steam 上在售的商业同人游戏
  * （夜雀食堂、Luna Nights 之类）——那些是卖钱的作品，不该出现在分发站。
  */
+
 import { db } from '../src/client'
 import {
   resource,
   resourceFile,
   resourceTag,
   resourceVersion,
-  topic,
-  user,
 } from '../src/schema'
+import {
+  createResourceTopic,
+  ensureSeedUser,
+  seedHandle,
+} from './_shared/create-resource-topic'
 
 const DEMO_USER = 'demo-importer'
 
@@ -126,15 +130,12 @@ const ITEMS = [
 ]
 
 async function main() {
-  await db
-    .insert(user)
-    .values({
-      id: DEMO_USER,
-      name: '编目机器人',
-      email: 'demo-importer@example.invalid',
-      emailVerified: false,
-    })
-    .onConflictDoNothing()
+  await ensureSeedUser({
+    id: DEMO_USER,
+    name: '编目机器人',
+    email: 'demo-importer@example.invalid',
+    handle: seedHandle(DEMO_USER),
+  })
 
   let created = 0
   for (const it of ITEMS) {
@@ -165,12 +166,7 @@ async function main() {
       .values(it.tags.map((t) => ({ resourceId: row.id, tagId: t })))
       .onConflictDoNothing()
 
-    await db.insert(topic).values({
-      kind: 'resource',
-      resourceId: row.id,
-      authorId: DEMO_USER,
-      title: it.titleOriginal,
-    })
+    await createResourceTopic(row.id, DEMO_USER)
 
     const [version] = await db
       .insert(resourceVersion)

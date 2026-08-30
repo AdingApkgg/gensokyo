@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, test } from 'bun:test'
+import { cleanupTracked, trackUser } from '@gensokyo/db/testing'
 import { app } from './app'
-import { cleanupTracked, trackUser } from './test-support'
 
 /** 最小的合法 PNG（1x1 透明像素） */
 const PNG = Uint8Array.from([
