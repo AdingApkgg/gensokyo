@@ -13,6 +13,7 @@ import { entityIdParam, fail, validate } from '../../errors'
 import { isOwnerOrStaff, requireAuth } from '../../middleware/require'
 import { type AppEnv, canAutoPublish } from '../../middleware/session'
 import { autoPublishThreshold } from '../../site-config'
+import { loadVisibleTopicByResourceSlug } from '../content/visibility'
 import { makeSlug } from './slug'
 import { canTransition, submitTarget } from './status'
 
@@ -142,6 +143,15 @@ export const kourindou = new Hono<AppEnv>()
           .orderBy(resourceFile.sortOrder)
       : []
 
+    /**
+     * 评论区的入口。楼层的读写全部走 /api/shrine/topics/:id/posts——
+     * 同一张表两个写入口 = 两份可见性判断 = 必然漂移，所以这里只给 id。
+     *
+     * 走同一道闸门取：主题被软删时它是 null，前端据此不渲染评论区，
+     * 而不是渲染出一个点进去 404 的壳。
+     */
+    const discussion = await loadVisibleTopicByResourceSlug(slug)
+
     return c.json({
       resource: row,
       circle: circleRow[0] ?? null,
@@ -150,6 +160,7 @@ export const kourindou = new Hono<AppEnv>()
         ...v,
         files: files.filter((f) => f.versionId === v.id),
       })),
+      topicId: discussion?.id ?? null,
     })
   })
 
@@ -339,6 +350,21 @@ export const kourindou = new Hono<AppEnv>()
         .where(and(eq(resource.id, id), isNull(resource.deletedAt)))
         .limit(1)
       if (!row) return fail(c, 'not_found', 404)
+
+      /**
+       * 审核通过只能走 `/moderation/resources/:id/review`。
+       *
+       * 那条路径才递增 `approvedResourceCount`、才把审计写成 `review`；
+       * 从这里放行的话同一个业务动作有两条路径，而只有一条推进信任梯度。
+       *
+       * ⚠️ **不能改状态机去掉这条边**：`/review` 自己调的正是
+       * `canTransition(pending, published)`，删了它审核通过会 409。
+       * `status.ts` 是「什么跃迁合法」的真相，不是「走哪扇门」的真相——
+       * 门在这里关。
+       */
+      if (row.status === 'pending' && to === 'published') {
+        return fail(c, 'invalid_state_transition', 409)
+      }
 
       if (
         !canTransition(row.status, to, {

@@ -47,15 +47,22 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const detail = await res.json()
   if ('error' in detail) throw data(null, { status: 404 })
 
-  // 评论区只对已发布资源开放，取不到不算错误
-  const postsRes = await api.api.kourindou.resources[':slug'].posts.$get({
-    param: { slug },
-    query: {},
-  })
-  const postsBody = await postsRes.json()
-  const posts = 'error' in postsBody ? [] : postsBody.posts
+  /**
+   * 楼层走神社：资源评论区与论坛帖是同一份数据，M4 起也是同一组端点。
+   * topicId 由详情接口给出，主题被软删时它是 null——那时不渲染评论区，
+   * 而不是渲染出一个点进去 404 的壳。
+   */
+  let discussion = null
+  if (detail.topicId) {
+    const res2 = await api.api.shrine.topics[':id'].posts.$get({
+      param: { id: detail.topicId },
+      query: {},
+    })
+    const body = await res2.json()
+    if (!('error' in body)) discussion = body
+  }
 
-  return { ...detail, posts }
+  return { ...detail, discussion }
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
@@ -66,9 +73,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 
   if (intent === 'comment') {
     const body = String(form.get('bodyMd') ?? '').trim()
-    if (!body) return { ok: false as const }
-    await api.api.kourindou.resources[':slug'].posts.$post({
-      param: { slug },
+    const topicId = String(form.get('topicId') ?? '')
+    if (!body || !topicId) return { ok: false as const }
+    await api.api.shrine.topics[':id'].posts.$post({
+      param: { id: topicId },
       json: { bodyMd: body },
     })
     return { ok: true as const }
@@ -120,7 +128,8 @@ export default function ResourceDetail({
   loaderData,
   matches,
 }: Route.ComponentProps) {
-  const { resource, circle, tags, versions, posts } = loaderData
+  const { resource, circle, tags, versions, discussion, topicId } = loaderData
+  const posts = discussion?.posts ?? []
   const nav = useNavigation()
   const user = matches[0]?.loaderData?.user
   const avg = averageRating(resource.ratingSum, resource.ratingCount)
@@ -276,9 +285,10 @@ export default function ResourceDetail({
           )}
         </div>
 
-        {user ? (
+        {user && topicId ? (
           <Form method="post" className="mb-6 grid gap-2">
             <input type="hidden" name="intent" value="comment" />
+            <input type="hidden" name="topicId" value={topicId ?? ''} />
             <Textarea
               name="bodyMd"
               rows={3}

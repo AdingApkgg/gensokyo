@@ -127,6 +127,20 @@ async function main() {
   })
   check('普通用户看不到队列', outsider.status === 403)
 
+  /**
+   * 审核通过只能走 /review。
+   *
+   * 从 /status 直接把 pending 改 published 会绕开信任梯度：不递增
+   * approvedResourceCount、审计写成 status_change 而非 review。
+   * 这一条断言的是那扇门关上了——而下面那条断言的是**正门还开着**，
+   * 两条必须一起看：只关门不验正门的话，改错了会让审核通过全线 409。
+   */
+  const bypass = await app.request(
+    `/api/kourindou/resources/${resource.id}/status`,
+    send(staff, 'POST', { to: 'published' }),
+  )
+  check('staff 也不能从 /status 绕开审核', bypass.status === 409)
+
   // --- 审核通过 ---
   const review = await app.request(
     `/api/moderation/resources/${resource.id}/review`,
@@ -185,12 +199,30 @@ async function main() {
   check('读者可评分', rate.status === 200)
   check('作者不能给自己评分', selfRate.status === 403)
 
+  // 楼层走神社：资源页只给 topicId，读写都在 /api/shrine
+  const detail = await app.request(`/api/kourindou/resources/${resource.slug}`)
+  const { topicId } = (await detail.json()) as { topicId: string | null }
+  check('资源详情给出讨论主题 id', typeof topicId === 'string')
+
   const post = await app.request(
-    `/api/kourindou/resources/${resource.slug}/posts`,
+    `/api/shrine/topics/${topicId}/posts`,
     send(reader, 'POST', { bodyMd: 'E2E 评论' }),
   )
   const pb = (await post.json()) as { floor: number }
   check('发表评论并拿到楼层号', post.status === 201 && pb.floor === 1)
+
+  // 同一条楼层从神社读得到，且投影一致（同一份数据两个视图）
+  const viaShrine = await app.request(`/api/shrine/topics/${topicId}/posts`)
+  const shrineBody = (await viaShrine.json()) as {
+    posts: { floor: number; bodyMd: string }[]
+    total: number
+  }
+  check(
+    '资源评论与论坛帖走同一段 service',
+    viaShrine.status === 200 &&
+      shrineBody.posts.some((p) => p.floor === 1 && p.bodyMd === 'E2E 评论') &&
+      shrineBody.total === 1,
+  )
 
   // --- 举报闭环 ---
   const report = await app.request(
