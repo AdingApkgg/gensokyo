@@ -1,16 +1,12 @@
 import { db, schema } from '@gensokyo/db'
-import { createReportSchema, rateSchema } from '@gensokyo/shared'
+import { rateSchema } from '@gensokyo/shared'
 import { and, eq, isNull, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { fail, validate } from '../errors'
 import { requireAuth } from '../middleware/require'
 import type { AppEnv } from '../middleware/session'
 
-const { resource, rating, favorite, report, post } = schema
-
-/** targetId 是多态的，进 uuid 列之前先自己挡一道，避免 22P02 */
-const uuidLike = (v: string) =>
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)
+const { resource, rating, favorite } = schema
 
 /** 只有已发布的资源能被互动 */
 async function publishedResource(slug: string) {
@@ -103,59 +99,4 @@ export const interactions = new Hono<AppEnv>()
     return c.json({ favorited: false })
   })
 
-  .post(
-    '/reports',
-    requireAuth,
-    validate('json', createReportSchema),
-    async (c) => {
-      const actor = c.get('actor')
-      if (!actor) return fail(c, 'unauthorized', 401)
-      const input = c.req.valid('json')
-
-      /**
-       * 举报是版权下架的入口通道，两个分支都要设防：
-       * 不过滤状态的话，对任意 uuid 举报的成败就成了「该资源是否存在」的
-       * 预言机——包括别人的私有草稿。post 分支此前完全没有校验。
-       */
-      if (input.targetKind === 'resource') {
-        if (!uuidLike(input.targetId)) return fail(c, 'not_found', 404)
-        const [row] = await db
-          .select({ uploaderId: resource.uploaderId })
-          .from(resource)
-          .where(
-            and(
-              eq(resource.id, input.targetId),
-              eq(resource.status, 'published'),
-              isNull(resource.deletedAt),
-            ),
-          )
-          .limit(1)
-        if (!row) return fail(c, 'not_found', 404)
-        if (row.uploaderId === actor.id)
-          return fail(c, 'self_action_forbidden', 403)
-      } else {
-        if (!uuidLike(input.targetId)) return fail(c, 'not_found', 404)
-        const [row] = await db
-          .select({ authorId: post.authorId })
-          .from(post)
-          .where(and(eq(post.id, input.targetId), isNull(post.deletedAt)))
-          .limit(1)
-        if (!row) return fail(c, 'not_found', 404)
-        if (row.authorId === actor.id)
-          return fail(c, 'self_action_forbidden', 403)
-      }
-
-      const [created] = await db
-        .insert(report)
-        .values({
-          targetKind: input.targetKind,
-          targetId: input.targetId,
-          reporterId: actor.id,
-          reason: input.reason,
-          detail: input.detail,
-        })
-        .returning({ id: report.id })
-
-      return c.json({ id: created?.id }, 201)
-    },
-  )
+// 举报已搬到顶层 /api/reports —— 论坛与香霖堂两侧都要调它

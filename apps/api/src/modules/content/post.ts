@@ -66,26 +66,34 @@ export function toPostView(r: Record<string, unknown>): PostView {
     bodyMd: deleted ? '' : (r.bodyMd as string),
     deleted,
     locale: (r.locale ?? null) as Locale | null,
-    author: r.authorId
-      ? {
-          id: r.authorId as string,
-          name: (r.authorName ?? '') as string,
-          handle: (r.authorHandle ?? '') as string,
-        }
-      : null,
+    /**
+     * handle 缺失 → 整个 author 置 null。**不用 `?? ''` 兜**：
+     * PostAuthor 的契约就写着这一条，空 handle 会让 web 拼出 `/u/`——
+     * 那是另一个路由，产出一条没有任何编译期或运行期信号的死链。
+     * authorId 可为 null（onDelete set null），所以不能换成 innerJoin。
+     */
+    author:
+      r.authorId && r.authorHandle
+        ? {
+            id: r.authorId as string,
+            name: (r.authorName ?? '') as string,
+            handle: r.authorHandle as string,
+          }
+        : null,
     quoted:
       r.parentId === null
         ? null
         : {
             id: r.parentId as string,
             floor: r.parentFloor as number,
-            author: r.parentAuthorId
-              ? {
-                  id: r.parentAuthorId as string,
-                  name: (r.parentAuthorName ?? '') as string,
-                  handle: (r.parentAuthorHandle ?? '') as string,
-                }
-              : null,
+            author:
+              r.parentAuthorId && r.parentAuthorHandle
+                ? {
+                    id: r.parentAuthorId as string,
+                    name: (r.parentAuthorName ?? '') as string,
+                    handle: r.parentAuthorHandle as string,
+                  }
+                : null,
             excerpt: parentDeleted ? '' : excerpt(r.parentBody as string),
             deleted: parentDeleted,
           },

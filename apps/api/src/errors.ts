@@ -20,6 +20,10 @@ export const ERROR_CODES = [
   'file_too_large',
   'duplicate_slug',
   'self_action_forbidden',
+  /** @ 的人数超过上限。不静默截断——那会让发帖人以为都提及到了 */
+  'mention_limit_exceeded',
+  /** 新账号发站外链接被拒。冷启动期阈值设 0，出事再收紧 */
+  'link_not_allowed',
   'internal',
 ] as const
 

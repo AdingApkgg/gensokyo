@@ -226,7 +226,7 @@ async function main() {
 
   // --- 举报闭环 ---
   const report = await app.request(
-    '/api/kourindou/reports',
+    '/api/reports',
     send(reader, 'POST', {
       targetKind: 'resource',
       targetId: resource.id,

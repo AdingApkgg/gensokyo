@@ -1,4 +1,5 @@
 export * from './enums'
+export * from './link'
 export * from './mention'
 export * from './schemas'
 export * from './types'

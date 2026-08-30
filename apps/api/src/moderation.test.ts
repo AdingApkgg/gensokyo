@@ -227,7 +227,7 @@ describe('举报处理', () => {
 
     const reporter = await signUp('举报人')
     const created = await app.request(
-      '/api/kourindou/reports',
+      '/api/reports',
       send(reporter, 'POST', {
         targetKind: 'resource',
         targetId: r.id,
@@ -248,5 +248,47 @@ describe('举报处理', () => {
       .where(eq(schema.report.id, id))
     expect(row?.status).toBe('resolved')
     expect(row?.resolvedBy).toBe(staff.userId)
+  })
+})
+
+/**
+ * 举报队列的 GET 此前**零测试覆盖**——只有 /queue 与 /reports/:id/resolve 有。
+ * 于是「114 项全绿」与这条路由是不是 500 完全无关，而它是站点唯一的治理入口。
+ */
+describe('举报队列不会被一条非 uuid 的 targetId 整条打挂', () => {
+  test('库里有非 uuid 的 target_id 时仍然 200', async () => {
+    const mod = await signUp('看队列的版主')
+    await promote(mod)
+    const reporter = await signUp('乱填目标的')
+
+    /**
+     * 直接写库，不走 POST /api/reports——那条路由有 uuidLike 前置校验。
+     * 要防的正是**绕过入口校验进来的行**：历史数据、seed、手工 SQL。
+     * targetKind 用 user，因为 better-auth 的 user.id 本来就不是 uuid，
+     * 这不是构造出来的极端值，是这张多态表的正常内容。
+     */
+    const [row] = await db
+      .insert(schema.report)
+      .values({
+        targetKind: 'user',
+        targetId: reporter.userId,
+        reporterId: reporter.userId,
+        reason: 'harassment',
+      })
+      .returning({ id: schema.report.id })
+
+    try {
+      const res = await app.request('/api/moderation/reports?pageSize=100', {
+        headers: { cookie: mod.cookie },
+      })
+      expect(res.status).toBe(200)
+      const { items } = (await res.json()) as { items: { id: string }[] }
+      // 那一行照常出现在队列里，只是关联不上任何 post/resource
+      expect(items.some((i) => i.id === row?.id)).toBe(true)
+    } finally {
+      if (row) {
+        await db.delete(schema.report).where(eq(schema.report.id, row.id))
+      }
+    }
   })
 })

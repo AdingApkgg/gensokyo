@@ -183,6 +183,7 @@ export const deleteResourceSchema = z.object({
 export const siteConfigSchema = z.object({
   registrationOpen: z.boolean().optional(),
   autoPublishThreshold: z.number().int().min(0).max(1000).optional(),
+  linkTrustThreshold: z.number().int().min(0).max(1000).optional(),
   takedownEmail: z.email().max(320).optional(),
   announcement: localizedTextSchema.optional(),
 })

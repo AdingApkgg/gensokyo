@@ -243,7 +243,7 @@ describe('收藏', () => {
 describe('举报', () => {
   test('不能举报自己的资源', async () => {
     const res = await app.request(
-      '/api/kourindou/reports',
+      '/api/reports',
       send(owner, 'POST', {
         targetKind: 'resource',
         targetId: target.id,
@@ -255,7 +255,7 @@ describe('举报', () => {
 
   test('他人可以举报', async () => {
     const res = await app.request(
-      '/api/kourindou/reports',
+      '/api/reports',
       send(visitor, 'POST', {
         targetKind: 'resource',
         targetId: target.id,
@@ -267,7 +267,7 @@ describe('举报', () => {
   })
 
   test('未登录不能举报', async () => {
-    const res = await app.request('/api/kourindou/reports', {
+    const res = await app.request('/api/reports', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({

@@ -79,6 +79,33 @@ export async function loadVisibleTopic(id: string): Promise<TopicView | null> {
 }
 
 /**
+ * 按 id 取一条主题，**只要那一行还在**——不看资源可不可见，也不看主题是否已软删。
+ *
+ * 「读的闸门」与「治理的闸门」是两回事。把 loadVisibleTopic 当鉴权用在
+ * staff 的写路径上，会让治理动作的标准顺序锁死自己：版权举报的第一动作就是
+ * 下架资源，一下架，那条资源讨论区里所有楼层对 moderator 和 admin 一并变成
+ * 404——删不掉、记不上 strike、举报行还挂在队列里指着一个永远处置不了的对象。
+ *
+ * 软删的主题同样要能治理，否则规避路径是现成的：发一串广告帖 → 被举报 →
+ * 抢在处理前自删主题（无他人回复时作者可删）→ 里面的楼层对 staff 不可达 →
+ * strike 记不上、moderationLog 也没有。**删掉内容不该同时删掉问责。**
+ *
+ * ⚠️ **只给 staff 路径用。** 它不做任何可见性判断，普通用户拿它会读到被下架
+ * 资源的讨论——那正是 P0-1。调用点必须已经过了 requireRole / isOwnerOrStaff。
+ */
+export async function loadTopicForModeration(
+  id: string,
+): Promise<TopicView | null> {
+  const [row] = await db
+    .select(topicProjection)
+    .from(topic)
+    .leftJoin(resource, eq(resource.id, topic.resourceId))
+    .where(eq(topic.id, id))
+    .limit(1)
+  return row ? toView(row) : null
+}
+
+/**
  * 按资源 slug 取它的讨论主题。
  *
  * 资源详情页要用它——那个页面只知道 slug。走的是同一个谓词，

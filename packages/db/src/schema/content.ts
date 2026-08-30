@@ -87,8 +87,20 @@ export const topic = pgTable(
       .defaultNow(),
   },
   (t) => [
-    /** 全站最新流与版块页共用同一条排序键：置顶进排序，不抽出流外 */
-    index('topic_latest_idx').on(desc(t.pinnedAt), desc(t.lastPostAt)),
+    /**
+     * 全站最新流与版块页共用同一条排序键：置顶进排序，不抽出流外。
+     *
+     * ⚠️ **`nulls last` 必须写出来。** PG 的 `DESC` 默认 NULLS FIRST，而路由
+     * 要的是 `pinned_at desc nulls last`（否则每条没置顶的主题都排在最前）。
+     * 两者 null 位置不同时 PG **根本不会**把这条索引用于该排序——不是代价
+     * 选择问题。上一版就是这样，它是一条谁也用不上的死索引，而它是论坛门面页
+     * 的排序索引。末列的 `id desc` 与路由的唯一性兜底对齐。
+     */
+    index('topic_latest_idx').on(
+      sql`${t.pinnedAt} desc nulls last`,
+      sql`${t.lastPostAt} desc`,
+      sql`${t.id} desc`,
+    ),
     index('topic_board_last_post_idx').on(t.boardSlug, desc(t.lastPostAt)),
     index('topic_author_idx').on(t.authorId),
     /**
@@ -97,8 +109,16 @@ export const topic = pgTable(
      */
     check(
       'topic_kind_shape',
-      sql`(${t.kind} = 'resource' AND ${t.title} IS NULL AND ${t.resourceId} IS NOT NULL)
-       OR (${t.kind} = 'board' AND ${t.title} IS NOT NULL AND ${t.boardSlug} IS NOT NULL)`,
+      /**
+       * 两个分支都要**闭合**，否则「互斥」只写了一半：上一版 board 分支对
+       * resource_id 只字未提，于是一条同时带 title 与 resource_id 的行是合法的。
+       * 那种行的后果是复合的——GET /topics 同时返回非 null 的 title 和 resource
+       * （前端两条渲染分支同时命中）、visibleTopicWhere 会按资源可见性判定它
+       * （资源一下架这条**版块**讨论静默消失）、而 DELETE /topics/:id 又因为
+       * `resourceId !== null` 给它 409：谁也删不掉。
+       */
+      sql`(${t.kind} = 'resource' AND ${t.title} IS NULL AND ${t.resourceId} IS NOT NULL AND ${t.boardSlug} IS NULL)
+       OR (${t.kind} = 'board' AND ${t.title} IS NOT NULL AND ${t.boardSlug} IS NOT NULL AND ${t.resourceId} IS NULL)`,
     ),
     /**
      * 版块白名单。**这条 CHECK 代替了一整张 board 表**——

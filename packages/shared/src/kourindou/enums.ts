@@ -72,6 +72,22 @@ export const REPORT_REASON = [
 ] as const
 export type ReportReason = (typeof REPORT_REASON)[number]
 
+/**
+ * 哪些举报理由在 staff 删楼时记违规。与 {@link STRIKE_REJECT_REASONS} 并列。
+ *
+ * **类型声明是 `readonly ReportReason[]` 而不是 `as const`**：这样「它是
+ * REPORT_REASON 的子集」由编译器保证。上一版是路由里的就地字面量 + `as`
+ * 断言，故障形态是**静默少记违规**——日后谁把 REPORT_REASON 里的某个值
+ * 改名，只要剩下的值还有交集，`as` 照样通过编译，而那一类违规从此不再计入。
+ * strikeCount 是信任梯度唯一的惩罚机制，它不该靠一句断言撑着。
+ */
+export const STRIKE_REPORT_REASONS: readonly ReportReason[] = [
+  'spam',
+  'harassment',
+  'illegal',
+  'copyright',
+]
+
 export const REPORT_STATUS = ['open', 'resolved', 'rejected'] as const
 export type ReportStatus = (typeof REPORT_STATUS)[number]
 
@@ -125,6 +141,15 @@ export type ModerationAction = (typeof MODERATION_ACTION)[number]
 export const TRUST_AUTO_PUBLISH_THRESHOLD = 3
 
 /**
+ * 发站外链接的门槛。**必须与 {@link TRUST_AUTO_PUBLISH_THRESHOLD} 是两个旋钮。**
+ *
+ * 两侧的默认策略是相反的：帖子可删，所以链接先放开、出事再收紧；资源分发
+ * 不可撤，所以先审后发。共用一个 key 的话这个「相反」表达不出来——把它调成
+ * 0 想放开发链接，同一下也让每个投稿者变成即发即审，第一份资源直接绕过人工审核。
+ */
+export const TRUST_LINK_THRESHOLD = 1
+
+/**
  * 站点配置。键是白名单的——配置表是 admin 唯一能写的自由结构，
  * 不限死键名等于给自己开一个任意写入口。
  */
@@ -133,6 +158,8 @@ export const SITE_CONFIG_KEYS = [
   'registrationOpen',
   /** 即发即审门槛：通过多少个资源后免审 */
   'autoPublishThreshold',
+  /** 发站外链接的门槛：通过多少个资源后可发外链。与上一条**刻意分开** */
+  'linkTrustThreshold',
   /** 版权联系邮箱——「权利人能联系到你」是法律要求，不能只存在于代码注释里 */
   'takedownEmail',
   /** 站点公告，三语 */

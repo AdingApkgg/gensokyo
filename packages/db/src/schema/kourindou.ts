@@ -15,7 +15,7 @@ import {
   TAKEDOWN_STATUS,
   USER_ROLE,
 } from '@gensokyo/shared'
-import { relations, sql } from 'drizzle-orm'
+import { desc, relations, sql } from 'drizzle-orm'
 import {
   bigint,
   check,
@@ -434,6 +434,13 @@ export const report = pgTable(
   (t) => [
     index('report_status_created_idx').on(t.status, t.createdAt),
     index('report_target_idx').on(t.targetKind, t.targetId),
+    /**
+     * 限流按 (举报人, 时间) 数窗口内的行。与 post_author_idx 同形。
+     * 下面那条 report_open_uq 用不上：它是 `where status='open'` 的部分索引，
+     * 而限流的查询里没有 status 谓词。rate.ts 的注释一度声称这条索引已经存在——
+     * 现在它真的存在了。
+     */
+    index('report_reporter_created_idx').on(t.reporterId, desc(t.createdAt)),
     /**
      * 同一个人对同一个对象只能有一条未结案的举报。
      * solo 运营下举报队列是论坛唯一的「审」的入口——被同一个人的重复提交
