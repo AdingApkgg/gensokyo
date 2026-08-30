@@ -20,5 +20,17 @@
   - zod 的 `.partial()` **不移除 `.default()`**——更新用的 schema 必须逐字段重建，否则没传的字段会被写成空值
   - 校验用 `validate()` 而非裸 `zValidator`，`:id` 路由要挂 `entityIdParam`，否则非 UUID 会 500 逃出错误信封
   - 前端错误按 `error.code` 查 Paraglide 文案，api 不返回人类可读消息
+- 博丽神社（M4，进行中）约定：
+  - **可见性只有一个来源**：`apps/api/src/modules/content/visibility.ts` 的 `visibleTopicWhere()`（表达式，给列表路径）与 `loadVisibleTopic()`（函数，给取单行路径）。只有函数不够——列表路径（最新流 / `/u/:handle` / 通知收件箱）必然各写一遍 WHERE，那就是漂移的源头。**新增任何能返回 `post` 行或 `topic.title` 的端点，必须回答「它用的是哪一份 `visibleTopicWhere()`」**
+  - `content/post.ts` 的函数一律收 `TopicView` 而非裸 `topicId`，让「没过闸就拿不到参数」成为编译期事实
+  - **`isSelf(actor, ownerId)` 与 `isOwnerOrStaff(actor, ownerId)` 不可混用**：编辑他人正文永远禁止，staff 也不行。`isOwnerOrStaff` 在仓库里已出现 6 次且全部是「作者或 staff」，所以正确写法要有更短的名字
+  - `requireAuth` 永远在 `entityIdParam` 之前，否则未登录用户能用 400/404 的差异探测资源存在性
+  - **`topic.floorSeq` 是序列不是计数，只增不减**（软删的楼层保留占位）。展示值按 kind 推：版块主题 -1，资源主题不减。旧名 `postCount` 邀请人写 `- 1`，真写了该主题永久发不出帖而错误信息说「主题不存在」
+  - **通知扇出的 SELECT 在事务外，写入在事务内包 SAVEPOINT**（`tx.transaction()`）。PG 里事务内任何错误都让事务进 aborted 状态，裸 `try/catch` 救不回发帖
+  - 通知不可重算：`notify()` 的去重只对 `{mention, reply}` 生效，其余 kind 直接入队，否则同批次第二条治理通知被静默丢弃且永久丢失
+  - **任何 PR 里出现 `rehype-raw` 都是安全事故**
+  - **handle 不可逆**：它同时进 `/u/:handle` 与已发布帖子的正文，改动等于死链 + 重写历史正文。`^[a-z0-9][a-z0-9_]{1,19}$`，NOT NULL，从 `user.id` 派生
+  - 版块 slug 是对外 URL，六值闭合在 `packages/shared/src/shrine/enums.ts`，DB 侧由一条 CHECK 兜底（不建 `board` 表）
+  - **测试必须接 `apps/api/src/test-support.ts` 的 track/cleanup**——测试打的是共享开发库，不是一次性容器
 - 常用脚本：`bun run e2e`（端到端验收 23 项）、`reindex`（Meili 全量重建）、`gc:images`（未引用图片巡检，带白名单熔断）、`seed:demo*`（演示数据）
 - 设计文档：docs/superpowers/specs/；产品文档：docs/product/；实施计划：docs/superpowers/plans/；调研与审计：docs/superpowers/research/；legacy/ 是只读参考
