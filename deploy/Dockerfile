@@ -55,7 +55,14 @@ COPY . .
 RUN cd apps/web && bun run build && test -d build/server && test -d build/client
 
 # ---------------------------------------------------------------- web 运行
-FROM ${BUN_IMAGE} AS web
+#
+# ⚠️ **构建用 bun，运行必须用 Node。**
+# bun 把 `react-dom/server` 解析到它自己的 server.bun.js，那个文件没有
+# `renderToPipeableStream`——那是 Node 专用的流式 SSR API，而 React Router
+# 的服务端入口正依赖它。用 bun 起会在第一个请求之前就崩：
+#   SyntaxError: Export named 'renderToPipeableStream' not found
+# api 那边没有这个问题（它是纯 hono，不做 React SSR），所以只有 web 换 Node。
+FROM node:24-slim AS web
 WORKDIR /app
 COPY --from=web-build /app/node_modules ./node_modules
 COPY --from=web-build /app/packages ./packages
@@ -65,4 +72,4 @@ COPY --from=web-build /app/apps/web/node_modules ./apps/web/node_modules
 WORKDIR /app/apps/web
 ENV NODE_ENV=production
 EXPOSE 3000
-CMD ["bun", "run", "start"]
+CMD ["node", "node_modules/.bin/react-router-serve", "./build/server/index.js"]

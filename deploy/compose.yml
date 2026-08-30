@@ -31,7 +31,10 @@ services:
       POSTGRES_USER: gensokyo
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: gensokyo
-    volumes: [pgdata:/var/lib/postgresql/data]
+    # postgres:18 起改了约定：挂 /var/lib/postgresql（镜像自己在里面按
+    # 大版本建子目录），而不是老的 /var/lib/postgresql/data。
+    # 挂错的话容器会拒绝启动并提示 pg_upgrade——这也是它替你挡住的一次误配。
+    volumes: [pgdata:/var/lib/postgresql]
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U gensokyo -d gensokyo']
       interval: 5s
