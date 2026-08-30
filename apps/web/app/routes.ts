@@ -12,6 +12,7 @@ export default [
     route('login', 'routes/login.tsx'),
     route('register', 'routes/register.tsx'),
     route('kourindou', 'routes/kourindou/list.tsx'),
+    route('kourindou/upload', 'routes/kourindou/upload.tsx'),
     route('kourindou/:slug', 'routes/kourindou/detail.tsx'),
     route('shrine', 'routes/stub.tsx', { id: 'stub-shrine' }),
     route('chronicle', 'routes/stub.tsx', { id: 'stub-chronicle' }),
