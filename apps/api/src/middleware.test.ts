@@ -1,10 +1,11 @@
-import { describe, expect, test } from 'bun:test'
+import { afterAll, describe, expect, test } from 'bun:test'
 import { db, schema } from '@gensokyo/db'
 import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { app } from './app'
 import { requireAuth, requireRole } from './middleware/require'
 import { type AppEnv, sessionMiddleware } from './middleware/session'
+import { cleanupTracked, trackUser } from './test-support'
 
 /**
  * 中间件挂在一个本地 app 上测，不往生产 app 里塞测试路由。
@@ -25,7 +26,7 @@ async function signUp(name: string) {
   })
   const cookie = res.headers.get('set-cookie') ?? ''
   const body = (await res.json()) as { user?: { id: string } }
-  return { cookie, userId: body.user?.id as string }
+  return { cookie, userId: trackUser(body.user?.id) }
 }
 
 describe('会话中间件', () => {

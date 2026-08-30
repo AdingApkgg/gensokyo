@@ -1,8 +1,11 @@
-import { describe, expect, test } from 'bun:test'
+import { afterAll, describe, expect, test } from 'bun:test'
 import { app } from './app'
+import { cleanupTracked, trackUser } from './test-support'
 
 const email = `test-${Date.now()}@example.com`
 const password = 'hakurei-reimu-514'
+
+afterAll(cleanupTracked)
 
 describe('auth flow', () => {
   test('注册 → 拿到会话 cookie → get-session 返回用户', async () => {
@@ -14,6 +17,7 @@ describe('auth flow', () => {
     expect(signUp.status).toBe(200)
     const cookie = signUp.headers.get('set-cookie')
     expect(cookie).toContain('better-auth.session_token')
+    trackUser(((await signUp.json()) as { user?: { id: string } }).user?.id)
 
     const session = await app.request('/api/auth/get-session', {
       headers: { cookie: cookie ?? '' },

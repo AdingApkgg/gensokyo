@@ -1,17 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { db, schema } from '@gensokyo/db'
-import { eq, inArray } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { app } from './app'
 import { invalidateConfig } from './site-config'
+import { cleanupTracked, trackResource, trackUser } from './test-support'
 
 type Session = { cookie: string; id: string }
-
-/**
- * 这个文件会造 admin 账号，跑完必须收走。
- * 测试打的是共享的开发库，不清理的话每跑一次就多两个站长，
- * 几十次之后 /dash/users 里全是它们，真人反而找不着。
- */
-const created: string[] = []
 
 async function signUp(name: string): Promise<Session> {
   const email = `ad-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`
@@ -21,17 +15,13 @@ async function signUp(name: string): Promise<Session> {
     body: JSON.stringify({ email, password: 'hakurei-reimu-514', name }),
   })
   const body = (await res.json()) as { user?: { id: string } }
-  const id = body.user?.id as string
-  if (id) created.push(id)
-  return { cookie: res.headers.get('set-cookie') ?? '', id }
+  return {
+    cookie: res.headers.get('set-cookie') ?? '',
+    id: trackUser(body.user?.id),
+  }
 }
 
-afterAll(async () => {
-  if (created.length === 0) return
-  // user_profile 跟着级联删；moderation_log.actor_id 是 set null，
-  // 所以审计记录本身活下来——这正是那条外键要的行为。
-  await db.delete(schema.user).where(inArray(schema.user.id, created))
-})
+afterAll(cleanupTracked)
 
 const send = (s: Session, method: string, body?: unknown) => ({
   method,
@@ -60,7 +50,7 @@ async function makeResource(owner: Session) {
   const { resource } = (await res.json()) as {
     resource: { id: string; slug: string }
   }
-  return resource
+  return trackResource(resource)
 }
 
 let boss: Session

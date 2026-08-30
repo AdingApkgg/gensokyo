@@ -1,7 +1,8 @@
-import { beforeAll, describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { db, schema } from '@gensokyo/db'
 import { eq } from 'drizzle-orm'
 import { app } from './app'
+import { cleanupTracked, trackResource, trackUser } from './test-support'
 
 type Session = { cookie: string; userId: string }
 
@@ -15,9 +16,11 @@ async function signUp(name: string): Promise<Session> {
   const body = (await res.json()) as { user?: { id: string } }
   return {
     cookie: res.headers.get('set-cookie') ?? '',
-    userId: body.user?.id as string,
+    userId: trackUser(body.user?.id),
   }
 }
+
+afterAll(cleanupTracked)
 
 const json = (s: Session, body: unknown) => ({
   method: 'POST',
@@ -42,6 +45,7 @@ async function createResource(s: Session, overrides = {}) {
   const body = (await res.json()) as {
     resource?: { id: string; slug: string; status: string }
   }
+  if (body.resource) trackResource(body.resource)
   return { status: res.status, ...body }
 }
 

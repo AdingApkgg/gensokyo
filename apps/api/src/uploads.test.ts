@@ -1,5 +1,6 @@
-import { describe, expect, test } from 'bun:test'
+import { afterAll, describe, expect, test } from 'bun:test'
 import { app } from './app'
+import { cleanupTracked, trackUser } from './test-support'
 
 /** 最小的合法 PNG（1x1 透明像素） */
 const PNG = Uint8Array.from([
@@ -22,8 +23,12 @@ async function signUp() {
       name: '上传者',
     }),
   })
+  const body = (await res.json()) as { user?: { id: string } }
+  trackUser(body.user?.id)
   return res.headers.get('set-cookie') ?? ''
 }
+
+afterAll(cleanupTracked)
 
 const form = (bytes: Uint8Array, type: string, name = 'cover.png') => {
   const fd = new FormData()

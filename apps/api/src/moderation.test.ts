@@ -1,7 +1,8 @@
-import { beforeAll, describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { db, schema } from '@gensokyo/db'
 import { eq } from 'drizzle-orm'
 import { app } from './app'
+import { cleanupTracked, trackResource, trackUser } from './test-support'
 
 type Session = { cookie: string; userId: string }
 
@@ -15,9 +16,11 @@ async function signUp(name: string): Promise<Session> {
   const body = (await res.json()) as { user?: { id: string } }
   return {
     cookie: res.headers.get('set-cookie') ?? '',
-    userId: body.user?.id as string,
+    userId: trackUser(body.user?.id),
   }
 }
+
+afterAll(cleanupTracked)
 
 const send = (s: Session, method: string, body?: unknown) => ({
   method,
@@ -51,7 +54,7 @@ async function pendingResource(owner: Session) {
     method: 'POST',
     headers: { cookie: owner.cookie },
   })
-  return resource
+  return trackResource(resource)
 }
 
 const profileOf = async (userId: string) => {
@@ -185,6 +188,7 @@ describe('审核结论', () => {
       }),
     )
     const { resource } = (await next.json()) as { resource: { id: string } }
+    trackResource(resource)
     const submitted = await app.request(
       `/api/kourindou/resources/${resource.id}/submit`,
       { method: 'POST', headers: { cookie: author.cookie } },

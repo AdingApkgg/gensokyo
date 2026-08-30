@@ -1,7 +1,8 @@
-import { beforeAll, describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { db, schema } from '@gensokyo/db'
 import { eq } from 'drizzle-orm'
 import { app } from './app'
+import { cleanupTracked, trackResource, trackUser } from './test-support'
 
 type Session = { cookie: string; userId: string }
 
@@ -15,9 +16,11 @@ async function signUp(name: string): Promise<Session> {
   const body = (await res.json()) as { user?: { id: string } }
   return {
     cookie: res.headers.get('set-cookie') ?? '',
-    userId: body.user?.id as string,
+    userId: trackUser(body.user?.id),
   }
 }
+
+afterAll(cleanupTracked)
 
 const send = (s: Session, method: string, body?: unknown) => ({
   method,
@@ -45,6 +48,7 @@ async function publishedResource(owner: Session) {
   const { resource } = (await created.json()) as {
     resource: { id: string; slug: string }
   }
+  trackResource(resource)
 
   const ver = await app.request(
     `/api/kourindou/resources/${resource.id}/versions`,
@@ -121,6 +125,7 @@ describe('下载', () => {
     const { resource } = (await created.json()) as {
       resource: { id: string; slug: string }
     }
+    trackResource(resource)
     const ver = await app.request(
       `/api/kourindou/resources/${resource.id}/versions`,
       send(draftOwner, 'POST', {
