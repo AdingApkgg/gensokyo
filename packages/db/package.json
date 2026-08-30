@@ -13,7 +13,10 @@
     "generate": "drizzle-kit generate",
     "migrate": "bun --env-file=../../.env x drizzle-kit migrate",
     "seed": "bun run --env-file=../../.env scripts/seed.ts",
-    "seed:demo": "bun run --env-file=../../.env scripts/seed-demo.ts"
+    "seed:demo": "bun run --env-file=../../.env scripts/seed-demo.ts",
+    "seed:demo-tools": "bun run --env-file=../../.env scripts/seed-demo-tools.ts",
+    "seed:demo-fanworks": "bun run --env-file=../../.env scripts/seed-demo-fanworks.ts",
+    "seed:demo-official": "bun run --env-file=../../.env scripts/seed-demo-official.ts"
   },
   "dependencies": {
     "@gensokyo/shared": "workspace:*",
