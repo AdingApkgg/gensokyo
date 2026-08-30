@@ -125,6 +125,9 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
       target: web
+      args:
+        # 只要主机名，不含协议——CSRF 检查比的是 host
+        ALLOWED_ACTION_ORIGINS: ${PUBLIC_HOST}
     restart: unless-stopped
     depends_on:
       api: {condition: service_healthy}

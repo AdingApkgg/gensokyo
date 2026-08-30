@@ -48,6 +48,10 @@ CMD ["bun", "run", "packages/db/scripts/migrate.ts"]
 # ---------------------------------------------------------------- web 构建
 FROM deps AS web-build
 COPY . .
+# 反代后面 action 的 CSRF 校验要放行公开域名，见 apps/web/react-router.config.ts。
+# 它在**构建时**求值，所以必须是构建参数而不是运行时环境变量。
+ARG ALLOWED_ACTION_ORIGINS=""
+ENV ALLOWED_ACTION_ORIGINS=$ALLOWED_ACTION_ORIGINS
 # Paraglide 的产物是 Vite 插件在构建时生成的（app/paraglide 不进 git），
 # 所以这里必须真的跑一次构建，不能只拷贝。
 # 显式断言产物存在：alpine 那次就是"构建成功但没有产物"，
