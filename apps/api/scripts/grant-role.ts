@@ -13,6 +13,7 @@
 import { db, schema } from '@gensokyo/db'
 import { USER_ROLE, type UserRole } from '@gensokyo/shared'
 import { eq, ne } from 'drizzle-orm'
+import { availableHandle } from '../src/handle'
 
 const args = process.argv.slice(2).filter((a) => a !== '--')
 
@@ -55,10 +56,17 @@ async function grant(email: string, role: UserRole) {
     process.exit(1)
   }
 
-  // profile 是首次带会话请求时惰性创建的，脚本里可能还不存在
+  /**
+   * profile 是首次**带会话请求**时由 sessionMiddleware 惰性创建的——
+   * 注册完从没访问过 API 的账号（比如刚注册就来提权的站长）还没有这一行。
+   *
+   * 所以插入时必须自己派生 handle：它是 NOT NULL 且没有 DB 默认值，
+   * 走 `default` 会撞 23502。用与 sessionMiddleware 相同的派生逻辑，
+   * 保证同一个账号无论从哪条路径建档，拿到的 handle 都一样。
+   */
   await db
     .insert(schema.userProfile)
-    .values({ userId: u.id, role })
+    .values({ userId: u.id, role, handle: await availableHandle(u.id) })
     .onConflictDoUpdate({
       target: schema.userProfile.userId,
       set: { role },
