@@ -55,10 +55,10 @@ resource   标题/简介/类型/原作关联/展会/状态(待审|已发布|已�
 ## 里程碑（更新）
 
 ```
-M1  monorepo 骨架（计划已批：docs/superpowers/plans/2026-08-30-monorepo-skeleton.md）
-M1.5 东方风 shadcn/ui 主题 + /ui 设计系统展示页（用户验收视觉方向）
-M2  auth + 用户体系 + 站点外壳
-M3  香霖堂完整闭环（上传→审核→分发→互动）
+M1  monorepo 骨架 ✅
+M1.5 东方风 shadcn/ui 主题 + /ui 设计系统展示页 ✅
+M2  auth + 用户体系 + 站点外壳 ✅
+M3  香霖堂完整闭环（上传→审核→分发→互动）✅ 2026-08-30 完成
 M4  博丽神社（版块/主题/楼层 + 资源评论统一 + 通知中心）
 M5+ chronicle(TouhouDB 中文层) → music → 其余方向逐个铺
 ```

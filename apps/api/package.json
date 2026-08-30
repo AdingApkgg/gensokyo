@@ -10,7 +10,9 @@
     "dev": "bun run --hot --env-file=../../.env src/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test --env-file=../../.env",
-    "gc:images": "bun run --env-file=../../.env scripts/gc-images.ts"
+    "gc:images": "bun run --env-file=../../.env scripts/gc-images.ts",
+    "reindex": "bun run --env-file=../../.env scripts/reindex.ts",
+    "e2e": "bun run --env-file=../../.env scripts/e2e.ts"
   },
   "dependencies": {
     "@gensokyo/db": "workspace:*",
