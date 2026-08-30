@@ -123,4 +123,5 @@ build/
 apps/web/app/paraglide/
 
 # 审计 agent 的临时探测文件
-**/*probe*.test.ts
+**/*probe*
+**/zz*
