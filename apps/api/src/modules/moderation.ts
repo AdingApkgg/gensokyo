@@ -10,6 +10,7 @@ import { Hono } from 'hono'
 import { entityIdParam, fail, validate } from '../errors'
 import { requireRole } from '../middleware/require'
 import type { AppEnv } from '../middleware/session'
+import { notify } from '../notify'
 import { canTransition } from './kourindou/status'
 
 const { resource, userProfile, moderationLog, report, user, post, topic } =
@@ -127,6 +128,22 @@ export const moderation = new Hono<AppEnv>()
           rejectReason: input.rejectReason,
           reason: input.note,
         })
+
+        if (row.uploaderId) {
+          await notify(tx, [
+            {
+              userId: row.uploaderId,
+              kind:
+                input.decision === 'approve'
+                  ? 'review_approved'
+                  : 'review_rejected',
+              actorId: actor.id,
+              resourceId: id,
+              // 只带枚举。note 是给审计日志的内部备注，不投递给投稿者
+              payload: { rejectReason: input.rejectReason ?? null },
+            },
+          ])
+        }
       })
 
       return c.json({ status: to, struck: striking })
@@ -223,16 +240,26 @@ export const moderation = new Hono<AppEnv>()
         .where(eq(report.id, id))
         .limit(1)
       if (!row) return fail(c, 'not_found', 404)
+      /**
+       * 只处理 open 的。此前能把已 resolved 的改成 rejected 并覆盖 resolvedBy——
+       * 审计里「谁处理的」被后来者顶掉，而 report_open_uq 是按 open 算的，
+       * 结案后再改也不会撞它。既有 bug，顺手修。
+       */
+      if (row.status !== 'open') return fail(c, 'invalid_state_transition', 409)
 
-      await db.transaction(async (tx) => {
-        await tx
+      // 两个版主同时结案：UPDATE 的 WHERE 带 status='open'，只有一个能命中行；
+      // 命中 0 行的那个不能再写审计装作自己处理了
+      const won = await db.transaction(async (tx) => {
+        const [hit] = await tx
           .update(report)
           .set({
             status: input.status,
             resolvedBy: actor.id,
             resolvedAt: new Date(),
           })
-          .where(eq(report.id, id))
+          .where(and(eq(report.id, id), eq(report.status, 'open')))
+          .returning({ id: report.id })
+        if (!hit) return false
         await tx.insert(moderationLog).values({
           actorId: actor.id,
           action: 'report_resolve',
@@ -242,7 +269,9 @@ export const moderation = new Hono<AppEnv>()
           toValue: { status: input.status },
           reason: input.note,
         })
+        return true
       })
+      if (!won) return fail(c, 'invalid_state_transition', 409)
 
       return c.json({ status: input.status })
     },

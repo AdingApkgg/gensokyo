@@ -2,7 +2,7 @@ import { db, schema } from '@gensokyo/db'
 import { createReportSchema } from '@gensokyo/shared'
 import { and, eq, isNull } from 'drizzle-orm'
 import { Hono } from 'hono'
-import { fail, validate } from '../errors'
+import { fail, isUniqueViolation, validate } from '../errors'
 import { requireAuth } from '../middleware/require'
 import type { AppEnv } from '../middleware/session'
 import { assertRate } from '../rate'
@@ -92,14 +92,7 @@ export const reports = new Hono<AppEnv>().post(
       return c.json({ id: created?.id }, 201)
     } catch (err) {
       // report_open_uq：同一人对同一对象已有未结案举报
-      if (
-        typeof err === 'object' &&
-        err !== null &&
-        'code' in err &&
-        (err as { code?: string }).code === '23505'
-      ) {
-        return fail(c, 'duplicate_slug', 409)
-      }
+      if (isUniqueViolation(err)) return fail(c, 'duplicate_slug', 409)
       throw err
     }
   },

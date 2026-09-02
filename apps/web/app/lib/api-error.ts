@@ -17,6 +17,8 @@ const MESSAGES: Record<string, () => string> = {
   unauthorized: () => m.err_unauthorized(),
   forbidden: () => m.err_forbidden(),
   not_found: () => m.err_not_found(),
+  duplicate_slug: () => m.err_duplicate_slug(),
+  invalid_state_transition: () => m.err_invalid_state_transition(),
 }
 
 export const errorMessage = (code: string | undefined): string =>

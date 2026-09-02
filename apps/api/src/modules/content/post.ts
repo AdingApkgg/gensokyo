@@ -6,6 +6,7 @@ import {
   type TopicView,
 } from '@gensokyo/shared'
 import { aliasedTable, and, asc, between, eq, sql } from 'drizzle-orm'
+import { type NotificationDraft, notify } from '../../notify'
 
 const { topic, post, user, userProfile } = schema
 
@@ -168,8 +169,14 @@ export async function createPost(
     bodyMd: string
     parentId?: string
     locale?: Locale
+    /**
+     * 正文里 @ 到的 userId。**由调用方在事务外解析好**（notify.ts 的
+     * resolveMentions）——扇出的 SELECT 不进事务，这是 notify 的约定。
+     */
+    mentionUserIds?: readonly string[]
   },
 ): Promise<CreatePostResult> {
+  let parentAuthorId: string | null = null
   if (input.parentId) {
     /**
      * `eq(post.topicId, t.id)` **必须保留**：它是 QuotedPost 不需要自己那道
@@ -177,11 +184,12 @@ export async function createPost(
      * 引用一条不可见主题里的楼层，摘要会照常渲染出来。
      */
     const [p] = await tx
-      .select({ id: post.id })
+      .select({ id: post.id, authorId: post.authorId })
       .from(post)
       .where(and(eq(post.id, input.parentId), eq(post.topicId, t.id)))
       .limit(1)
     if (!p) return { ok: false, reason: 'parent_invalid' }
+    parentAuthorId = p.authorId
   }
 
   /**
@@ -211,8 +219,34 @@ export async function createPost(
       locale: input.locale,
     })
     .returning({ id: post.id })
+  const id = created?.id as string
 
-  return { ok: true, id: created?.id as string, floor: updated.floor }
+  /**
+   * 通知扇出。收件人从 topic.authorId 与父楼作者推出——M4 没有订阅表，
+   * 一次回复产生 ≤2 行 reply，外加被 @ 的人。自己不通知自己、
+   * 同一人同时被回复与被 @ 只留 mention，都在 notify 里处理。
+   * 主楼（floor 1）没有人可回复：它自己就是主题。
+   */
+  const drafts: NotificationDraft[] = []
+  const base = { actorId: input.authorId, topicId: t.id, postId: id }
+  /**
+   * 「主楼不算回复」**只对版块主题成立**：资源主题没有主楼，floorSeq 从 0 起，
+   * 评论区的 floor 1 就是第一条真实评论——而那恰恰是最该送达投稿者的一条。
+   * 写成 `floor > 1` 会让每个只被评论过一次的资源的投稿者完全不知道有人评论了。
+   */
+  const opening = t.kind === 'board' && updated.floor === 1
+  if (!opening && t.authorId) {
+    drafts.push({ ...base, userId: t.authorId, kind: 'reply' })
+  }
+  if (parentAuthorId && parentAuthorId !== t.authorId) {
+    drafts.push({ ...base, userId: parentAuthorId, kind: 'reply' })
+  }
+  for (const uid of input.mentionUserIds ?? []) {
+    drafts.push({ ...base, userId: uid, kind: 'mention' })
+  }
+  await notify(tx, drafts)
+
+  return { ok: true, id, floor: updated.floor }
 }
 
 /** 软删：保留楼层占位，不打断楼层号与引用 */
@@ -232,6 +266,7 @@ export async function findPost(id: string) {
       id: post.id,
       authorId: post.authorId,
       topicId: post.topicId,
+      floor: post.floor,
       deletedAt: post.deletedAt,
     })
     .from(post)

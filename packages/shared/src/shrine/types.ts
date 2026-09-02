@@ -157,6 +157,11 @@ export type NotificationView = {
   /** subject 不可见时是 { kind:'removed' }，**通知行本身保留** */
   subject: NotificationSubject | null
   floor: number | null
+  /**
+   * 写入时的快照与理由：resource_deleted 的 `title`（对象已不存在，只剩这个）、
+   * post_deleted / review_rejected 的 `reason` / `note`。全部是写给收件人看的。
+   */
+  payload: Record<string, unknown> | null
   read: boolean
   createdAt: string
 }

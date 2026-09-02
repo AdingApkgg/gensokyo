@@ -221,5 +221,7 @@
   "admin_link_trust_hint": "通过多少个投稿后可以在帖子里发站外链接（账号满 3 天也可以）。与即发即审门槛是两个旋钮：帖子可删，链接先放开出事再收紧；资源分发不可撤，投稿先审后发。设 0 等于不限。",
   "admin_reset_strikes": "清零违规",
   "admin_reset_strikes_hint": "违规记录只增不减，且会在门槛判断之前就否掉发外链与即发即审——把门槛调成 0 也救不回来。误判只能从这里撤销，会写进审计。",
-  "admin_strikes_reset_done": "违规已清零。"
+  "admin_strikes_reset_done": "违规已清零。",
+  "err_duplicate_slug": "已经存在了：这个名字或这条记录已被占用。",
+  "err_invalid_state_transition": "现在的状态不允许这个操作。"
 }

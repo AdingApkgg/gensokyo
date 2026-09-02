@@ -77,28 +77,25 @@ export type ListPostsQuery = z.infer<typeof listPostsQuerySchema>
 
 /**
  * 标记已读。用 `z.object` + XOR refine，**不用 `z.union`**：
- * union 在 `{ids, before}` 同时给出时会静默走第一分支并把 before 剥掉，
+ * union 在 `{ids, upTo}` 同时给出时会静默走第一分支并把 upTo 剥掉，
  * 于是「全部已读」变成「只读了这几条」而前端毫不知情。
  *
- * 「全部已读」走 before 游标而不是 all:true——点击那一瞬间刚到的通知
- * 不该被这次操作吞掉。
+ * 「全部已读」走 **通知 id 游标**（`upTo`），不走时间戳：
+ * - created_at 在 PG 里是微秒精度，`toISOString()` 截到毫秒；客户端把列表里
+ *   最新一条的时间原样送回来，`created_at <= before` 在 DB 侧比的是
+ *   `.010096 <= .010000` → false，**最新那条永远标不掉**，铃铛卡在 ≥1。
+ * - PG 的 `now()` 是事务起点：扇出事务在用户点击前 start、点击后 commit，
+ *   那条通知的时间早于点击，用户没看到就被标成已读——正是游标要防的情形。
+ * 用 (created_at, id) 的 row-value 比较，两个问题一起消失，且不依赖客户端时钟。
  */
 export const markReadSchema = z
   .object({
     ids: z.array(entityIdSchema).min(1).max(200).optional(),
-    /**
-     * **不能用 `z.coerce.date()`**：它把 `null` / `0` / `false` 全部强转成
-     * 1970 纪元，而那三个值都能通过下面的 XOR refine（before 确实 !== undefined）。
-     * 后果是「全部已读」变成一次静默空操作——`created_at < 1970` 匹配不到任何行，
-     * 用户点了没反应，也没有任何错误。收严成 ISO 串再转 Date。
-     */
-    before: z.iso
-      .datetime({ offset: true })
-      .transform((s) => new Date(s))
-      .optional(),
+    /** 收件箱里看到的最新一条的 id：它及它之前的全部标已读 */
+    upTo: entityIdSchema.optional(),
   })
-  .refine((v) => (v.ids === undefined) !== (v.before === undefined), {
-    message: 'ids 与 before 必须且只能给一个',
+  .refine((v) => (v.ids === undefined) !== (v.upTo === undefined), {
+    message: 'ids 与 upTo 必须且只能给一个',
   })
 export type MarkRead = z.infer<typeof markReadSchema>
 

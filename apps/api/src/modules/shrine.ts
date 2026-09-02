@@ -15,6 +15,7 @@ import { type Context, Hono } from 'hono'
 import { entityIdParam, fail, validate } from '../errors'
 import { isOwnerOrStaff, isSelf, requireAuth } from '../middleware/require'
 import type { Actor, AppEnv } from '../middleware/session'
+import { notify, resolveMentions } from '../notify'
 import { assertRate, type Bucket, canPostLinks, hasExternalLink } from '../rate'
 import { linkTrustThreshold } from '../site-config'
 import { createPost, findPost, listPosts, softDeletePost } from './content/post'
@@ -218,6 +219,10 @@ export const shrine = new Hono<AppEnv>()
       // 标题与正文都过闸；限流仍只按这一次发帖算一次
       const g = await guardWrite(actor, [input.title, input.bodyMd])
       if (g) return blocked(c, g)
+      // @ 解析在事务外：扇出的 SELECT 不进事务（notify 的约定）
+      const mentionUserIds = await resolveMentions(
+        extractMentions(input.bodyMd),
+      )
 
       /**
        * 主题与 1 楼必须同事务：分开写会产生「没有主楼的主题」，
@@ -252,6 +257,7 @@ export const shrine = new Hono<AppEnv>()
           authorId: actor.id,
           bodyMd: input.bodyMd,
           locale: input.locale,
+          mentionUserIds,
         })
         if (!r.ok) throw new Error(`opening post failed: ${r.reason}`)
         return { id: t.id, postId: r.id }
@@ -336,6 +342,28 @@ export const shrine = new Hono<AppEnv>()
         toValue: { reason },
         reason: note ?? reason,
       })
+      /**
+       * 删一层要通知作者，删整条主题（连所有回复一起下掉）更要。
+       * 不加 topic_deleted 这个 kind：主题的 1 楼就是主题正文，post_deleted
+       * 带 floor 1 足够前端区分；主题软删后 subject 渲染成 removed。
+       */
+      if (t.authorId) {
+        const [opening] = await tx
+          .select({ id: post.id })
+          .from(post)
+          .where(and(eq(post.topicId, t.id), eq(post.floor, 1)))
+          .limit(1)
+        await notify(tx, [
+          {
+            userId: t.authorId,
+            kind: 'post_deleted',
+            actorId: actor.id,
+            topicId: t.id,
+            postId: opening?.id ?? null,
+            payload: { reason, floor: 1, topicTitle: t.title },
+          },
+        ])
+      }
     })
     return c.json({ deleted: true })
   })
@@ -367,9 +395,12 @@ export const shrine = new Hono<AppEnv>()
       const input = c.req.valid('json')
       const g = await guardWrite(actor, [input.bodyMd])
       if (g) return blocked(c, g)
+      const mentionUserIds = await resolveMentions(
+        extractMentions(input.bodyMd),
+      )
 
       const result = await db.transaction((tx) =>
-        createPost(tx, t, { authorId: actor.id, ...input }),
+        createPost(tx, t, { authorId: actor.id, ...input, mentionUserIds }),
       )
       if (!result.ok) {
         return result.reason === 'parent_invalid'
@@ -382,6 +413,11 @@ export const shrine = new Hono<AppEnv>()
 
   /**
    * 编辑楼层。**仅作者本人**——staff 也不行。
+   *
+   * **编辑不触发通知**（取舍）：编辑时新加的 @ 不会送达。要送就得 diff 新旧
+   * 提及、再查一次已发过的 mention 行去重——为一个「发完才想起 @」的场景，
+   * 代价是每次编辑多两次查询和一条可被反复触发的通知路径。先不做；
+   * web 的编辑框要提示这一点。
    *
    * staff 可以「删」他人的东西（留痕、可申诉），但不能「改」他人的话：
    * 改完之后没有痕迹说明原文是什么，作者也无从申诉。
@@ -501,6 +537,21 @@ export const shrine = new Hono<AppEnv>()
           .update(userProfile)
           .set({ strikeCount: sql`${userProfile.strikeCount} + 1` })
           .where(eq(userProfile.userId, row.authorId))
+      }
+      // 被删的人要知道：申诉的前提是先收到通知
+      if (row.authorId) {
+        await notify(tx, [
+          {
+            userId: row.authorId,
+            kind: 'post_deleted',
+            actorId: actor.id,
+            topicId: t.id,
+            postId: row.id,
+            // 只带枚举理由。note 是版主写给审计日志的内部备注，UI 文案就是这么提示的，
+            // 不能原样投递给被处置的人
+            payload: { reason, floor: row.floor, topicTitle: t.title },
+          },
+        ])
       }
       return true
     })

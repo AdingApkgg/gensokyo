@@ -3,6 +3,7 @@ import type { UserRole } from '@gensokyo/shared'
 import { eq } from 'drizzle-orm'
 import { createMiddleware } from 'hono/factory'
 import { auth } from '../auth'
+import { isUniqueViolation } from '../errors'
 import { availableHandle } from '../handle'
 
 export type Actor = {
@@ -11,6 +12,8 @@ export type Actor = {
   email: string
   /** 稳定标识：进 /u/:handle 与正文里的 @ */
   handle: string
+  /** null = 还没自选过。sessionMiddleware 已经读了整行，别在 /me 里再查一次 */
+  handleSetAt: Date | null
   role: UserRole
   approvedResourceCount: number
   strikeCount: number
@@ -41,6 +44,7 @@ export const sessionMiddleware = createMiddleware<AppEnv>(async (c, next) => {
     name: session.user.name,
     email: session.user.email,
     handle: row.handle,
+    handleSetAt: row.handleSetAt,
     role: row.role,
     approvedResourceCount: row.approvedResourceCount,
     strikeCount: row.strikeCount,
@@ -96,12 +100,6 @@ async function loadOrCreateProfile(userId: string) {
   }
   throw new Error(`无法为 ${userId} 建立 user_profile`)
 }
-
-const isUniqueViolation = (err: unknown): boolean =>
-  typeof err === 'object' &&
-  err !== null &&
-  'code' in err &&
-  (err as { code?: string }).code === '23505'
 
 /**
  * 信任梯度：通过 N 个资源且无违规记录 → 即发即审。

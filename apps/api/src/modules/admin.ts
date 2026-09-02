@@ -12,6 +12,7 @@ import { Hono } from 'hono'
 import { entityIdParam, fail, userIdParam, validate } from '../errors'
 import { requireRole } from '../middleware/require'
 import type { AppEnv } from '../middleware/session'
+import { notify } from '../notify'
 import { invalidateConfig } from '../site-config'
 
 const { resource, user, userProfile, moderationLog, siteConfig } = schema
@@ -179,12 +180,16 @@ export const admin = new Hono<AppEnv>()
           id: resource.id,
           slug: resource.slug,
           titleOriginal: resource.titleOriginal,
+          uploaderId: resource.uploaderId,
           deletedAt: resource.deletedAt,
         })
         .from(resource)
         .where(eq(resource.id, id))
         .limit(1)
       if (!row) return fail(c, 'not_found', 404)
+      // 软删幂等：已经在回收站里的再软删一次，会重写 deletedAt、再记一条审计、再发一条通知
+      if (mode === 'soft' && row.deletedAt !== null)
+        return fail(c, 'invalid_state_transition', 409)
 
       await db.transaction(async (tx) => {
         /**
@@ -202,6 +207,31 @@ export const admin = new Hono<AppEnv>()
           reason,
         })
 
+        if (row.uploaderId) {
+          await notify(tx, [
+            mode === 'purge'
+              ? {
+                  userId: row.uploaderId,
+                  kind: 'resource_deleted',
+                  actorId: actor.id,
+                  /**
+                   * ⚠️ **不带 resourceId。** 下面那句 delete 会在同一个事务里顺着
+                   * 外键把这条通知自己级联删掉，作者永远收不到——而症状是
+                   * 「什么都没发生」。标题快照进 payload。
+                   */
+                  payload: { title: row.titleOriginal, slug: row.slug },
+                }
+              : {
+                  userId: row.uploaderId,
+                  kind: 'resource_delisted',
+                  actorId: actor.id,
+                  resourceId: id,
+                  // reason 是写进审计日志的内部理由，不投递
+                  payload: { mode: 'soft' },
+                },
+          ])
+        }
+
         if (mode === 'purge') {
           // 级联会带走 version / file / tag / rating / favorite / topic / post
           await tx.delete(resource).where(eq(resource.id, id))
@@ -217,21 +247,34 @@ export const admin = new Hono<AppEnv>()
     },
   )
 
-  /** 软删的可以恢复；硬删的不行，这就是两者的区别 */
+  /** 软删的可以恢复；硬删的不行，这就是两者的区别。恢复同样留痕 */
   .post('/resources/:id/restore', entityIdParam, async (c) => {
+    const actor = c.get('actor')
+    if (!actor) return fail(c, 'unauthorized', 401)
     const id = c.req.param('id')
     const [row] = await db
-      .select({ deletedAt: resource.deletedAt })
+      .select({ deletedAt: resource.deletedAt, slug: resource.slug })
       .from(resource)
       .where(eq(resource.id, id))
       .limit(1)
     if (!row) return fail(c, 'not_found', 404)
     if (row.deletedAt === null) return fail(c, 'invalid_state_transition', 409)
 
-    await db
-      .update(resource)
-      .set({ deletedAt: null })
-      .where(eq(resource.id, id))
+    await db.transaction(async (tx) => {
+      await tx
+        .update(resource)
+        .set({ deletedAt: null })
+        .where(eq(resource.id, id))
+      await tx.insert(moderationLog).values({
+        actorId: actor.id,
+        action: 'status_change',
+        subjectKind: 'resource',
+        subjectId: id,
+        fromValue: { deleted: true },
+        toValue: { deleted: false, slug: row.slug },
+        reason: '从回收站恢复',
+      })
+    })
     return c.json({ restored: true })
   })
 

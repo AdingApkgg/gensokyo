@@ -42,20 +42,25 @@ export const notification = pgTable(
     kind: notificationKind('kind').notNull(),
 
     // ---- subject 是类型化的可空外键 ----
-    topicId: uuid('topic_id').references(() => topic.id, {
-      onDelete: 'cascade',
-    }),
-    postId: uuid('post_id').references(() => post.id, { onDelete: 'cascade' }),
     /**
-     * ⚠️ **kind='resource_deleted' 绝不能带这个外键。**
-     * 硬删会在同一个事务里顺着它把通知自己级联删掉，于是作者永远收不到
-     * 「你的资源被删除了」——而**症状是「什么都没发生」**，没有报错、
-     * 没有日志、没有残留。唯一能发现它的方式是 e2e：
-     * purge 之后断言那条通知**仍然存在**。
-     * purge 类通知只在 payload.title 里存标题快照。
+     * 三个 subject 外键全部 **SET NULL，不级联**。
+     *
+     * 通知是「有没有告诉过用户」的送达副本。对象被硬删时通知行要留着，
+     * 收件箱把 subject 渲染成 removed——否则 staff 删楼给作者记的 strike 还在，
+     * 而「告诉过他」的那条记录随资源 purge 一起消失了（T6 验证抓出来的）。
+     * 0004 时这三条是 cascade，0006 改成 set null。
+     */
+    topicId: uuid('topic_id').references(() => topic.id, {
+      onDelete: 'set null',
+    }),
+    postId: uuid('post_id').references(() => post.id, { onDelete: 'set null' }),
+    /**
+     * ⚠️ **kind='resource_deleted' 仍然不带这个外键**，即使它已经是 set null：
+     * 标题快照必须进 payload，因为对象没了之后没有任何地方能再取到它。
+     * 这条约定有一条测试钉住：purge 之后那条通知**仍然存在且带 title**。
      */
     resourceId: uuid('resource_id').references(() => resource.id, {
-      onDelete: 'cascade',
+      onDelete: 'set null',
     }),
 
     /** 被删对象的标题快照等——只在没有外键可指时使用 */

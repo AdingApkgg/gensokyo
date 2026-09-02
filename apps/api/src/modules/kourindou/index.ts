@@ -12,6 +12,7 @@ import { Hono } from 'hono'
 import { entityIdParam, fail, validate } from '../../errors'
 import { isOwnerOrStaff, requireAuth } from '../../middleware/require'
 import { type AppEnv, canAutoPublish } from '../../middleware/session'
+import { notify } from '../../notify'
 import { autoPublishThreshold } from '../../site-config'
 import { loadVisibleTopicByResourceSlug } from '../content/visibility'
 import { makeSlug } from './slug'
@@ -352,17 +353,18 @@ export const kourindou = new Hono<AppEnv>()
       if (!row) return fail(c, 'not_found', 404)
 
       /**
-       * 审核通过只能走 `/moderation/resources/:id/review`。
+       * 审核结论（通过**与拒绝**）只能走 `/moderation/resources/:id/review`。
        *
-       * 那条路径才递增 `approvedResourceCount`、才把审计写成 `review`；
-       * 从这里放行的话同一个业务动作有两条路径，而只有一条推进信任梯度。
+       * 那条路径才递增 `approvedResourceCount` / 记 strike、才把审计写成 `review`、
+       * 才通知投稿者；从这里放行 pending→draft 就是一扇「不通知、不记理由、
+       * 不记 strike」的第二拒稿门。同一个业务动作只能有一条路径。
        *
        * ⚠️ **不能改状态机去掉这条边**：`/review` 自己调的正是
        * `canTransition(pending, published)`，删了它审核通过会 409。
        * `status.ts` 是「什么跃迁合法」的真相，不是「走哪扇门」的真相——
        * 门在这里关。
        */
-      if (row.status === 'pending' && to === 'published') {
+      if (row.status === 'pending' && (to === 'published' || to === 'draft')) {
         return fail(c, 'invalid_state_transition', 409)
       }
 
@@ -387,6 +389,19 @@ export const kourindou = new Hono<AppEnv>()
           toValue: { status: to },
           reason,
         })
+        // 被 staff 下架要通知作者；作者自助下架不用（notify 会滤掉自己）
+        if (to === 'delisted' && row.uploaderId) {
+          await notify(tx, [
+            {
+              userId: row.uploaderId,
+              kind: 'resource_delisted',
+              actorId: actor.id,
+              resourceId: id,
+              // reason 是自由文本、写进审计日志的，不投递给作者
+              payload: null,
+            },
+          ])
+        }
       })
 
       return c.json({ status: to })

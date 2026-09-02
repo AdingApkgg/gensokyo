@@ -31,6 +31,34 @@ export type ErrorCode = (typeof ERROR_CODES)[number]
 
 export type ApiError = { error: { code: ErrorCode; fields?: string[] } }
 
+/**
+ * 从 drizzle 抛出的错误里取 SQLSTATE。
+ *
+ * ⚠️ **drizzle 会把驱动错误包一层**：顶层是 `Error { query, params, cause }`，
+ * 真正的 `PostgresError` 在 `cause` 上，而 bun-sql 把 SQLSTATE 放在 **`errno`**
+ * （它的 `code` 恒为 `ERR_POSTGRES_SERVER_ERROR`）。此前三处 `err.code === '23505'`
+ * 的判定**从未命中过**：重复举报回的是 500 不是 409，handle 撞车的重试分支
+ * 从没跑到过。全仓只许从这里判，别再手写。
+ */
+export function pgErrorCode(err: unknown): string | null {
+  let cur: unknown = err
+  for (
+    let depth = 0;
+    depth < 4 && typeof cur === 'object' && cur !== null;
+    depth++
+  ) {
+    const e = cur as { code?: unknown; errno?: unknown; cause?: unknown }
+    for (const v of [e.errno, e.code]) {
+      if (typeof v === 'string' && /^[0-9A-Z]{5}$/.test(v)) return v
+    }
+    cur = e.cause
+  }
+  return null
+}
+
+/** 23505 = 唯一违例 */
+export const isUniqueViolation = (err: unknown) => pgErrorCode(err) === '23505'
+
 export const fail = (
   c: Context,
   code: ErrorCode,
