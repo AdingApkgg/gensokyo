@@ -5,9 +5,11 @@ import {
   createTopicSchema,
   deletePostSchema,
   extractMentions,
+  handlePathSchema,
   listPostsQuerySchema,
   listTopicsQuerySchema,
   MAX_MENTIONS_PER_POST,
+  paginationQuerySchema,
   STRIKE_REPORT_REASONS,
   type TopicListItem,
   type TopicWire,
@@ -577,3 +579,108 @@ export const shrine = new Hono<AppEnv>()
 
 // softDeletePost 保留给 dash 的删楼按钮复用
 export { softDeletePost }
+
+/**
+ * 个人主页（/u/:handle）——**必须过闸门**（P0-1）。
+ *
+ * 触发序列全是正常运营动作：资源被版权下架 → /shrine 与 /kourindou 都看不到了
+ * → 但 /u/A、/u/B 仍公开列出「在《R 的标题》的 #2 楼」。一份因版权被下架的资源，
+ * 标题、讨论内容、讨论者名单仍可被任何人经任一参与者主页枚举。
+ * 所以这里 INNER JOIN topic + LEFT JOIN resource，用**同一个** visibleTopicWhere()
+ * 加 post.deleted_at IS NULL。只有「帖子」一个列表，不给 counts。
+ *
+ * handle 形状不对 → 404 而不是 400：挡路径会让保留字的存在从 URL 上被探测出来。
+ */
+export const profiles = new Hono<AppEnv>().get(
+  '/:handle',
+  validate('query', paginationQuerySchema),
+  async (c) => {
+    const parsed = handlePathSchema.safeParse(c.req.param('handle'))
+    if (!parsed.success) return fail(c, 'not_found', 404)
+    const { page, pageSize } = c.req.valid('query')
+
+    const [who] = await db
+      .select({
+        id: user.id,
+        name: user.name,
+        handle: userProfile.handle,
+        createdAt: userProfile.createdAt,
+      })
+      .from(userProfile)
+      .innerJoin(user, eq(user.id, userProfile.userId))
+      .where(eq(userProfile.handle, parsed.data))
+      .limit(1)
+    if (!who) return fail(c, 'not_found', 404)
+
+    const where = and(
+      eq(post.authorId, who.id),
+      isNull(post.deletedAt),
+      visibleTopicWhere(),
+    )
+    const [rows, [total]] = await Promise.all([
+      db
+        .select({
+          id: post.id,
+          floor: post.floor,
+          bodyMd: post.bodyMd,
+          createdAt: post.createdAt,
+          topicId: topic.id,
+          topicKind: topic.kind,
+          topicTitle: topic.title,
+          boardSlug: topic.boardSlug,
+          resourceSlug: resource.slug,
+          resourceTitleOriginal: resource.titleOriginal,
+          resourceTitleOriginalLocale: resource.titleOriginalLocale,
+          resourceTitle: resource.title,
+          resourceCoverUrl: resource.coverUrl,
+        })
+        .from(post)
+        .innerJoin(topic, eq(topic.id, post.topicId))
+        .leftJoin(resource, eq(resource.id, topic.resourceId))
+        .where(where)
+        .orderBy(desc(post.createdAt), desc(post.id))
+        .limit(pageSize)
+        .offset((page - 1) * pageSize),
+      db
+        .select({ n: count() })
+        .from(post)
+        .innerJoin(topic, eq(topic.id, post.topicId))
+        .leftJoin(resource, eq(resource.id, topic.resourceId))
+        .where(where),
+    ])
+
+    return c.json({
+      user: {
+        id: who.id,
+        name: who.name,
+        handle: who.handle,
+        createdAt: who.createdAt.toISOString(),
+      },
+      posts: rows.map((r) => ({
+        id: r.id,
+        floor: r.floor,
+        // 摘要用码点切，别把 emoji 切成半个
+        excerpt: [...r.bodyMd].slice(0, 200).join(''),
+        createdAt: r.createdAt.toISOString(),
+        topic: {
+          id: r.topicId,
+          kind: r.topicKind,
+          title: r.topicTitle,
+          boardSlug: r.boardSlug as BoardSlug | null,
+          resource: r.resourceSlug
+            ? {
+                slug: r.resourceSlug,
+                titleOriginal: r.resourceTitleOriginal as string,
+                titleOriginalLocale: r.resourceTitleOriginalLocale as string,
+                title: r.resourceTitle,
+                coverUrl: r.resourceCoverUrl,
+              }
+            : null,
+        },
+      })),
+      page,
+      pageSize,
+      total: total?.n ?? 0,
+    })
+  },
+)

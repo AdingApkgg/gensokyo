@@ -1,4 +1,4 @@
-import { UserRound } from 'lucide-react'
+import { Bell, UserRound } from 'lucide-react'
 import { Link, NavLink, useRevalidator } from 'react-router'
 import { LangSwitcher } from '~/components/lang-switcher'
 import { ThemeToggle } from '~/components/theme-toggle'
@@ -19,9 +19,12 @@ export type SessionUser = {
   id: string
   name: string
   email: string
+  handle: string
   role: 'user' | 'moderator' | 'admin'
   approvedResourceCount: number
   strikeCount: number
+  /** 未读通知数，服务端 100 截断 */
+  unread: number
 }
 
 const nav = [
@@ -69,6 +72,28 @@ export function SiteHeader({ user }: { user: SessionUser | null }) {
         <div className="ml-auto flex items-center gap-1">
           <LangSwitcher />
           <ThemeToggle />
+          {user && (
+            <Button variant="ghost" size="icon" asChild>
+              <Link
+                to={localizeHref('/notifications')}
+                aria-label={
+                  user.unread > 0
+                    ? m.notif_unread_n({
+                        n: user.unread >= 100 ? '99+' : String(user.unread),
+                      })
+                    : m.nav_notifications()
+                }
+                className="relative"
+              >
+                <Bell />
+                {user.unread > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 min-w-4 rounded-full bg-primary px-1 text-center text-[10px] leading-4 text-primary-foreground">
+                    {user.unread >= 100 ? '99+' : user.unread}
+                  </span>
+                )}
+              </Link>
+            </Button>
+          )}
           {user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -84,6 +109,11 @@ export function SiteHeader({ user }: { user: SessionUser | null }) {
                   </span>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link to={localizeHref(`/u/${user.handle}`)}>
+                    {m.nav_profile()}
+                  </Link>
+                </DropdownMenuItem>
                 {(user.role === 'moderator' || user.role === 'admin') && (
                   <DropdownMenuItem asChild>
                     <Link to={localizeHref('/dash')}>{m.dash()}</Link>

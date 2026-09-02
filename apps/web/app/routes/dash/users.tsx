@@ -6,6 +6,7 @@ import { Button } from '~/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { Input } from '~/components/ui/input'
 import { apiFor } from '~/lib/api'
+import { apiErrorCode, errorMessage } from '~/lib/api-error'
 import { m } from '~/paraglide/messages'
 import { localizeHref } from '~/paraglide/runtime'
 import type { Route } from './+types/users'
@@ -41,7 +42,9 @@ export async function action({ request }: Route.ActionArgs) {
   await requireAdmin(request)
   const form = await request.formData()
   const reason = String(form.get('reason') ?? '').trim()
-  if (!reason) return { ok: false as const, reason: 'missing_reason' as const }
+  if (!reason) {
+    return { ok: false as const, reason: 'missing_reason' as const, code: null }
+  }
   const api = apiFor(request)
   const id = String(form.get('id'))
 
@@ -50,11 +53,18 @@ export async function action({ request }: Route.ActionArgs) {
       param: { id },
       json: { reason },
     })
-    return res.ok
-      ? { ok: true as const, reason: null, intent: 'reset_strikes' as const }
-      : {
+    const code = await apiErrorCode(res)
+    return code
+      ? {
           ok: false as const,
-          reason: 'api_failed' as const,
+          reason: null,
+          code,
+          intent: 'reset_strikes' as const,
+        }
+      : {
+          ok: true as const,
+          reason: null,
+          code: null,
           intent: 'reset_strikes' as const,
         }
   }
@@ -66,13 +76,10 @@ export async function action({ request }: Route.ActionArgs) {
       reason,
     },
   })
-  return res.ok
-    ? { ok: true as const, reason: null, intent: 'role' as const }
-    : {
-        ok: false as const,
-        reason: 'api_failed' as const,
-        intent: 'role' as const,
-      }
+  const code = await apiErrorCode(res)
+  return code
+    ? { ok: false as const, reason: null, code, intent: 'role' as const }
+    : { ok: true as const, reason: null, code: null, intent: 'role' as const }
 }
 
 const roleLabel = (r: UserRole) =>
@@ -116,9 +123,9 @@ function RoleActions({ id, role }: { id: string; role: UserRole }) {
           {m.admin_reason_required()}
         </p>
       )}
-      {fetcher.data?.reason === 'api_failed' && (
+      {fetcher.data?.code && (
         <p className="text-xs text-destructive sm:col-span-2">
-          {m.admin_config_failed()}
+          {errorMessage(fetcher.data.code)}
         </p>
       )}
     </div>
@@ -173,8 +180,10 @@ function StrikeActions({ id, strikes }: { id: string; strikes: number }) {
       {missing && (
         <p className="text-xs text-destructive">{m.admin_reason_required()}</p>
       )}
-      {fetcher.data?.reason === 'api_failed' && (
-        <p className="text-xs text-destructive">{m.admin_config_failed()}</p>
+      {fetcher.data?.code && (
+        <p className="text-xs text-destructive">
+          {errorMessage(fetcher.data.code)}
+        </p>
       )}
     </div>
   )

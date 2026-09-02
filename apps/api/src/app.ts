@@ -9,7 +9,7 @@ import { me } from './modules/me'
 import { moderation } from './modules/moderation'
 import { notifications } from './modules/notifications'
 import { reports } from './modules/reports'
-import { shrine } from './modules/shrine'
+import { profiles, shrine } from './modules/shrine'
 import { uploads } from './modules/uploads'
 
 export const app = new Hono<AppEnv>()
@@ -23,6 +23,7 @@ export const app = new Hono<AppEnv>()
   .route('/kourindou', kourindou)
   .route('/kourindou', interactions)
   .route('/shrine', shrine)
+  .route('/shrine/users', profiles)
   .route('/reports', reports)
   .route('/notifications', notifications)
   .route('/moderation', moderation)

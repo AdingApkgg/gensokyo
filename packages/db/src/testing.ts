@@ -51,8 +51,13 @@ export async function cleanupTracked() {
       .where(inArray(schema.resource.id, resources.splice(0)))
   }
   if (users.length > 0) {
+    const ids = users.splice(0)
+    // report.reporter_id 也是 set null：测试账号删掉后它发的举报会以
+    // 「reporter 不存在、目标不存在」的 open 行永远留在 dash 里——
+    // 开发库里曾攒下 59 条这样的孤儿。举报是测试造的，随测试走。
+    await db.delete(schema.report).where(inArray(schema.report.reporterId, ids))
     // user_profile 级联删；moderation_log.actor_id 是 set null，
     // 审计记录本身活下来——这正是那条外键要的行为。
-    await db.delete(schema.user).where(inArray(schema.user.id, users.splice(0)))
+    await db.delete(schema.user).where(inArray(schema.user.id, ids))
   }
 }

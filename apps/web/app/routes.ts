@@ -19,6 +19,8 @@ export default [
     route('shrine/new', 'routes/shrine/new.tsx'),
     route('shrine/b/:board', 'routes/shrine/board.tsx'),
     route('shrine/t/:id', 'routes/shrine/topic.tsx'),
+    route('u/:handle', 'routes/profile.tsx'),
+    route('notifications', 'routes/notifications.tsx'),
     route('chronicle', 'routes/stub.tsx', { id: 'stub-chronicle' }),
     route('spellcard', 'routes/stub.tsx', { id: 'stub-spellcard' }),
     route('music', 'routes/stub.tsx', { id: 'stub-music' }),

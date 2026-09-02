@@ -6,6 +6,7 @@ import { Input } from '~/components/ui/input'
 import { Label } from '~/components/ui/label'
 import { Switch } from '~/components/ui/switch'
 import { apiFor } from '~/lib/api'
+import { apiErrorCode, errorMessage } from '~/lib/api-error'
 import { m } from '~/paraglide/messages'
 import { localizeHref } from '~/paraglide/runtime'
 import type { Route } from './+types/site'
@@ -58,10 +59,13 @@ export async function action({ request }: Route.ActionArgs) {
       : {}),
     ...(email ? { takedownEmail: email } : {}),
   }
-  if (Object.keys(json).length === 0) return { ok: false as const }
+  if (Object.keys(json).length === 0) {
+    return { ok: false as const, code: 'validation_failed' }
+  }
 
   const res = await apiFor(request).api.admin.config.$patch({ json })
-  return { ok: res.ok }
+  const code = await apiErrorCode(res)
+  return code ? { ok: false as const, code } : { ok: true as const, code: null }
 }
 
 function Row({
@@ -192,7 +196,9 @@ export default function AdminSite({ loaderData }: Route.ComponentProps) {
         <p
           className={`text-sm ${fetcher.data.ok ? 'text-muted-foreground' : 'text-destructive'}`}
         >
-          {fetcher.data.ok ? m.admin_config_saved() : m.admin_config_failed()}
+          {fetcher.data.ok
+            ? m.admin_config_saved()
+            : errorMessage(fetcher.data.code)}
         </p>
       )}
     </div>

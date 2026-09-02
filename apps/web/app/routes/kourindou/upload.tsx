@@ -27,6 +27,7 @@ import {
 import { Separator } from '~/components/ui/separator'
 import { Textarea } from '~/components/ui/textarea'
 import { apiFor } from '~/lib/api'
+import { apiErrorCode, errorMessage } from '~/lib/api-error'
 import { kindLabel, licenseLabel, licenseVariant } from '~/lib/display'
 import { m } from '~/paraglide/messages'
 import { localizeHref } from '~/paraglide/runtime'
@@ -76,7 +77,9 @@ export async function action({ request }: Route.ActionArgs) {
       ? { zh: String(form.get('description')) }
       : {},
   })
-  if (!parsedResource.success) return { ok: false as const }
+  if (!parsedResource.success) {
+    return { ok: false as const, code: 'validation_failed' }
+  }
 
   const mirrors = JSON.parse(String(form.get('mirrors') ?? '[]')) as Mirror[]
   const files = mirrors.map((mi) =>
@@ -91,21 +94,27 @@ export async function action({ request }: Route.ActionArgs) {
   const created = await api.api.kourindou.resources.$post({
     json: parsedResource.data,
   })
+  const createdCode = await apiErrorCode(created)
+  if (createdCode) return { ok: false as const, code: createdCode }
   const createdBody = await created.json()
-  if ('error' in createdBody) return { ok: false as const }
+  if ('error' in createdBody) return { ok: false as const, code: 'generic' }
   const { id, slug } = createdBody.resource
 
   const ver = await api.api.kourindou.resources[':id'].versions.$post({
     param: { id },
     json: { label: 'v1', changelog: '', files },
   })
-  if (!ver.ok) return { ok: false as const, slug }
+  const verCode = await apiErrorCode(ver)
+  if (verCode) return { ok: false as const, slug, code: verCode }
 
   const submitted = await api.api.kourindou.resources[':id'].submit.$post({
     param: { id },
   })
+  const submitCode = await apiErrorCode(submitted)
+  if (submitCode) return { ok: false as const, slug, code: submitCode }
   const submitBody = await submitted.json()
-  if ('error' in submitBody) return { ok: false as const, slug }
+  if ('error' in submitBody)
+    return { ok: false as const, slug, code: 'generic' }
 
   return { ok: true as const, slug, autoPublished: submitBody.autoPublished }
 }
@@ -620,7 +629,9 @@ export default function UploadWizard() {
             {m.upload_review_hint()}
           </p>
           {result?.ok === false && (
-            <p className="text-sm text-destructive">{m.upload_failed()}</p>
+            <p className="text-sm text-destructive">
+              {errorMessage(result.code)}
+            </p>
           )}
         </div>
       )}
