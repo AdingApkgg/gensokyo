@@ -216,5 +216,10 @@
   "err_validation_failed": "That doesn't look right. Please check it and try again.",
   "err_unauthorized": "Please sign in first.",
   "err_forbidden": "You don't have permission to do that.",
-  "err_not_found": "That no longer exists, or has been removed."
+  "err_not_found": "That no longer exists, or has been removed.",
+  "admin_link_trust_threshold": "External-link threshold",
+  "admin_link_trust_hint": "How many approved uploads before a user may post external links (a 3-day-old account also qualifies). Separate from the auto-publish threshold on purpose: posts can be deleted, so links open first and tighten if abused; distribution cannot be recalled, so uploads are reviewed first. 0 means no limit.",
+  "admin_reset_strikes": "Clear strikes",
+  "admin_reset_strikes_hint": "Strikes only ever go up, and they veto external links and auto-publish before the threshold is even checked — setting the threshold to 0 does not help. A wrong call can only be undone here, and it is written to the audit log.",
+  "admin_strikes_reset_done": "Strikes cleared."
 }

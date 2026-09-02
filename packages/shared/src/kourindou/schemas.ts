@@ -174,6 +174,15 @@ export const userSearchSchema = z.object({
   q: z.string().trim().min(1).max(200).optional(),
 })
 
+/**
+ * 清零违规。strikeCount 全仓只有 +1 的写入点，没有它，一次误判就是永久的：
+ * `strikeCount > 0` 在信任梯度里**先于阈值判断**短路，把门槛调成 0 也救不回来。
+ * 理由必填并写审计——「宽恕」和「惩罚」是同一条治理链的两端，都要留痕。
+ */
+export const resetStrikesSchema = z.object({
+  reason: z.string().min(1).max(500),
+})
+
 /** 硬删是不可逆的，因此理由必填且会写进审计 */
 export const deleteResourceSchema = z.object({
   mode: z.enum(['soft', 'purge']),

@@ -24,6 +24,7 @@ async function requireAdmin(request: Request) {
 type Config = {
   registrationOpen?: boolean
   autoPublishThreshold?: number
+  linkTrustThreshold?: number
   takedownEmail?: string
 }
 
@@ -43,6 +44,7 @@ export async function action({ request }: Route.ActionArgs) {
    * 「修改了全部」的审计——审计日志得能看出到底动了什么。
    */
   const threshold = form.get('autoPublishThreshold')
+  const linkThreshold = form.get('linkTrustThreshold')
   const email = String(form.get('takedownEmail') ?? '').trim()
   const json = {
     ...(form.has('registrationOpen')
@@ -50,6 +52,9 @@ export async function action({ request }: Route.ActionArgs) {
       : {}),
     ...(threshold !== null && String(threshold) !== ''
       ? { autoPublishThreshold: Number(threshold) }
+      : {}),
+    ...(linkThreshold !== null && String(linkThreshold) !== ''
+      ? { linkTrustThreshold: Number(linkThreshold) }
       : {}),
     ...(email ? { takedownEmail: email } : {}),
   }
@@ -87,6 +92,9 @@ export default function AdminSite({ loaderData }: Route.ComponentProps) {
   const [open, setOpen] = useState(config.registrationOpen ?? true)
   const [threshold, setThreshold] = useState(
     String(config.autoPublishThreshold ?? ''),
+  )
+  const [linkThreshold, setLinkThreshold] = useState(
+    String(config.linkTrustThreshold ?? ''),
   )
   const [email, setEmail] = useState(config.takedownEmail ?? '')
 
@@ -132,6 +140,29 @@ export default function AdminSite({ loaderData }: Route.ComponentProps) {
             variant="secondary"
             disabled={busy || threshold === ''}
             onClick={() => save({ autoPublishThreshold: threshold })}
+          >
+            {m.admin_save()}
+          </Button>
+        </div>
+      </Row>
+
+      <Row
+        title={m.admin_link_trust_threshold()}
+        hint={m.admin_link_trust_hint()}
+      >
+        <div className="flex gap-2">
+          <Input
+            type="number"
+            min={0}
+            max={1000}
+            value={linkThreshold}
+            onChange={(e) => setLinkThreshold(e.target.value)}
+            aria-label={m.admin_link_trust_threshold()}
+          />
+          <Button
+            variant="secondary"
+            disabled={busy || linkThreshold === ''}
+            onClick={() => save({ linkTrustThreshold: linkThreshold })}
           >
             {m.admin_save()}
           </Button>

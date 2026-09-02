@@ -81,7 +81,18 @@ const IMAGE_TYPES: Record<
 
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
-export type ImagePurpose = 'cover' | 'avatar'
+/**
+ * 上传用途白名单。**它同时是对象 key 的第一段**（`<purpose>/<uuid>.<ext>`），
+ * 所以这个数组是 key 文法的一部分——GC 的正则从它派生，别在别处再抄一份。
+ *
+ * `post`：帖子正文里的图。宽限期比封面长（见 gc-images），因为草稿被设计成
+ * 跨天存活而图片是立即落桶的。
+ */
+export const IMAGE_PURPOSES = ['cover', 'avatar', 'post'] as const
+export type ImagePurpose = (typeof IMAGE_PURPOSES)[number]
+
+export const isImagePurpose = (v: unknown): v is ImagePurpose =>
+  typeof v === 'string' && (IMAGE_PURPOSES as readonly string[]).includes(v)
 
 /** Content-Type 可以伪造，所以核对文件头 */
 function sniff(bytes: Uint8Array, contentType: string) {
@@ -123,6 +134,61 @@ export async function putImage(
 export function isManagedUrl(url: string) {
   const base = publicBaseUrl()
   return base !== '' && url.startsWith(`${base}/`)
+}
+
+export const escapeRegExp = (s: string) =>
+  s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/**
+ * 对象 key 的完整文法，**锚死**，不多吃一个字符。
+ *
+ * key 是上面 putImage 自己生成的：`<purpose>/<uuidv7>.<ext>`，三段的取值
+ * 都是我们定的，所以这里可以写成精确文法而不是「像 URL 的东西」。
+ *
+ * 为什么必须锚死：GC 的白名单装的是 key，判定是**精确字符串相等**。
+ * 从 Markdown `![](https://…/post/xxx.webp)` 里用宽松正则抽 URL，多吃一个
+ * 闭括号，派生出来的 key 就是 `post/xxx.webp)`——桶里那个叫 `post/xxx.webp`，
+ * `has()` 为 false，**过了宽限期这张正在用的图被精确删掉**。熔断挡不住：
+ * 封面都还在，白名单远非空集。「多匹配一点是安全方向」这个直觉在这里是反的。
+ *
+ * uuidv7 是 36 位 `[0-9a-f-]`；扩展名从 IMAGE_TYPES 派生，加一种图片格式
+ * 不用回来改这里。
+ */
+export function managedKeyPattern(base: string): RegExp {
+  const exts = [...new Set(Object.values(IMAGE_TYPES).map((t) => t.ext))]
+  return new RegExp(
+    `${escapeRegExp(base)}/(?:${IMAGE_PURPOSES.join('|')})/[0-9a-f-]{36}\\.(?:${exts.join('|')})(?![0-9a-z])`,
+    // 不加 i：key 是我们自己生成的小写；大写的「同名」在 S3 里是另一个不存在的对象
+    'g',
+  )
+}
+
+/**
+ * **不带 base 前缀**的 key 文法：`<任意前缀>/<purpose>/<uuid>.<ext>`。
+ * 捕获组 1 是前缀（scheme + host + 路径），GC 用它侦测「长得像我们的对象、
+ * 但挂在别的 base 下」的引用——换域名 / 上 CDN / 改桶名之后没迁移存量 URL，
+ * 就是这个形状。那时按当前 base 派生的白名单会把所有老图判成无引用，
+ * 两道熔断都看不见（它们只看「当前 base 下」的引用），宽限期一过老图整批被删。
+ */
+export function bareKeyPattern(): RegExp {
+  const exts = [...new Set(Object.values(IMAGE_TYPES).map((t) => t.ext))]
+  return new RegExp(
+    `(https?://[^\\s()<>"']+?)/(?:${IMAGE_PURPOSES.join('|')})/[0-9a-f-]{36}\\.(?:${exts.join('|')})(?![0-9a-z])`,
+    'g',
+  )
+}
+
+/**
+ * 从一段自由文本（Markdown 正文、公告 jsonb 里的字符串）里抽出本站对象 key。
+ * 只返回 key（`post/….webp`），不返回整条 URL——白名单存的就是 key。
+ */
+export function extractManagedKeys(text: string, base: string): string[] {
+  if (!base || !text) return []
+  const out: string[] = []
+  for (const m of text.matchAll(managedKeyPattern(base))) {
+    out.push(m[0].slice(base.length + 1))
+  }
+  return out
 }
 
 export async function deleteObject(key: string) {

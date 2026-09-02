@@ -1,6 +1,6 @@
 import { db, schema } from '@gensokyo/db'
 import { hasExternalLink as hasExternalLinkIn } from '@gensokyo/shared'
-import { and, count, eq, gte, sql } from 'drizzle-orm'
+import { and, count, eq, gte, isNull, sql } from 'drizzle-orm'
 import type { Actor } from './middleware/session'
 import { publicBaseUrl } from './storage'
 
@@ -89,6 +89,9 @@ async function countSince(bucket: Bucket, actorId: string, from: Date) {
                 eq(schema.post.authorId, actorId),
                 gte(schema.post.updatedAt, from),
                 sql`${schema.post.updatedAt} > ${schema.post.createdAt}`,
+                // 软删也会 bump updatedAt（$onUpdate），但那不是作者的编辑——
+                // 否则 staff 删一层，作者就被算进自己的编辑冷却窗
+                isNull(schema.post.deletedAt),
               ),
             )
         : await db

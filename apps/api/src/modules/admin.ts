@@ -3,10 +3,11 @@ import {
   deleteResourceSchema,
   grantRoleSchema,
   PUBLIC_CONFIG_KEYS,
+  resetStrikesSchema,
   siteConfigSchema,
   userSearchSchema,
 } from '@gensokyo/shared'
-import { desc, eq, ilike, inArray, isNotNull, or } from 'drizzle-orm'
+import { and, desc, eq, ilike, inArray, isNotNull, or } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { entityIdParam, fail, userIdParam, validate } from '../errors'
 import { requireRole } from '../middleware/require'
@@ -92,6 +93,73 @@ export const admin = new Hono<AppEnv>()
       })
 
       return c.json({ role })
+    },
+  )
+
+  /**
+   * 清零违规。这是 strikeCount **唯一的递减路径**。
+   *
+   * 没有它，一次误判就是永久的：`canPostLinks` 与 `canAutoPublish` 里
+   * `strikeCount > 0` 的短路都在阈值判断**之前**，把门槛调成 0 也救不回来。
+   * 删楼幂等只挡住「双击 +2」，挡不住「误判 +1」。
+   *
+   * 记 `trust_change`（既有枚举值，不加新的）：宽恕与惩罚是同一条治理链，
+   * 审计要能回答「谁、什么时候、凭什么把这个人的违规清掉了」。
+   */
+  .post(
+    '/users/:id/strikes/reset',
+    userIdParam,
+    validate('json', resetStrikesSchema),
+    async (c) => {
+      const actor = c.get('actor')
+      if (!actor) return fail(c, 'unauthorized', 401)
+      const id = c.req.param('id')
+      const { reason } = c.req.valid('json')
+
+      const [target] = await db
+        .select({ strikeCount: userProfile.strikeCount })
+        .from(userProfile)
+        .where(eq(userProfile.userId, id))
+        .limit(1)
+      if (!target) return fail(c, 'not_found', 404)
+      // 本来就是 0：别写一条「从 0 清到 0」的审计，那会把日志变成噪音
+      if (target.strikeCount === 0)
+        return fail(c, 'invalid_state_transition', 409)
+
+      /**
+       * 乐观条件：只在 strikeCount 仍等于刚才读到的值时才清。
+       * 惩罚路径是原子 `+1`（moderation.ts / shrine.ts），与这里交错时——站长
+       * 复核旧误判的同时审核员刚拒了一条新的侵权投稿——无条件 `SET 0` 会把
+       * 那次新违规一并抹掉，且审计里写的是 `{from: 2, to: 0}` 而实际抹掉的是 3。
+       * 审计存在的理由正是「凭什么清掉」，它给出错的答案比没有更糟。
+       */
+      const cleared = await db.transaction(async (tx) => {
+        const [hit] = await tx
+          .update(userProfile)
+          .set({ strikeCount: 0 })
+          .where(
+            and(
+              eq(userProfile.userId, id),
+              eq(userProfile.strikeCount, target.strikeCount),
+            ),
+          )
+          .returning({ id: userProfile.userId })
+        if (!hit) return false
+        await tx.insert(moderationLog).values({
+          actorId: actor.id,
+          action: 'trust_change',
+          subjectKind: 'user',
+          subjectId: id,
+          fromValue: { strikeCount: target.strikeCount },
+          toValue: { strikeCount: 0 },
+          reason,
+        })
+        return true
+      })
+      // 读到的值已经变了：让站长刷新后重看，别替他决定
+      if (!cleared) return fail(c, 'invalid_state_transition', 409)
+
+      return c.json({ strikeCount: 0 })
     },
   )
 

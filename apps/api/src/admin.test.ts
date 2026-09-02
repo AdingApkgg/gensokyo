@@ -357,3 +357,67 @@ describe('站点配置', () => {
     invalidateConfig()
   })
 })
+
+describe('清零违规 —— strikeCount 唯一的递减路径', () => {
+  test('站长清零：strikeCount 归 0，写 trust_change 审计', async () => {
+    const victim = await signUp('被误判的')
+    await app.request('/api/me', { headers: { cookie: victim.cookie } })
+    await db
+      .update(schema.userProfile)
+      .set({ strikeCount: 2 })
+      .where(eq(schema.userProfile.userId, victim.id))
+
+    const res = await app.request(
+      `/api/admin/users/${victim.id}/strikes/reset`,
+      send(boss, 'POST', { reason: '复核后确认是误判' }),
+    )
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ strikeCount: 0 })
+
+    const [after] = await db
+      .select({ n: schema.userProfile.strikeCount })
+      .from(schema.userProfile)
+      .where(eq(schema.userProfile.userId, victim.id))
+    expect(after?.n).toBe(0)
+
+    const logs = await db
+      .select()
+      .from(schema.moderationLog)
+      .where(eq(schema.moderationLog.subjectId, victim.id))
+    const entry = logs.find((l) => l.action === 'trust_change')
+    expect(entry?.fromValue).toEqual({ strikeCount: 2 })
+    expect(entry?.toValue).toEqual({ strikeCount: 0 })
+    expect(entry?.reason).toBe('复核后确认是误判')
+  })
+
+  test('本来就是 0 → 409，不写「从 0 清到 0」的噪音审计', async () => {
+    const clean = await signUp('清白的')
+    await app.request('/api/me', { headers: { cookie: clean.cookie } })
+    const res = await app.request(
+      `/api/admin/users/${clean.id}/strikes/reset`,
+      send(boss, 'POST', { reason: '手滑' }),
+    )
+    expect(res.status).toBe(409)
+  })
+
+  test('必须给理由；审核员不能清', async () => {
+    const victim = await signUp('又一个被误判的')
+    await app.request('/api/me', { headers: { cookie: victim.cookie } })
+    await db
+      .update(schema.userProfile)
+      .set({ strikeCount: 1 })
+      .where(eq(schema.userProfile.userId, victim.id))
+
+    const noReason = await app.request(
+      `/api/admin/users/${victim.id}/strikes/reset`,
+      send(boss, 'POST', {}),
+    )
+    expect(noReason.status).toBe(400)
+
+    const byMod = await app.request(
+      `/api/admin/users/${victim.id}/strikes/reset`,
+      send(mod, 'POST', { reason: '我想帮他' }),
+    )
+    expect(byMod.status).toBe(403)
+  })
+})
