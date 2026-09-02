@@ -1,5 +1,6 @@
 import { db, schema } from '@gensokyo/db'
 import {
+  type BoardSlug,
   createPostSchema,
   createTopicSchema,
   deletePostSchema,
@@ -8,6 +9,8 @@ import {
   listTopicsQuerySchema,
   MAX_MENTIONS_PER_POST,
   STRIKE_REPORT_REASONS,
+  type TopicListItem,
+  type TopicWire,
   updatePostSchema,
 } from '@gensokyo/shared'
 import { and, count, desc, eq, isNull, sql } from 'drizzle-orm'
@@ -166,40 +169,42 @@ export const shrine = new Hono<AppEnv>()
         .where(where),
     ])
 
-    return c.json({
-      items: items.map((r) => ({
-        id: r.id,
-        kind: r.kind,
-        boardSlug: r.boardSlug,
-        title: r.title,
-        resource: r.resourceSlug
+    // 投影按 shared 契约收口：boardSlug 在 DB 里是 varchar，CHECK 保证了取值集
+    const list: TopicListItem[] = items.map((r) => ({
+      id: r.id,
+      kind: r.kind,
+      boardSlug: r.boardSlug as BoardSlug | null,
+      title: r.title,
+      resource: r.resourceSlug
+        ? {
+            slug: r.resourceSlug,
+            titleOriginal: r.resourceTitleOriginal as string,
+            titleOriginalLocale: r.resourceTitleOriginalLocale as string,
+            title: r.resourceTitle,
+            coverUrl: r.resourceCoverUrl,
+          }
+        : null,
+      /**
+       * handle 缺失时整个 author 置 null，**不用 `?? ''` 兜**——
+       * PostAuthor 的契约就写着这一条：空 handle 会让 web 拼出 `/u/`，
+       * 那是另一个路由，产出的是一条没有任何信号的死链。
+       * authorId 可为 null（onDelete set null），所以不能简单换成 innerJoin。
+       */
+      author:
+        r.authorId && r.authorHandle
           ? {
-              slug: r.resourceSlug,
-              titleOriginal: r.resourceTitleOriginal as string,
-              titleOriginalLocale: r.resourceTitleOriginalLocale as string,
-              title: r.resourceTitle,
-              coverUrl: r.resourceCoverUrl,
+              id: r.authorId,
+              name: r.authorName ?? '',
+              handle: r.authorHandle,
             }
           : null,
-        /**
-         * handle 缺失时整个 author 置 null，**不用 `?? ''` 兜**——
-         * PostAuthor 的契约就写着这一条：空 handle 会让 web 拼出 `/u/`，
-         * 那是另一个路由，产出的是一条没有任何信号的死链。
-         * authorId 可为 null（onDelete set null），所以不能简单换成 innerJoin。
-         */
-        author:
-          r.authorId && r.authorHandle
-            ? {
-                id: r.authorId,
-                name: r.authorName ?? '',
-                handle: r.authorHandle,
-              }
-            : null,
-        replyCount: r.replyCount,
-        pinned: r.pinnedAt !== null,
-        lastPostAt: r.lastPostAt.toISOString(),
-        createdAt: r.createdAt.toISOString(),
-      })),
+      replyCount: r.replyCount,
+      pinned: r.pinnedAt !== null,
+      lastPostAt: r.lastPostAt.toISOString(),
+      createdAt: r.createdAt.toISOString(),
+    }))
+    return c.json({
+      items: list,
       page: q.page,
       pageSize: q.pageSize,
       total: total?.n ?? 0,
@@ -273,7 +278,13 @@ export const shrine = new Hono<AppEnv>()
     if (!t) return fail(c, 'not_found', 404)
     // 必须带上主楼：详情页首屏不该再发一次请求
     const opening = await listPosts(t, 1)
-    return c.json({ topic: t, ...opening })
+    // 跨线用 ISO 串（TopicWire），web 侧靠 hc 推导即可，不必手写类型
+    const topicWire: TopicWire = {
+      ...t,
+      pinnedAt: t.pinnedAt?.toISOString() ?? null,
+      lastPostAt: t.lastPostAt.toISOString(),
+    }
+    return c.json({ topic: topicWire, ...opening })
   })
 
   // ------------------------------------------------------------ 删主题
@@ -443,7 +454,11 @@ export const shrine = new Hono<AppEnv>()
 
       await db
         .update(post)
-        .set({ bodyMd: input.bodyMd, locale: input.locale })
+        // locale 不传就不动：否则任何一次编辑都把创建时写的语言清成 NULL
+        .set({
+          bodyMd: input.bodyMd,
+          ...(input.locale ? { locale: input.locale } : {}),
+        })
         .where(eq(post.id, row.id))
       return c.json({ updated: true })
     },

@@ -1,6 +1,8 @@
 import type {
+  BoardSlug,
   LicenseStatus,
   LocalizedText,
+  ReportReason,
   ResourceKind,
 } from '@gensokyo/shared'
 import { resolveLocalized } from '@gensokyo/shared'
@@ -54,3 +56,36 @@ export const licenseVariant = (
 
 export const averageRating = (sum: number, count: number) =>
   count === 0 ? null : Math.round((sum / count) * 10) / 10
+
+/** 六个版块的名字与一句话说明。slug 闭合在 shared 的 BOARD_SLUGS，这里只做文案 */
+export const boardLabel = (b: BoardSlug) =>
+  ({
+    'tea-house': m.board_tea_house(),
+    danmaku: m.board_danmaku(),
+    workshop: m.board_workshop(),
+    'music-hall': m.board_music_hall(),
+    kappa: m.board_kappa(),
+    meta: m.board_meta(),
+  })[b]
+
+export const boardDescription = (b: BoardSlug) =>
+  ({
+    'tea-house': m.board_tea_house_desc(),
+    danmaku: m.board_danmaku_desc(),
+    workshop: m.board_workshop_desc(),
+    'music-hall': m.board_music_hall_desc(),
+    kappa: m.board_kappa_desc(),
+    meta: m.board_meta_desc(),
+  })[b]
+
+/** 举报 / 删楼理由。删楼的理由集就是举报的理由集 */
+export const reportReasonLabel = (r: ReportReason) =>
+  ({
+    copyright: m.report_reason_copyright(),
+    illegal: m.report_reason_illegal(),
+    spam: m.report_reason_spam(),
+    harassment: m.report_reason_harassment(),
+    broken_link: m.report_reason_broken_link(),
+    wrong_info: m.report_reason_wrong_info(),
+    other: m.report_reason_other(),
+  })[r]

@@ -11,6 +11,7 @@ import {
 import type { Route } from './+types/root'
 import { SiteFooter } from './components/site-footer'
 import { SiteHeader } from './components/site-header'
+import { m } from './paraglide/messages'
 import { getLocale } from './paraglide/runtime'
 import { paraglideMiddleware } from './paraglide/server'
 import './app.css'
@@ -92,15 +93,20 @@ export default function App({ loaderData }: Route.ComponentProps) {
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
-  let message = 'Oops!'
-  let details = 'An unexpected error occurred.'
+  // 文案走 Paraglide：中文站上不该出现英文的 Oops
+  // 显式 string：Paraglide 的返回值是 LocalizedString 品牌类型，statusText 是裸 string
+  let message: string = m.err_page_error_title()
+  let details: string = m.err_page_error_desc()
   let stack: string | undefined
 
   if (isRouteErrorResponse(error)) {
-    message = error.status === 404 ? '404' : 'Error'
+    message =
+      error.status === 404
+        ? m.err_page_not_found_title()
+        : m.err_page_error_title()
     details =
       error.status === 404
-        ? 'The requested page could not be found.'
+        ? m.err_page_not_found_desc()
         : error.statusText || details
   } else if (import.meta.env.DEV && error && error instanceof Error) {
     details = error.message

@@ -112,6 +112,15 @@ export type TopicView = {
   lastPostAt: Date
 }
 
+/**
+ * TopicView 的**跨线**形态：Date → ISO 串。`GET /shrine/topics/:id` 返回的是它，
+ * web 侧拿 hc 推导就能对上，不必手写一份再 `as unknown as`。
+ */
+export type TopicWire = Omit<TopicView, 'pinnedAt' | 'lastPostAt'> & {
+  pinnedAt: string | null
+  lastPostAt: string
+}
+
 /** 最新流与版块页的行。资源主题带封面与来源徽章，视觉权重与版块主题区分 */
 export type TopicListItem = {
   id: string

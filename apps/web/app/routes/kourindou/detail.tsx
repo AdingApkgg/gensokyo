@@ -1,22 +1,16 @@
 import type { MirrorKind } from '@gensokyo/shared'
 import { Download, Star } from 'lucide-react'
 import { useState } from 'react'
-import {
-  data,
-  Form,
-  Link,
-  redirect,
-  useFetcher,
-  useNavigation,
-} from 'react-router'
+import { data, Form, Link, redirect, useFetcher } from 'react-router'
+import { Discussion } from '~/components/discussion/Discussion'
+import { ReportDialog } from '~/components/discussion/ReportDialog'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { Input } from '~/components/ui/input'
 import { Separator } from '~/components/ui/separator'
-import { Textarea } from '~/components/ui/textarea'
 import { apiFor } from '~/lib/api'
-import { apiErrorCode, errorMessage } from '~/lib/api-error'
+import { discussionAction, floorParam } from '~/lib/discussion-action'
 import {
   averageRating,
   displayTitle,
@@ -55,9 +49,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
    */
   let discussion = null
   if (detail.topicId) {
+    // 此前传 query:{}，默认第一页，**第 21 条评论就看不见且无提示**——补 ?floor=
+    // floorParam 只放行正整数：非法值回落第一页，别让整个讨论区连回复框一起消失
     const res2 = await api.api.shrine.topics[':id'].posts.$get({
       param: { id: detail.topicId },
-      query: {},
+      query: floorParam(request.url),
     })
     const body = await res2.json()
     if (!('error' in body)) discussion = body
@@ -72,26 +68,14 @@ export async function action({ request, params }: Route.ActionArgs) {
   const slug = params.slug as string
   const api = apiFor(request)
 
-  if (intent === 'comment') {
-    const body = String(form.get('bodyMd') ?? '').trim()
-    const topicId = String(form.get('topicId') ?? '')
-    if (!body || !topicId) return { ok: false as const }
-    /**
-     * **必须读响应。** hc 客户端对 4xx/5xx 不抛异常，`await` 完就返回
-     * `{ ok: true }` 的写法会让限流、外链禁令、@ 上限的拒绝变成
-     * 「评论凭空消失」——表单清空、没有新楼层、没有任何提示。
-     * 这条路由是全站唯一在跑的发帖入口，静默丢内容的代价最高。
-     */
-    const res = await api.api.shrine.topics[':id'].posts.$post({
-      param: { id: topicId },
-      json: { bodyMd: body },
-    })
-    const code = await apiErrorCode(res)
-    // 失败时把原文还回去，别让用户重新打一遍
-    return code
-      ? { ok: false as const, code, draft: body }
-      : { ok: true as const }
-  }
+  /**
+   * 讨论区四个 intent（comment/edit/delete/report）与主题页共用一份处理——
+   * 两处各写一遍就是两份错误映射。它会读响应：hc 对 4xx/5xx 不抛异常，
+   * `await` 完就当成功的写法曾让被拒的评论「凭空消失」。
+   */
+  const topicId = String(form.get('topicId') ?? '') || null
+  const shared = await discussionAction(request, form, topicId)
+  if (shared) return shared
 
   if (intent === 'rate') {
     await api.api.kourindou.resources[':slug'].rating.$put({
@@ -141,13 +125,7 @@ export default function ResourceDetail({
   matches,
 }: Route.ComponentProps) {
   const { resource, circle, tags, versions, discussion, topicId } = loaderData
-  // 评论被拒时才有值；拿到 code 才渲染错误行，别用 `!ok` —— 其它 intent 也返回它
-  const commentError =
-    actionData && 'code' in actionData ? actionData.code : undefined
-  const commentDraft =
-    actionData && 'draft' in actionData ? actionData.draft : undefined
-  const posts = discussion?.posts ?? []
-  const nav = useNavigation()
+  void actionData
   const user = matches[0]?.loaderData?.user
   const avg = averageRating(resource.ratingSum, resource.ratingCount)
   const locale = getLocale()
@@ -302,74 +280,41 @@ export default function ResourceDetail({
           )}
         </div>
 
-        {user && topicId ? (
-          <Form method="post" className="mb-6 grid gap-2">
-            <input type="hidden" name="intent" value="comment" />
-            <input type="hidden" name="topicId" value={topicId ?? ''} />
-            <Textarea
-              name="bodyMd"
-              rows={3}
-              placeholder={m.detail_comment_placeholder()}
-              // 被拒时把原文填回去，否则用户要重打一遍
-              defaultValue={commentDraft}
-              key={commentDraft ?? ''}
-              required
-              aria-invalid={commentError ? true : undefined}
-              aria-describedby={commentError ? 'comment-error' : undefined}
+        {topicId && discussion ? (
+          <div id="discussion" className="scroll-mt-20">
+            {/* topicId 由 PostForm 的隐藏字段带给 action */}
+            <Discussion
+              topicId={topicId}
+              page={discussion}
+              user={user ? { id: user.id, role: user.role } : null}
+              action={localizeHref(`/kourindou/${resource.slug}`)}
+              pathname={localizeHref(`/kourindou/${resource.slug}`)}
+              openingIsTopic={false}
+              loginNext={`${localizeHref(`/kourindou/${resource.slug}`)}#discussion`}
             />
-            {commentError ? (
-              <p
-                id="comment-error"
-                role="alert"
-                className="text-sm text-destructive"
-              >
-                {errorMessage(commentError)}
-              </p>
-            ) : null}
-            <Button
-              type="submit"
-              className="justify-self-end"
-              disabled={nav.state === 'submitting'}
-            >
-              {m.detail_post()}
-            </Button>
-          </Form>
+          </div>
         ) : (
-          <p className="mb-6 text-sm text-muted-foreground">
-            <Link
-              to={localizeHref('/login')}
-              className="underline underline-offset-4"
-            >
-              {m.detail_login_to_comment()}
-            </Link>
-          </p>
-        )}
-
-        {posts.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             {m.detail_no_comments()}
           </p>
-        ) : (
-          <ol className="divide-y border-y">
-            {posts.map((p) => (
-              <li key={p.id} className="py-3">
-                <div className="flex items-baseline gap-2 text-sm">
-                  <span className="font-medium">
-                    {p.author?.name ?? m.anonymous()}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {m.detail_floor({ n: p.floor })}
-                  </span>
-                </div>
-                <p
-                  className={`mt-1 whitespace-pre-wrap ${p.deleted ? 'text-sm text-muted-foreground italic' : ''}`}
-                >
-                  {p.deleted ? m.detail_deleted() : p.bodyMd}
-                </p>
-              </li>
-            ))}
-          </ol>
         )}
+
+        <div className="mt-6 flex flex-wrap items-center gap-3 text-sm">
+          {user && user.id !== resource.uploaderId && (
+            <ReportDialog
+              action={localizeHref(`/kourindou/${resource.slug}`)}
+              targetKind="resource"
+              targetId={resource.id}
+              variant="outline"
+            />
+          )}
+          <Link
+            to={localizeHref('/shrine')}
+            className="text-muted-foreground underline-offset-4 hover:underline"
+          >
+            {m.shrine_back_to_shrine()} →
+          </Link>
+        </div>
       </section>
 
       {user?.role === 'admin' && <AdminZone id={resource.id} />}

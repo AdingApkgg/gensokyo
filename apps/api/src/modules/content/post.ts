@@ -124,7 +124,9 @@ export async function listPosts(
   fromFloor?: number,
 ): Promise<PostPage> {
   // 吸附到页边界：客户端传第 137 楼，返回的是含它的那一页
-  const raw = fromFloor && fromFloor > 0 ? fromFloor : 1
+  // 越界的 from 吸附到最后一页：?floor=99999 不该渲染成「没有楼层」而实际有 58 层
+  const ceiling = Math.max(1, t.floorSeq)
+  const raw = Math.min(fromFloor && fromFloor > 0 ? fromFloor : 1, ceiling)
   const from = Math.floor((raw - 1) / POSTS_PAGE_SIZE) * POSTS_PAGE_SIZE + 1
 
   const rows = await db

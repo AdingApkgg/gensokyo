@@ -18,8 +18,10 @@ import { MAX_MENTIONS_PER_POST } from './enums'
  * 后顾无从判断的情况。用 `[a-z]` 而不是 `\p{L}`，否则「谢谢 @reimu.好」
  * 会被误拒。
  */
-const MENTION =
+export const MENTION_RE =
   /(?<![\p{L}\p{N}_@])@([a-z0-9][a-z0-9_]{1,19})(?![a-z0-9_])(?!\.[a-z])/gu
+// 内部沿用短名；对外导出的名字说明它是**唯一**的那份，web 渲染 @ 用的也是它
+const MENTION = MENTION_RE
 
 /**
  * 这些节点里的文字**不算提及**：
@@ -37,7 +39,7 @@ const MENTION =
  * 「发得出通知但渲染后看不见」是本站最没有防御的失败模式：被 @ 的人点进来
  * 找不到痕迹，版主看渲染结果也拿不到可处置的证据，而本站明确不做私信与拉黑。
  */
-const OPAQUE = new Set([
+export const MENTION_OPAQUE_NODES = new Set([
   'code',
   'inlineCode',
   'html',
@@ -75,7 +77,7 @@ export function extractMentions(md: string): string[] {
     if (full) return false
     // 整棵子树跳过：link 的 children 是可见的，但 url/title 不是，
     // 而 @ 出现在可见 children 里时它本来就是链接文字的一部分，不该当提及
-    if (OPAQUE.has(node.type)) return 'skip'
+    if (MENTION_OPAQUE_NODES.has(node.type)) return 'skip'
     if (node.type !== 'text') return
 
     for (const m of node.value.matchAll(MENTION)) {
