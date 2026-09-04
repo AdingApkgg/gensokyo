@@ -10,7 +10,7 @@
   - Meilisearch（@57700）与 MinIO（@59000，控制台 59001）跑 gensokyo 专属实例——前者的数据库格式与引擎版本强绑定，后者存的是本项目自己的图片
 - 存储分流：**大型资源走外链镜像**（网盘/直链/磁链，存 `resource_file.url`），**小图走自建 MinIO**（封面、头像 ≤5MB，经 `/api/uploads/image` 代理上传，URL 存 `coverUrl`/`avatarUrl`；文件头校验，不信 Content-Type）。未引用图片由 `apps/api/scripts/gc-images.ts` 白名单巡检清理
 - 生产才用容器：`deploy/compose.yml`。有状态服务**绝不用 `:latest`**；postgres/redis 固定大版本，Meilisearch 固定次版本（跨次版本需迁移 DB）
-- i18n：Paraglide JS，消息在 `apps/web/messages/{zh,ja,en}.json`，代码里一律 `m.key()`，不写裸字符串；zh 无 URL 前缀，ja/en 走 `/ja` `/en`；路由用 `localizeHref()`
+- i18n：Paraglide JS，消息在 `apps/web/messages/{zh,ja,en}.json`，代码里一律 `m.key()`，不写裸字符串；zh 无 URL 前缀，ja/en 走 `/ja` `/en`；路由用 `localizeHref()`。**改完消息跑 `bun run check-messages`**——Paraglide 缺 key 只报警告不挡构建，中文站会冒出一句日文
 - UI：shadcn `radix-nova`（Radix 底座，组合用 `asChild` 而非 `render`）；主题 token 在 `apps/web/app/app.css`（白玉楼 / 深夜幻想乡）
 - auth：better-auth 挂 `/api/auth/*`；SSR 取会话要手动转发 cookie（见 root loader 的 `createClient(url, { headers: { cookie } })`）；浏览器端 authClient 的 baseURL 必须在 window 存在时才拼 origin
 - 香霖堂（M3，已完成）约定：
@@ -20,7 +20,7 @@
   - zod 的 `.partial()` **不移除 `.default()`**——更新用的 schema 必须逐字段重建，否则没传的字段会被写成空值
   - 校验用 `validate()` 而非裸 `zValidator`，`:id` 路由要挂 `entityIdParam`，否则非 UUID 会 500 逃出错误信封
   - 前端错误按 `error.code` 查 Paraglide 文案，api 不返回人类可读消息
-- 博丽神社（M4，进行中）约定：
+- 博丽神社（M4，已完成）约定：
   - **可见性只有一个来源**：`apps/api/src/modules/content/visibility.ts` 的 `visibleTopicWhere()`（表达式，给列表路径）与 `loadVisibleTopic()`（函数，给取单行路径）。只有函数不够——列表路径（最新流 / `/u/:handle` / 通知收件箱）必然各写一遍 WHERE，那就是漂移的源头。**新增任何能返回 `post` 行或 `topic.title` 的端点，必须回答「它用的是哪一份 `visibleTopicWhere()`」**
   - `content/post.ts` 的函数一律收 `TopicView` 而非裸 `topicId`，让「没过闸就拿不到参数」成为编译期事实
   - **`isSelf(actor, ownerId)` 与 `isOwnerOrStaff(actor, ownerId)` 不可混用**：编辑他人正文永远禁止，staff 也不行。`isOwnerOrStaff` 在仓库里已出现 6 次且全部是「作者或 staff」，所以正确写法要有更短的名字
@@ -31,6 +31,7 @@
   - **任何 PR 里出现 `rehype-raw` 都是安全事故**
   - **handle 不可逆**：它同时进 `/u/:handle` 与已发布帖子的正文，改动等于死链 + 重写历史正文。`^[a-z0-9][a-z0-9_]{1,19}$`，NOT NULL，从 `user.id` 派生
   - 版块 slug 是对外 URL，六值闭合在 `packages/shared/src/shrine/enums.ts`，DB 侧由一条 CHECK 兜底（不建 `board` 表）
-  - **测试必须接 `apps/api/src/test-support.ts` 的 track/cleanup**——测试打的是共享开发库，不是一次性容器
-- 常用脚本：`bun run e2e`（端到端验收 23 项）、`reindex`（Meili 全量重建）、`gc:images`（未引用图片巡检，带白名单熔断）、`seed:demo*`（演示数据）
+  - **测试必须接 `@gensokyo/db/testing`（`packages/db/src/testing.ts`）的 track/cleanup**——测试打的是共享开发库，不是一次性容器。删账号前要先删它发的 `report`：`reporter_id` 是 ON DELETE SET NULL，留下的孤儿 open 举报会永远堆在 `/dash/reports`（真攒过 59 条）
+  - 开场内容（六篇引导帖 + 站规）的编辑源是 `docs/product/2026-08-30-shrine-seed-content.md`，生成到 `seed-shrine-content.ts` 后由 `bun run seed:shrine` 入库；幂等键是「版块 + 标题 + 种子账号」，**改正文重跑即可，改标题会当成新帖**
+- 常用脚本：`bun run e2e`（端到端验收 40 项，跑完自清理，`E2E_KEEP=1` 保留）、`check-messages`（三语 key 审计）、`reindex`（Meili 全量重建）、`gc:images`（未引用图片巡检，带白名单熔断）、`seed:shrine`（开场内容）、`seed:demo*`（演示数据）
 - 设计文档：docs/superpowers/specs/；产品文档：docs/product/；实施计划：docs/superpowers/plans/；调研与审计：docs/superpowers/research/；legacy/ 是只读参考
