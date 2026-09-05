@@ -1,6 +1,6 @@
 import type { PostView } from '@gensokyo/shared'
 import { useCallback, useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import {
   Pagination,
   PaginationContent,
@@ -9,6 +9,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '~/components/ui/pagination'
+import { replyTarget } from '~/lib/discussion-nav'
 import { pageWindow } from '~/lib/paging'
 import { m } from '~/paraglide/messages'
 import { localizeHref } from '~/paraglide/runtime'
@@ -58,6 +59,32 @@ export function Discussion({
   // 传给 PostForm 的回调必须稳定：它进了那边 effect 的依赖
   const clearParent = useCallback(() => setParent(null), [])
 
+  const navigate = useNavigate()
+
+  /**
+   * 发帖成功后把用户带到他刚发的那一楼。
+   *
+   * 不做这件事的话，主题超过 50 层（POSTS_PAGE_SIZE）之后新楼根本不在当前
+   * 楼层窗口里——revalidate 回来的列表看不到它，观感等同于发失败。
+   */
+  const onPosted = useCallback(
+    (floor: number) => {
+      const target = replyTarget(floor, page.from, page.pageSize)
+      if (target.kind === 'navigate') {
+        navigate(`${pathname}?floor=${target.from}#p${floor}`)
+        return
+      }
+      // 已在本页：等 revalidate 把新楼渲染出来再滚过去
+      requestAnimationFrame(() => {
+        document.getElementById(`p${floor}`)?.scrollIntoView({
+          block: 'center',
+          behavior: prefersReduced() ? 'auto' : 'smooth',
+        })
+      })
+    },
+    [navigate, pathname, page.from, page.pageSize],
+  )
+
   /**
    * 引用只设 parentId，**不往正文里塞任何文本**。引用块由服务端按 parentId
    * 现查（摘要不快照，一次软删就能让它从所有引用处消失）；往正文里注入
@@ -67,7 +94,7 @@ export function Discussion({
     setParent(p)
     document
       .getElementById('reply-form')
-      ?.scrollIntoView({ behavior: 'smooth' })
+      ?.scrollIntoView({ behavior: prefersReduced() ? 'auto' : 'smooth' })
   }, [])
 
   const pages = Math.max(1, Math.ceil(page.total / page.pageSize))
@@ -129,6 +156,7 @@ export function Discussion({
             topicId={topicId}
             parentId={parent?.id ?? null}
             onClearParent={clearParent}
+            onPosted={onPosted}
             draftKey={`shrine:draft:topic:${topicId}`}
             compact
           />
@@ -144,5 +172,13 @@ export function Discussion({
         )}
       </div>
     </div>
+  )
+}
+
+/** MotionConfig 管不到原生滚动 API，reduced-motion 要自己判 */
+function prefersReduced() {
+  return (
+    typeof matchMedia === 'function' &&
+    matchMedia('(prefers-reduced-motion: reduce)').matches
   )
 }
