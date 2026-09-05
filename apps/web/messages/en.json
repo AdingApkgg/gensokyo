@@ -26,6 +26,8 @@
   "auth_logout": "Log out",
   "nav_spellcard": "Spell Card",
   "nav_music": "Music",
+  "nav_menu": "Menu",
+  "nav_menu_close": "Close menu",
   "footer_disclaimer": "A Touhou Project fan platform, unaffiliated with Team Shanghai Alice. Fan works follow the official derivative-work guidelines.",
   "home_tagline": "Resource & data infrastructure for Touhou fans",
   "home_enter": "Enter",

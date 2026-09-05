@@ -188,6 +188,109 @@ html.dark {
   }
 }
 
+@layer components {
+  /* 正文排版。Markdown.tsx 一直挂着 .markdown 这个类，但此前全站没有任何
+     对应规则，正文的标题/引用/列表/表格全被 preflight 抹平——工具栏的
+     「❝」按钮产出的是看不见的格式。
+     不装 @tailwindcss/typography：它自带一整套与白玉楼/深夜幻想乡无关的
+     配色与字号，覆盖成本高于自己写这三十行。 */
+  .markdown {
+    line-height: 1.75;
+  }
+  .markdown > * + * {
+    margin-top: 0.75em;
+  }
+  /* h1-h4 的 margin-top 对首个子元素也生效：以标题开头的帖子顶部会多出
+     24px 空白。.markdown 自己不留内边距，这个位置该是 0。 */
+  .markdown > :first-child {
+    margin-top: 0;
+  }
+  .markdown h1,
+  .markdown h2,
+  .markdown h3,
+  .markdown h4 {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    line-height: 1.35;
+    margin-top: 1.5em;
+  }
+  .markdown h1 {
+    font-size: 1.5rem;
+  }
+  .markdown h2 {
+    font-size: 1.25rem;
+  }
+  .markdown h3 {
+    font-size: 1.0625rem;
+  }
+  .markdown h4 {
+    font-size: 1rem;
+  }
+  .markdown a {
+    color: var(--primary);
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+  .markdown blockquote {
+    border-inline-start: 2px solid var(--border);
+    padding-inline-start: 0.875rem;
+    color: var(--muted-foreground);
+  }
+  .markdown ul,
+  .markdown ol {
+    padding-inline-start: 1.5rem;
+  }
+  .markdown ul {
+    list-style: disc;
+  }
+  .markdown ol {
+    list-style: decimal;
+  }
+  .markdown li::marker {
+    color: var(--muted-foreground);
+  }
+  .markdown li + li {
+    margin-top: 0.25em;
+  }
+  .markdown code {
+    background: var(--muted);
+    border-radius: var(--radius-sm);
+    padding: 0.1em 0.35em;
+    font-size: 0.875em;
+  }
+  .markdown pre {
+    background: var(--muted);
+    border-radius: var(--radius-md);
+    padding: 0.875rem;
+    overflow-x: auto;
+  }
+  .markdown pre code {
+    background: transparent;
+    padding: 0;
+    font-size: 0.8125rem;
+  }
+  .markdown hr {
+    border-top: 1px solid var(--border);
+    margin-block: 1.5em;
+  }
+  .markdown table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875em;
+    display: block;
+    overflow-x: auto;
+  }
+  .markdown :is(th, td) {
+    border: 1px solid var(--border);
+    padding: 0.4rem 0.6rem;
+    text-align: start;
+  }
+  .markdown th {
+    background: var(--muted);
+    font-weight: 600;
+  }
+}
+
 @layer utilities {
   /* 数据密集区域：资源列表、数据表、搜索结果。
      实测惯例——Moriya Shrine 每行 90px 塞 9 项元数据、TouhouDB 正文 12.8px；
@@ -202,5 +305,40 @@ html.dark {
   }
   [data-density="compact"] :is(h2, h3) {
     font-size: 0.9375rem;
+  }
+}
+
+/* 减弱动效：只掐掉位移与缩放，保留淡入淡出与颜色过渡。
+   **整块必须不带 @layer**：设 --tw-enter-* 与 --tw-exit-* 的工具类在 @layer utilities，
+   Tailwind v4 层序 theme→base→components→utilities 晚层恒胜，放进 @layer base 会完全失效
+   （T0 曾犯过这个错，最终审查实测抓出）；放进 @layer utilities 也不行——我们的 `*`
+   特异性 0,0,0 仍输给工具类选择器 0,1,0。未分层的常规声明胜过任何分层声明。
+
+   三条写法上的选择也都是刻意的：
+   1) 选择器必须是 `*, *::before, *::after`——仓库弹层的类名 token 是 `data-open:animate-in`，
+      `:where(.animate-in)` 一个元素都选不中。
+   2) 不能用 `animation: none`——Radix 靠 animationend 卸载弹层，掐掉动画会让弹层卡住不消失。
+      归零变量保留淡入淡出、只掐位移与缩放。
+   3) 不能用 `transition-duration: .01ms !important`——会连颜色过渡一起杀，与后续
+      MotionConfig reducedMotion="user"（只关 transform、保留 opacity）的语义打架。 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    --tw-enter-translate-x: 0;
+    --tw-enter-translate-y: 0;
+    --tw-exit-translate-x: 0;
+    --tw-exit-translate-y: 0;
+    --tw-enter-scale: 1;
+    --tw-exit-scale: 1;
+    --tw-enter-rotate: 0;
+    --tw-exit-rotate: 0;
+    --tw-enter-blur: 0;
+    --tw-exit-blur: 0;
+    scroll-behavior: auto !important;
+  }
+  /* 骨架屏保留一个低幅度脉冲：完全静止的话用户分不清是在加载还是坏了 */
+  .animate-pulse {
+    animation-duration: 3s;
   }
 }

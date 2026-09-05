@@ -1,6 +1,7 @@
 import { Bell, UserRound } from 'lucide-react'
 import { Link, NavLink, useRevalidator } from 'react-router'
 import { LangSwitcher } from '~/components/lang-switcher'
+import { MobileNav } from '~/components/mobile-nav'
 import { ThemeToggle } from '~/components/theme-toggle'
 import { Button } from '~/components/ui/button'
 import {
@@ -27,7 +28,7 @@ export type SessionUser = {
   unread: number
 }
 
-const nav = [
+export const NAV_ITEMS = [
   { path: '/kourindou', label: () => m.nav_kourindou() },
   { path: '/shrine', label: () => m.nav_shrine() },
   { path: '/chronicle', label: () => m.nav_chronicle() },
@@ -45,7 +46,8 @@ export function SiteHeader({ user }: { user: SessionUser | null }) {
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/85 backdrop-blur">
-      <div className="mx-auto flex h-14 max-w-6xl items-center gap-6 px-4">
+      <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 md:gap-6">
+        <MobileNav items={NAV_ITEMS} />
         <Link
           to={localizeHref('/')}
           className="font-heading text-lg font-bold tracking-wide"
@@ -53,7 +55,7 @@ export function SiteHeader({ user }: { user: SessionUser | null }) {
           {m.site_name()}
         </Link>
         <nav className="hidden items-center gap-1 md:flex">
-          {nav.map((item) => (
+          {NAV_ITEMS.map((item) => (
             <NavLink
               key={item.path}
               to={localizeHref(item.path)}

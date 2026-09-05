@@ -3,6 +3,7 @@ import { useFetcher } from 'react-router'
 import { Button } from '~/components/ui/button'
 import { Textarea } from '~/components/ui/textarea'
 import { errorMessage } from '~/lib/api-error'
+import type { DiscussionResult } from '~/lib/discussion-action'
 import { m } from '~/paraglide/messages'
 import { getLocale } from '~/paraglide/runtime'
 import { Markdown } from './Markdown'
@@ -20,12 +21,12 @@ type Props = {
   initial?: string
   /** 草稿存 localStorage 的键；不给就不存（编辑不存草稿） */
   draftKey?: string
+  /** 发帖成功后回调，带上服务端分配的楼层号。编辑不给（没有新楼层） */
+  onPosted?: (floor: number) => void
   onDone?: () => void
   onCancel?: () => void
   compact?: boolean
 }
-
-type Result = { ok: boolean; code?: string; draft?: string }
 
 /**
  * 发帖 / 编辑框。textarea + Markdown 工具栏 + 预览 + 草稿 + 传图。
@@ -45,11 +46,12 @@ export function PostForm({
   postId,
   initial = '',
   draftKey,
+  onPosted,
   onDone,
   onCancel,
   compact,
 }: Props) {
-  const fetcher = useFetcher<Result>()
+  const fetcher = useFetcher<DiscussionResult>()
   const [body, setBody] = useState(initial)
   const [preview, setPreview] = useState(false)
   const [restored, setRestored] = useState(false)
@@ -63,7 +65,7 @@ export function PostForm({
    * 渲染都是新引用——不加守卫，成功效应会在此后每一次渲染时重跑，把用户正在
    * 打的字清掉：第一次回复之后这个框就再也打不进字。浏览器实测抓出来的。
    */
-  const handledResult = useRef<Result | undefined>(undefined)
+  const handledResult = useRef<DiscussionResult | undefined>(undefined)
 
   // 草稿恢复：只在客户端、只一次
   useEffect(() => {
@@ -103,9 +105,12 @@ export function PostForm({
         localStorage.removeItem(draftKey)
       } catch {}
     }
+    if (fetcher.data.ok && typeof fetcher.data.floor === 'number') {
+      onPosted?.(fetcher.data.floor)
+    }
     onClearParent?.()
     onDone?.()
-  }, [fetcher.state, fetcher.data, draftKey, onClearParent, onDone])
+  }, [fetcher.state, fetcher.data, draftKey, onClearParent, onDone, onPosted])
 
   function wrap(before: string, after = before, placeholder = '') {
     const el = ref.current

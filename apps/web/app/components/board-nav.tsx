@@ -23,7 +23,7 @@ export function BoardNav({ current }: { current?: BoardSlug }) {
           aria-current={b === current ? 'page' : undefined}
         >
           <Card
-            className={`h-full transition-colors hover:border-primary/50 ${b === current ? 'border-primary' : ''}`}
+            className={`h-full transition-shadow ${b === current ? 'ring-2 ring-primary hover:ring-primary' : 'hover:ring-primary/50'}`}
           >
             <CardHeader>
               <CardTitle className="font-heading text-base">
