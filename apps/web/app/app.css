@@ -56,6 +56,56 @@ html.dark {
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* 三材 Sanzai —— 墨・纸・水
+   这三条曲线不是挑好看的库存缓动，是从物理拟合来的；改数值之前请读
+   docs/superpowers/specs/2026-09-05-motion-atmosphere-design.md 第四节。
+
+   **必须用不带 inline 的 @theme**：inline 模式下变量不会真正落到 :root，
+   而 --settle-y 这类几何 token 需要在运行时被 var() 读到。
+
+   水（青海波）的正确缓动是 linear —— 这是**禁令不是 token**：给背景波加
+   ease-in-out，循环接缝处会出现肉眼可见的「抽泵」。不要为它立一个条目，
+   否则一定有人拿去当通用缓动使。 */
+@theme {
+  /* 墨·洇：Lucas–Washburn 毛细渗透 L ∝ √t 的拟合（RMSE 0.0001）。
+     前 10% 时间走完 32%、前 25% 走完 50%，之后是极长的尾——落笔猛、越洇越慢。
+     用于一切**出现类**的颜色/不透明度：hover 底色、ring 变色、focus ring、badge、tooltip。 */
+  --ease-sumi: cubic-bezier(0, 0.408, 0.501, 0.75);
+
+  /* 纸·落：临界阻尼 ζ=1 阶跃响应在 y(T)=97.5% 处的拟合（RMSE 0.0026）。
+     p(.25)=.42、p(.5)=.78、p(.75)=.95——最后 5% 用掉 25% 的时间，这就是「长而软」。
+     ζ=1 是选定的：纸纤维内阻尼极高，掀起一角松手不会来回抖。**全域禁止 overshoot**。
+     用于一切 transform 归位。 */
+  --ease-washi: cubic-bezier(0.212, 0.091, 0.259, 0.953);
+
+  /* 笔·运：梯形速度剖面（加速 20% / 匀速 60% / 减速 20%）的位置积分，p(.5)=0.500 严格对称。
+     **只**用于「一笔画出来」的几何延展：下划线 scaleX、分隔线铺开、进度条。
+     关键区分：笔画的**长度**由手速决定（匀速），笔画的**浓淡**才由毛细决定（√t）。
+     把两者混成一条曲线，是多数所谓「墨感」动效失真的原因。 */
+  --ease-fude: cubic-bezier(0.244, 0, 0.756, 1);
+
+  /* 墨的时长是单值不做阶梯：毛细渗透深度是材料常数，与元素多大无关。 */
+  --transition-duration-sumi: 180ms;
+
+  /* 纸的时长按**纸的尺寸**挑档，不按「这个交互重不重要」：
+     sm = badge / button / 图标（<40px）
+     md = 卡片 / 列表行 / 输入框（40–200px）
+     lg = dialog / 页面区块（>200px）
+     公式 T(L) = 180ms · √(L/40)，上限 420ms。
+     元规则：**曲线取真值，标度取压缩**——形状忠于物理（薄板基频 f ∝ 1/L²），
+     但标度指数从 L² 压到 L^0.5，否则 dialog 要等 4.5 秒。压缩是设计决定，不假装它是物理。 */
+  --transition-duration-washi-sm: 180ms;
+  --transition-duration-washi-md: 280ms;
+  --transition-duration-washi-lg: 400ms;
+
+  /* 收编：把出厂默认（150ms / cubic-bezier(0.4,0,0.2,1)）换成墨。
+     仓库现存所有裸 `transition-colors` / `transition-shadow` 零 diff 全部改用墨的曲线。
+     这两行必须写字面值而不是 var(--ease-sumi)——它们在构建期被 Tailwind 读取，
+     不是运行时求值。改上面的 --ease-sumi 时记得同步这里。 */
+  --default-transition-duration: 180ms;
+  --default-transition-timing-function: cubic-bezier(0, 0.408, 0.501, 0.75);
+}
+
 /* 白玉楼 —— 和纸暖白 · 墨 · 朱红 · 山吹金 */
 :root {
   --background: oklch(0.975 0.006 84);
@@ -93,6 +143,21 @@ html.dark {
   --chart-4: oklch(0.55 0.14 300);
   --chart-5: oklch(0.6 0.1 150);
   --radius: 0.375rem;
+
+  /* 三材的几何量。这些不是 Tailwind 命名空间，只是给 CSS 读的普通变量。 */
+
+  /* 全站**唯一**的入场位移量，方向恒为 +y→0（纸从上方落下贴到桌面）。
+     绝不给第二个值——一旦出现 12px/24px，「远近」就被编码进了 transform，
+     而 reduced-motion 会把 transform 全部关掉，那部分信息就丢了。
+
+     **T1–T2 不使用它**：本期所有「到达」都由原生 View Transition 独占（见
+     全局约束），没有任何元素需要 settle。这里先立着是为了 T3 的 motion 层，
+     那时非导航到达（fetcher 结果、展开收起、增删）才需要它。
+     在 T3 之前谁用到它，八成是在给内容层写入场动画——那是红线。 */
+  --settle-y: 6px;
+  --lift-y: -2px; /* 卡片 hover 抬起 */
+  --dogear: 14px; /* 折角三角边长，transform-origin 在角点 */
+  --wave-period: 22px; /* 近层瓦片高，来自 body::before 的 background-size: 44px 22px */
   --sidebar: oklch(0.96 0.008 84);
   --sidebar-foreground: oklch(0.26 0.018 45);
   --sidebar-primary: oklch(0.57 0.205 30);
