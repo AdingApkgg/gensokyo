@@ -209,9 +209,14 @@ Expected: ≥ 1
 Run:
 ```bash
 cd /Users/i/Code/th/apps/web && \
-  grep -o "prefers-reduced-motion[^}]*}" build/client/assets/*.css | grep -c "animation:none"
+  grep -o "@media (prefers-reduced-motion:reduce){\*,:before,:after{[^}]*}" build/client/assets/*.css \
+  | grep -c "animation:none"
 ```
 Expected: 0（**必须是 0**——出现 `animation:none` 说明有人改用了核弹写法，会卡住 Radix 弹层）
+
+**断言必须锚定 `{*,:before,:after{` 开头，只看我们自己那一块。** tw-animate-css@1.4.0 自带
+一个 `@media (prefers-reduced-motion:reduce){.shimmer{…animation:none}}`（给一个本项目没用
+的类），扫全文件的写法会把它算进来，永远不可能是 0。
 
 - [ ] **Step 4: 浏览器实测弹层仍能正常关闭**
 
