@@ -107,16 +107,27 @@ const components: Components = {
     )
   },
   img({ src, alt, title }) {
-    // 远程图片不带 referrer；lazy 让一屏几十张图的主题不至于一次全拉
+    /**
+     * 远程图片不带 referrer；lazy 让一屏几十张图的主题不至于一次全拉。
+     *
+     * 外面这层固定 3:2 的盒子是**尺寸预留**：远程图的真实尺寸我们不知道，
+     * 没有它，图片到达时会把下方内容整体顶开——这是站内一半布局跳变的源头。
+     * 代价是竖图会在盒子里缩小居中；要精确预留得走一个知道尺寸的图片代理。
+     * span 不是 div：img 渲染器的输出会落在 <p> 里，块级元素会被 HTML 解析器
+     * 提到 <p> 外面，造成水合不一致。
+     */
     return (
-      <img
-        src={src}
-        alt={alt ?? ''}
-        title={title}
-        loading="lazy"
-        referrerPolicy="no-referrer"
-        className="max-h-[32rem] rounded-md"
-      />
+      <span className="my-1 block aspect-3/2 max-h-[32rem] overflow-hidden rounded-md bg-muted/40">
+        <img
+          src={src}
+          alt={alt ?? ''}
+          title={title}
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          className="size-full object-contain"
+        />
+      </span>
     )
   },
 }
