@@ -200,6 +200,11 @@ html.dark {
   .markdown > * + * {
     margin-top: 0.75em;
   }
+  /* h1-h4 的 margin-top 对首个子元素也生效：以标题开头的帖子顶部会多出
+     24px 空白。.markdown 自己不留内边距，这个位置该是 0。 */
+  .markdown > :first-child {
+    margin-top: 0;
+  }
   .markdown h1,
   .markdown h2,
   .markdown h3,

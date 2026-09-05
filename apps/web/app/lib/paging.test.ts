@@ -22,6 +22,10 @@ describe('pageWindow', () => {
     expect(pageWindow(1, 1)).toEqual([1])
   })
 
+  test('total 不足 1（如空列表算出的 0 页）：clamp 到 1 页', () => {
+    expect(pageWindow(1, 0)).toEqual([1])
+  })
+
   test('结果永远升序且无重复', () => {
     const w = pageWindow(5, 30)
     expect(w).toEqual([...new Set(w)].sort((a, b) => a - b))

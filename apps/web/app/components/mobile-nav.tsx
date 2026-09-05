@@ -40,7 +40,10 @@ export function MobileNav({ items }: { items: readonly Item[] }) {
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/20 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0" />
         <DialogPrimitive.Content
-          aria-label={m.nav_menu()}
+          // Radix 已把 aria-labelledby 接到下面的 Title，Content 上再给
+          // aria-label 按 ARIA 规范会被忽略，是死重量；显式传 undefined 的
+          // aria-describedby 消掉 Radix 在 dev 下「缺少 Description」的常驻警告
+          aria-describedby={undefined}
           className="fixed inset-y-0 start-0 z-50 flex w-64 max-w-[80vw] flex-col gap-1 bg-popover p-4 text-popover-foreground shadow-lg ring-1 ring-foreground/10 outline-none data-open:animate-in data-open:slide-in-from-left data-closed:animate-out data-closed:slide-out-to-left"
         >
           <DialogPrimitive.Title className="mb-2 font-heading text-lg font-bold">
@@ -50,6 +53,9 @@ export function MobileNav({ items }: { items: readonly Item[] }) {
             <NavLink
               key={item.path}
               to={localizeHref(item.path)}
+              // 点击已经在的那一项时 pathname 不变，上面那条 pathname effect
+              // 不会触发，抽屉会留在屏幕上——两条关闭路径并存，互不干扰
+              onClick={() => setOpen(false)}
               className={({ isActive }) =>
                 `rounded-md px-3 py-2 text-sm transition-colors hover:bg-muted ${
                   isActive

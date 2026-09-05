@@ -22,8 +22,9 @@ describe('replyTarget', () => {
     expect(replyTarget(120, 101, 50)).toEqual({ kind: 'inpage' })
   })
 
-  test('软删造成楼层序列有空洞时，按页边界吸附而不是按计数', () => {
-    // floorSeq 是序列不是计数：第 3 页的页首恒为 101，与实际存活楼数无关
+  test('跨两页的边界计算：新楼落在第 3 页中段，落到该页页首而非页尾', () => {
+    // replyTarget 没有「存活楼数」入参，结构上区分不了软删造成的空洞——
+    // 这条验的是纯粹的 from/pageSize 边界算术，不是空洞场景本身
     expect(replyTarget(103, 1, 50)).toEqual({ kind: 'navigate', from: 101 })
   })
 })
