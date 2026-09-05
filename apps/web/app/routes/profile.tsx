@@ -60,7 +60,7 @@ export default function Profile({ loaderData }: Route.ComponentProps) {
             {m.profile_no_posts()}
           </p>
         ) : (
-          <ol className="divide-y border-y">
+          <ol className="ink-divide border-y">
             {posts.map((p) => {
               const href = p.topic.resource
                 ? `${localizeHref(`/kourindou/${p.topic.resource.slug}`)}?floor=${p.floor}#p${p.floor}`
