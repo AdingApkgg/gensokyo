@@ -9,6 +9,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '~/components/ui/pagination'
+import { pageWindow } from '~/lib/paging'
 import { m } from '~/paraglide/messages'
 import { localizeHref } from '~/paraglide/runtime'
 import { PostForm } from './PostForm'
@@ -144,12 +145,4 @@ export function Discussion({
       </div>
     </div>
   )
-}
-
-/** 当前页前后各两页，首尾常在 */
-function pageWindow(current: number, total: number): number[] {
-  const set = new Set<number>([1, total])
-  for (let p = current - 2; p <= current + 2; p++)
-    if (p >= 1 && p <= total) set.add(p)
-  return [...set].sort((a, b) => a - b)
 }
