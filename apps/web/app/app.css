@@ -124,6 +124,19 @@ html.dark {
     oklch(0.26 0.018 45 / 0.05) 21px 22px,
     transparent 22px
   );
+  /* 青海波远层：同一母题的第二个尺度（2×），线宽不变、对比度再降一半。
+     两个不同尺度的波列同向异速滚动会产生缓慢的莫尔/视差——这是真实水面的
+     深度线索，也是唯一一个「一眼认出这是那个站」的东西。 */
+  --bg-pattern-far: radial-gradient(
+    circle at 50% 100%,
+    transparent 18px,
+    oklch(0.26 0.018 45 / 0.025) 18px 20px,
+    transparent 20px 30px,
+    oklch(0.26 0.018 45 / 0.025) 30px 32px,
+    transparent 32px 42px,
+    oklch(0.26 0.018 45 / 0.025) 42px 44px,
+    transparent 44px
+  );
   --popover-foreground: oklch(0.26 0.018 45);
   --primary: oklch(0.57 0.205 30);
   --primary-foreground: oklch(0.985 0.006 84);
@@ -185,6 +198,16 @@ html.dark {
     oklch(0.92 0.012 84 / 0.055) 21px 22px,
     transparent 22px
   );
+  --bg-pattern-far: radial-gradient(
+    circle at 50% 100%,
+    transparent 18px,
+    oklch(0.92 0.012 84 / 0.028) 18px 20px,
+    transparent 20px 30px,
+    oklch(0.92 0.012 84 / 0.028) 30px 32px,
+    transparent 32px 42px,
+    oklch(0.92 0.012 84 / 0.028) 42px 44px,
+    transparent 44px
+  );
   --popover-foreground: oklch(0.92 0.012 84);
   --primary: oklch(0.65 0.19 30);
   --primary-foreground: oklch(0.985 0.006 84);
@@ -243,6 +266,24 @@ html.dark {
     background-size: cover, 44px 22px;
     background-position: center, center;
     background-repeat: no-repeat, repeat;
+  }
+
+  /* 青海波远层。挂 body::after——它目前是空的，所以零新增 DOM。
+     z-index 比近层再低一层，永远在内容之下。
+     上下各出血 24px：位移最多一个周期（44px），出血保证边缘不会露白。 */
+  body::after {
+    content: "";
+    position: fixed;
+    inset: -24px 0;
+    z-index: -2;
+    pointer-events: none;
+    background-image: var(--bg-pattern-far);
+    background-size: 88px 44px;
+    background-repeat: repeat;
+    /* 常驻图层提升：全屏图层约 8MB 显存，painted 一次之后只做合成。
+       比 will-change 的开/关更稳——后者会在滚动开始那一帧创建/销毁图层，
+       正好把抖动放在最不能抖的时刻。 */
+    transform: translate3d(0, 0, 0);
   }
 
   /* 内容卡半透明 + 背景模糊，让底纹透上来 */
@@ -485,6 +526,34 @@ html.dark {
   }
   [data-density="compact"] :is(h2, h3) {
     font-size: 0.9375rem;
+  }
+}
+
+/* 青海波远层的滚动驱动漂移。
+   **必须用 @supports 包住**：不支持 animation-timeline 的浏览器会忽略该属性、
+   却照常把 animation 当成基于时间的动画跑——那就变成了空闲循环，页面静止时
+   持续让每张 backdrop-filter 卡重算模糊，正是我们要避免的东西。
+   支持度：Chrome/Edge 115+、Safari 26+（含 iOS）、Firefox 158+，约 87%。
+   其余浏览器得到一个静止的远层，与 reduced-motion 下表现一致，可接受。
+
+   与 spec §4.3 的一处刻意偏离：spec 写的是「位移 = scrollY × 0.06」这样的
+   固定速率，而原生 scroll timeline 把进度归一化到滚动范围，表达不了速率。
+   改为「整页滚动范围内恰好漂移一个远层周期（44px）」——首尾无缝，代价是
+   漂移速率随页面长度变化。 */
+@keyframes wave-drift {
+  to {
+    /* 远层周期是近层的两倍（88×44 对 44×22），所以位移一个远层周期
+       = --wave-period × 2。写成 calc 而不是字面 44px，改 token 时不会漏。 */
+    transform: translate3d(0, calc(var(--wave-period) * -2), 0);
+  }
+}
+
+@supports (animation-timeline: scroll()) {
+  @media not (prefers-reduced-motion: reduce) {
+    body::after {
+      animation: wave-drift linear both;
+      animation-timeline: scroll(root block);
+    }
   }
 }
 
