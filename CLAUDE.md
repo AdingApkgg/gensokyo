@@ -41,5 +41,9 @@
   - 分页窗口算法只有一份：`app/lib/paging.ts` 的 `pageWindow`，香霖堂列表与讨论区楼层分页共用
   - `apps/web` 已接 `bun test`；能抽成纯函数的逻辑请抽出来测（如 `lib/discussion-nav.ts` 的 `replyTarget`）
   - 移动端导航抽屉用 `radix-ui` 的 `Dialog` 做侧滑，**不装 `vaul`/`sheet`**；`<768px` 的导航入口只有它一处，改 `site-header` 时别把它弄丢
+  - 三材 token（墨・纸・水）在 `app.css` 的**不带 `inline` 的 `@theme`**：`--ease-sumi`（墨·洇，一切出现类的颜色/不透明度）/ `--ease-washi`（纸·落，一切 transform 归位，**全域禁 overshoot**，ζ=1）/ `--ease-fude`（笔·运，**只**给「一笔画出来」的几何延展如 scaleX）。水的 `linear` 是**禁令不是 token**——立成条目一定会被拿去当通用缓动使。时长按**纸的尺寸**挑档（`washi-sm/md/lg` = 180/280/400ms），不按交互重要性；墨是单值 180ms 不做阶梯。`@theme` 里两行 `--default-transition-*` 把仓库现存所有裸 `transition-*` 零 diff 收编
+  - **跨页转场用 RR8 原生 `viewTransition`（0 KB），不用 `AnimatePresence`**——RR 是 loader 完成后才提交新 location，出场动画没有时机窗口，而原生 VT 由浏览器前后各截一次快照。`::view-transition` 规则**不进任何 `@layer`**（伪元素在 UA origin，包进 layer 会被优先级问题吃掉），`bun run check-css-layers` 把这条钉成断言。**不得依赖 view transition `types`**（Firefox 首版没有）。配 `prefetch="intent"`，但**资源列表行不加**（一屏 20 行悬停预取会打出大量请求）
+  - **青海波近层（`body::before`）永远不动**（那是纸的纤维肌理，且它还挂着 `--bg-image` 槽位），远层（`body::after`，原本是空的所以零新增 DOM）走原生 scroll-driven animation。**必须用 `@supports (animation-timeline: scroll())` 包住**——不支持的浏览器会忽略该属性却照常把 `animation` 当成时间驱动动画跑，那就变成空闲循环，会让每张 `backdrop-filter` 卡持续重算高斯模糊
+  - **内容层 / 装饰层契约**（整个动效工程的支点）：装饰层必须**同时**满足 `aria-hidden="true"` 与 `pointer-events: none` 且不承载任何信息，满足了才**被允许**自由入场；**内容层首帧即终态，禁止任何 `initial` 隐藏态，无例外**。客户端导航后的到达由**原生 View Transition 独占**，motion 的 settle 只服务非导航到达。装饰性且会动的节点若待在装饰层容器之外（如 hero 的朱红界线夹在 h1 与 tagline 之间），必须自己带上这两样——破例一次就等于取消这条不变式
 - 常用脚本：`bun run e2e`（端到端验收 40 项，跑完自清理，`E2E_KEEP=1` 保留）、`check-messages`（三语 key 审计）、`reindex`（Meili 全量重建）、`gc:images`（未引用图片巡检，带白名单熔断）、`seed:shrine`（开场内容）、`seed:demo*`（演示数据）
 - 设计文档：docs/superpowers/specs/；产品文档：docs/product/；实施计划：docs/superpowers/plans/；调研与审计：docs/superpowers/research/；legacy/ 是只读参考
