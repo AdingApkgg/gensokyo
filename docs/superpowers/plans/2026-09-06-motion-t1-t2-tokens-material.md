@@ -1305,7 +1305,7 @@ EOF
 - Modify: `apps/web/app/routes/home.tsx`
 
 **Interfaces:**
-- Consumes: `--ease-fude`、`--ease-sumi`、`--transition-duration-washi-lg`、`--bg-pattern-far`
+- Consumes: `--ease-fude`（仅 `hero-rule`）、`--ease-sumi`、`--bg-pattern-far`
 - Produces: `<HeroDecor />`
 
 - [ ] **Step 1: 装饰层规则**
@@ -1348,8 +1348,12 @@ EOF
   }
 
   /* 朱红界线：--ease-fude 唯一的正当用途（一笔画出来的几何延展） */
+  /* 它虽然渲染在 HeroDecor 之外（要夹在 h1 与 tagline 之间），但仍是装饰层，
+     所以 aria-hidden 与 pointer-events 一个都不能少——「每一个装饰性的、会动的
+     节点都可证明地 aria-hidden + 不可交互」是这一层的不变式，破例一次就等于取消它。 */
   .hero-rule {
     display: block;
+    pointer-events: none;
     height: 1px;
     width: min(18rem, 60%);
     margin-inline: auto;
@@ -1444,7 +1448,7 @@ export function HeroDecor() {
       <section className="relative isolate py-20 text-center">
         <HeroDecor />
         <h1 className="text-5xl font-bold tracking-wide">{m.site_name()}</h1>
-        <span className="hero-rule mt-6" />
+        <span className="hero-rule mt-6" aria-hidden="true" />
         <p className="mt-6 text-lg text-muted-foreground">{m.home_tagline()}</p>
       </section>
 ```
