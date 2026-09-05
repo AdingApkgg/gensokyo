@@ -1372,7 +1372,7 @@ Expected: 全绿。`e2e` 是 HTTP 层验收（40 项），本期改动全在 web
 ```markdown
 - 动效与样式约定（T0 已落地，详见 docs/superpowers/specs/2026-09-05-motion-atmosphere-design.md）：
   - **卡片不能用 `border-*` 表达状态**：`card.tsx` 只有 `ring-1`，preflight 是 `border: 0 solid`，改 border 颜色是空操作（首页与六版块网格曾因此三处 hover 全无反馈）
-  - `prefers-reduced-motion` 兜底在 `app.css` 的 `@layer base`：**归零 `--tw-enter-*/--tw-exit-*` 变量**，不用 `animation: none`（Radix 靠 `animationend` 卸载弹层）
+  - `prefers-reduced-motion` 兜底在 `app.css` **文件末尾、不带任何 `@layer`**：**归零 `--tw-enter-*` 与 `--tw-exit-*` 变量**，不用 `animation: none`（Radix 靠 `animationend` 卸载弹层）。放 `@layer base` 会被 `@layer utilities` 的工具类完全盖过而失效，放 `@layer utilities` 又输给工具类的特异性——只有未分层有效，`bun run check-css-layers` 把这条钉成断言
   - `.markdown` 的排版规则在 `app.css` 的 `@layer components`，不装 typography 插件
   - 分页窗口算法只有一份：`app/lib/paging.ts` 的 `pageWindow`
   - `apps/web` 已接 `bun test`，能抽成纯函数的逻辑请抽出来测
