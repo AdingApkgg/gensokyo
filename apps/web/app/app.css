@@ -215,6 +215,104 @@ html.dark {
   }
 }
 
+@layer components {
+  /* 正文排版。Markdown.tsx 一直挂着 .markdown 这个类，但此前全站没有任何
+     对应规则，正文的标题/引用/列表/表格全被 preflight 抹平——工具栏的
+     「❝」按钮产出的是看不见的格式。
+     不装 @tailwindcss/typography：它自带一整套与白玉楼/深夜幻想乡无关的
+     配色与字号，覆盖成本高于自己写这三十行。 */
+  .markdown {
+    line-height: 1.75;
+  }
+  .markdown > * + * {
+    margin-top: 0.75em;
+  }
+  .markdown h1,
+  .markdown h2,
+  .markdown h3,
+  .markdown h4 {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    line-height: 1.35;
+    margin-top: 1.5em;
+  }
+  .markdown h1 {
+    font-size: 1.5rem;
+  }
+  .markdown h2 {
+    font-size: 1.25rem;
+  }
+  .markdown h3 {
+    font-size: 1.0625rem;
+  }
+  .markdown h4 {
+    font-size: 1rem;
+  }
+  .markdown a {
+    color: var(--primary);
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+  .markdown blockquote {
+    border-inline-start: 2px solid var(--border);
+    padding-inline-start: 0.875rem;
+    color: var(--muted-foreground);
+  }
+  .markdown ul,
+  .markdown ol {
+    padding-inline-start: 1.5rem;
+  }
+  .markdown ul {
+    list-style: disc;
+  }
+  .markdown ol {
+    list-style: decimal;
+  }
+  .markdown li::marker {
+    color: var(--muted-foreground);
+  }
+  .markdown li + li {
+    margin-top: 0.25em;
+  }
+  .markdown code {
+    background: var(--muted);
+    border-radius: var(--radius-sm);
+    padding: 0.1em 0.35em;
+    font-size: 0.875em;
+  }
+  .markdown pre {
+    background: var(--muted);
+    border-radius: var(--radius-md);
+    padding: 0.875rem;
+    overflow-x: auto;
+  }
+  .markdown pre code {
+    background: transparent;
+    padding: 0;
+    font-size: 0.8125rem;
+  }
+  .markdown hr {
+    border-top: 1px solid var(--border);
+    margin-block: 1.5em;
+  }
+  .markdown table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875em;
+    display: block;
+    overflow-x: auto;
+  }
+  .markdown :is(th, td) {
+    border: 1px solid var(--border);
+    padding: 0.4rem 0.6rem;
+    text-align: start;
+  }
+  .markdown th {
+    background: var(--muted);
+    font-weight: 600;
+  }
+}
+
 @layer utilities {
   /* 数据密集区域：资源列表、数据表、搜索结果。
      实测惯例——Moriya Shrine 每行 90px 塞 9 项元数据、TouhouDB 正文 12.8px；
