@@ -30,7 +30,7 @@ export default function Home() {
       <section className="grid gap-4 pb-12 sm:grid-cols-2 lg:grid-cols-5">
         {modules.map((mod) => (
           <Link key={mod.path} to={localizeHref(mod.path)}>
-            <Card className="h-full transition-colors hover:ring-primary/50">
+            <Card className="h-full transition-shadow hover:ring-primary/50">
               <CardHeader>
                 <CardTitle className="font-heading">{mod.label()}</CardTitle>
                 <CardDescription>{m.home_enter()} →</CardDescription>

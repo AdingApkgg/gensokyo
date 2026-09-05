@@ -115,6 +115,10 @@ const components: Components = {
      * 代价是竖图会在盒子里缩小居中；要精确预留得走一个知道尺寸的图片代理。
      * span 不是 div：img 渲染器的输出会落在 <p> 里，块级元素会被 HTML 解析器
      * 提到 <p> 外面，造成水合不一致。
+     *
+     * object-scale-down 不是 object-contain：contain 会把小图**放大**到填满
+     * 盒子——一张 64×64 的表情会被等比拉到 512px 高。scale-down 取
+     * min(none, contain)：大图仍被 contain 缩小，小图保持原尺寸居中不放大。
      */
     return (
       <span className="my-1 block aspect-3/2 max-h-[32rem] overflow-hidden rounded-md bg-muted/40">
@@ -125,7 +129,7 @@ const components: Components = {
           loading="lazy"
           decoding="async"
           referrerPolicy="no-referrer"
-          className="size-full object-contain"
+          className="size-full object-scale-down"
         />
       </span>
     )
