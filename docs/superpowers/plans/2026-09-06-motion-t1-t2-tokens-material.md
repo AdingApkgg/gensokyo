@@ -443,8 +443,14 @@ Expected: `transitionProperty` 含 `transform` 与 `box-shadow`；`transitionDur
 
 ```js
 const s = document.createElement('style')
-s.textContent = '.paper-lift{transform:translateY(var(--lift-y))} .paper-lift::after{transform:scale(1);opacity:1}'
+// **transition: none !important 不能省**：Browser pane 常处于 visibilityState:hidden，
+// Chromium 会节流 CSS 过渡（currentTime 恒为 0），于是你读到的永远是过渡的**起点**，
+// 看起来就像规则没生效。关掉过渡让终态瞬时生效，才读得到真值。
+s.textContent = `.paper-lift, .paper-lift::after { transition: none !important }
+  .paper-lift { transform: translateY(var(--lift-y)) }
+  .paper-lift::after { transform: scale(1); opacity: 1 }`
 document.head.appendChild(s)
+card.offsetHeight
 const card = document.querySelector('.paper-lift')
 const r = { lifted: getComputedStyle(card).transform, dogear: getComputedStyle(card, '::after').opacity }
 s.remove()
