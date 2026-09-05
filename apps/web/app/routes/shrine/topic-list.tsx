@@ -53,7 +53,7 @@ export function TopicList({
 
   return (
     <>
-      <ol className="divide-y border-y">
+      <ol className="ink-divide border-y">
         {list.items.map((t) => (
           <li key={t.id} className="flex gap-3 py-3">
             {t.resource?.coverUrl ? (

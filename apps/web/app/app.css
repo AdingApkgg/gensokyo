@@ -354,6 +354,45 @@ html.dark {
     background: var(--muted);
     font-weight: 600;
   }
+
+  /* 墨界线：替代 divide-y 的硬线。两端渐隐，像墨在纸上洇开又淡去。
+     用 border-image 而不是 ::after，是为了不占用列表项的伪元素——
+     PostList 的 <li> 后面可能还要挂别的东西。 */
+  .ink-divide > * + * {
+    border-top: 1px solid transparent;
+    border-image: linear-gradient(
+        to right,
+        transparent 0,
+        var(--border) 8%,
+        var(--border) 92%,
+        transparent 100%
+      )
+      1;
+  }
+
+  /* 列表行落笔：左缘一道朱线由上至下画出来。
+     用 scaleY + transform-origin 而不是改 width/height——只动 transform，
+     不触发 layout。密度高的数据视图（data-density=compact）里行高只有 80px，
+     整行位移会让扫读失焦，所以**不做**任何行位移。 */
+  .ink-row {
+    position: relative;
+  }
+  .ink-row::before {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    width: 2px;
+    background: var(--primary);
+    transform: scaleY(0);
+    transform-origin: 50% 0;
+    transition: transform var(--transition-duration-sumi) var(--ease-fude);
+  }
+  .ink-row:hover::before,
+  .ink-row:focus-visible::before,
+  .ink-row:has(:focus-visible)::before {
+    transform: scaleY(1);
+  }
 }
 
 /* 纸被掀起一角。
@@ -473,5 +512,9 @@ html.dark {
   }
   .paper-lift::after {
     display: none;
+  }
+  /* 朱线的「画出来」是笔势，减弱动效下直接给终态：一步到位，不做过渡 */
+  .ink-row::before {
+    transition: none;
   }
 }

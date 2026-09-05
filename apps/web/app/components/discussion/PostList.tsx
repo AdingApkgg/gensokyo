@@ -36,7 +36,7 @@ export function PostList({
   onQuote,
 }: Props) {
   return (
-    <ol className="divide-y border-y">
+    <ol className="ink-divide border-y">
       {posts.map((p) => (
         <PostItem
           key={p.id}
