@@ -350,6 +350,8 @@ RR8 的默认行为是 **loader 完成后才提交新 location**，所以「出�
 
 ### 9.1 CSS 侧兜底（这一半与 motion 无关，但不做的话「尊重 reduced-motion」就是假的）
 
+**整块必须不带任何 `@layer`**（写在 `app.css` 文件末尾）。设 `--tw-enter-*`/`--tw-exit-*` 非零值的工具类落在 `@layer utilities`，Tailwind v4 层序 theme→base→components→utilities 晚层恒胜，放进 `@layer base` 会被 `utilities` 完全盖过而失效——T0 曾经这么写过，源码看起来没问题，直到最终审查在生产构建产物上实测才抓出。放进 `@layer utilities` 也不行：我们的 `*` 特异性是 0,0,0，仍输给工具类选择器的 0,1,0。未分层的常规声明胜过任何分层声明，这是唯一有效的位置。`scripts/check-css-layers.ts` 解析构建产物、把这条钉成门禁（`bun run check-css-layers`）。
+
 ```css
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

@@ -35,8 +35,8 @@
   - 开场内容（六篇引导帖 + 站规）的编辑源是 `docs/product/2026-08-30-shrine-seed-content.md`，生成到 `seed-shrine-content.ts` 后由 `bun run seed:shrine` 入库；幂等键是「版块 + 标题 + 种子账号」，**改正文重跑即可，改标题会当成新帖**
 - 动效与样式约定（T0 已落地，详见 `docs/superpowers/specs/2026-09-05-motion-atmosphere-design.md`）：
   - **卡片不能用 `border-*` 表达状态**：`card.tsx` 只有 `ring-1 ring-foreground/10`，Tailwind preflight 是 `border: 0 solid`，改 border 颜色是**空操作**。首页与六版块网格曾因此三处 hover 与「当前版块」高亮全部无效。一律用 `ring-*`
-  - `prefers-reduced-motion` 兜底在 `app.css` 的 `@layer base`：**归零 `--tw-enter-*` / `--tw-exit-*` 变量**，不用 `animation: none`（Radix 靠 `animationend` 卸载弹层，掐掉动画会让弹层卡住），也不用 `transition-duration: .01ms !important`（会连颜色过渡一起杀）
-  - **`.animate-pulse` 的减弱动效例外刻意放在任何 `@layer` 之外**（`app.css` 文件末尾）：Tailwind 自己的 `.animate-pulse` 在 `@layer utilities`，晚层恒胜于 `base`，且它用的是 `animation` 简写会重置 `animation-duration`。塞进任何 layer 就重新变成死代码
+  - `prefers-reduced-motion` 兜底在 `app.css` **文件末尾、不带任何 `@layer`**：**归零 `--tw-enter-*` / `--tw-exit-*` 变量**，不用 `animation: none`（Radix 靠 `animationend` 卸载弹层，掐掉动画会让弹层卡住），也不用 `transition-duration: .01ms !important`（会连颜色过渡一起杀）。**不能放 `@layer base`**——设这些变量非零值的工具类在 `@layer utilities`，Tailwind v4 层序 theme→base→components→utilities 晚层恒胜，放 `base` 会被 `utilities` 完全盖过而失效（T0 曾犯过这个错，最终审查在生产构建产物上实测抓出）；**也不能放 `@layer utilities`**——我们的 `*` 特异性 0,0,0 仍输给工具类选择器 0,1,0。未分层的常规声明胜过任何分层声明，这是唯一有效的位置。`bun run check-css-layers`（读构建产物）把这条钉成断言
+  - **`.animate-pulse` 的减弱动效例外与上面那条已合并为同一个不分层块**（`app.css` 文件末尾）：两者受同一条「未分层胜过任何分层声明」的规则约束，没有理由分开维护两处几乎相同的注释
   - `.markdown` 的正文排版在 `app.css` 的 `@layer components`，**不装 typography 插件**（它自带一整套与白玉楼／深夜幻想乡无关的配色与字号）
   - 分页窗口算法只有一份：`app/lib/paging.ts` 的 `pageWindow`，香霖堂列表与讨论区楼层分页共用
   - `apps/web` 已接 `bun test`；能抽成纯函数的逻辑请抽出来测（如 `lib/discussion-nav.ts` 的 `replyTarget`）

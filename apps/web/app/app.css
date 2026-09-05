@@ -180,33 +180,6 @@ html.dark {
     background-repeat: no-repeat, repeat;
   }
 
-  /* 减弱动效：只掐掉位移与缩放，保留淡入淡出与颜色过渡。
-     三条都是刻意的，改之前先读 specs/2026-09-05-motion-atmosphere-design.md 第 9.1 节：
-     1) 选择器必须是 `*`——本仓库弹层的类名 token 是 `data-open:animate-in`，
-        `:where(.animate-in)` 一个元素都选不中。
-     2) 不能用 `animation: none !important`——Radix 靠 animationend 卸载弹层，
-        掐掉动画会让弹层卡住不消失。归零 tw-animate-css 的 @property 变量才是对的。
-     3) 不能用 `transition-duration: .01ms !important`——它连颜色过渡一起杀，
-        而 T3 的 MotionConfig reducedMotion="user" 只关 transform、保留 opacity，
-        两套降级语义打架。 */
-  @media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
-      --tw-enter-translate-x: 0;
-      --tw-enter-translate-y: 0;
-      --tw-exit-translate-x: 0;
-      --tw-exit-translate-y: 0;
-      --tw-enter-scale: 1;
-      --tw-exit-scale: 1;
-      --tw-enter-rotate: 0;
-      --tw-exit-rotate: 0;
-      --tw-enter-blur: 0;
-      --tw-exit-blur: 0;
-      scroll-behavior: auto !important;
-    }
-  }
-
   /* 内容卡半透明 + 背景模糊，让底纹透上来 */
   [data-slot="card"],
   [data-slot="popover-content"],
@@ -330,11 +303,36 @@ html.dark {
   }
 }
 
-/* 骨架屏保留一个低幅度脉冲：完全静止的话用户分不清是在加载还是坏了。
-   **这一条必须不带 @layer**：Tailwind 自己的 `.animate-pulse{animation:var(--animate-pulse)}`
-   在 @layer utilities，晚层恒胜于 @layer base，而且它用的是 animation 简写、会重置
-   animation-duration。未分层的常规声明胜过任何分层声明，所以放在层外就够，不需要 !important。 */
+/* 减弱动效：只掐掉位移与缩放，保留淡入淡出与颜色过渡。
+   **整块必须不带 @layer**：设 --tw-enter-* 与 --tw-exit-* 的工具类在 @layer utilities，
+   Tailwind v4 层序 theme→base→components→utilities 晚层恒胜，放进 @layer base 会完全失效
+   （T0 曾犯过这个错，最终审查实测抓出）；放进 @layer utilities 也不行——我们的 `*`
+   特异性 0,0,0 仍输给工具类选择器 0,1,0。未分层的常规声明胜过任何分层声明。
+
+   三条写法上的选择也都是刻意的：
+   1) 选择器必须是 `*, *::before, *::after`——仓库弹层的类名 token 是 `data-open:animate-in`，
+      `:where(.animate-in)` 一个元素都选不中。
+   2) 不能用 `animation: none`——Radix 靠 animationend 卸载弹层，掐掉动画会让弹层卡住不消失。
+      归零变量保留淡入淡出、只掐位移与缩放。
+   3) 不能用 `transition-duration: .01ms !important`——会连颜色过渡一起杀，与后续
+      MotionConfig reducedMotion="user"（只关 transform、保留 opacity）的语义打架。 */
 @media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    --tw-enter-translate-x: 0;
+    --tw-enter-translate-y: 0;
+    --tw-exit-translate-x: 0;
+    --tw-exit-translate-y: 0;
+    --tw-enter-scale: 1;
+    --tw-exit-scale: 1;
+    --tw-enter-rotate: 0;
+    --tw-exit-rotate: 0;
+    --tw-enter-blur: 0;
+    --tw-exit-blur: 0;
+    scroll-behavior: auto !important;
+  }
+  /* 骨架屏保留一个低幅度脉冲：完全静止的话用户分不清是在加载还是坏了 */
   .animate-pulse {
     animation-duration: 3s;
   }
