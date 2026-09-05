@@ -1,4 +1,5 @@
 import { Link } from 'react-router'
+import { HeroDecor } from '~/components/hero-decor'
 import {
   Card,
   CardDescription,
@@ -23,9 +24,11 @@ const modules = [
 export default function Home() {
   return (
     <main className="mx-auto max-w-6xl px-4">
-      <section className="py-20 text-center">
+      <section className="relative isolate py-20 text-center">
+        <HeroDecor />
         <h1 className="text-5xl font-bold tracking-wide">{m.site_name()}</h1>
-        <p className="mt-4 text-lg text-muted-foreground">{m.home_tagline()}</p>
+        <span className="hero-rule mt-6" />
+        <p className="mt-6 text-lg text-muted-foreground">{m.home_tagline()}</p>
       </section>
       <section className="grid gap-4 pb-12 sm:grid-cols-2 lg:grid-cols-5">
         {modules.map((mod) => (

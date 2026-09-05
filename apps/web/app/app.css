@@ -483,6 +483,96 @@ html.dark {
     animation: ink-progress 8s var(--ease-fude) 0.15s both;
     transition: opacity var(--transition-duration-sumi) var(--ease-sumi);
   }
+
+  /* Hero 装饰层。整层是**装饰**不是内容——aria-hidden + pointer-events-none，
+     所以可以自由入场（内容层的首帧零入场红线不适用于它）。
+
+     三件东西：
+     1) hero 区局部强化的青海波弧组（同一母题的第三个尺度）
+     2) 一道朱红界线，由中心向两侧运笔展开
+     3) 一枚无字的几何朱印 + 墨洇 */
+  .hero-decor {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  /* 大尺度青海波：只在 hero 区，尺度是远层的两倍 */
+  .hero-decor::before {
+    content: "";
+    position: absolute;
+    inset-inline: -10%;
+    bottom: 0;
+    height: 60%;
+    background-image: var(--bg-pattern-far);
+    background-size: 176px 88px;
+    background-repeat: repeat-x;
+    opacity: 0;
+    animation: hero-wash 1.2s var(--ease-sumi) 0.1s forwards;
+  }
+  @keyframes hero-wash {
+    to {
+      opacity: 1;
+    }
+  }
+
+  /* 朱红界线：--ease-fude 唯一的正当用途（一笔画出来的几何延展） */
+  .hero-rule {
+    display: block;
+    height: 1px;
+    width: min(18rem, 60%);
+    margin-inline: auto;
+    background: linear-gradient(
+      to right,
+      transparent,
+      var(--primary) 20%,
+      var(--primary) 80%,
+      transparent
+    );
+    transform: scaleX(0);
+    animation: hero-stroke 0.52s var(--ease-fude) 0.25s forwards;
+  }
+  @keyframes hero-stroke {
+    to {
+      transform: scaleX(1);
+    }
+  }
+
+  /* 落款朱印：一枚无字的几何印，墨洇式淡入 */
+  .hero-seal {
+    position: absolute;
+    inset-inline-end: clamp(1rem, 8vw, 5rem);
+    bottom: 15%;
+    width: 3rem;
+    height: 3rem;
+    border: 2px solid var(--primary);
+    border-radius: var(--radius-sm);
+    opacity: 0;
+    animation: hero-seal-ink 0.9s var(--ease-sumi) 0.5s forwards;
+  }
+  .hero-seal::before,
+  .hero-seal::after {
+    content: "";
+    position: absolute;
+    background: var(--primary);
+  }
+  .hero-seal::before {
+    inset: 0.65rem 0.5rem;
+    clip-path: polygon(0 0, 100% 0, 100% 22%, 0 22%, 0 44%, 100% 44%, 100% 66%, 0 66%);
+  }
+  .hero-seal::after {
+    inset-block: 0.5rem;
+    inset-inline-start: 50%;
+    width: 2px;
+    translate: -1px 0;
+  }
+  @keyframes hero-seal-ink {
+    to {
+      opacity: 0.75;
+    }
+  }
 }
 
 /* 纸被掀起一角。
@@ -668,5 +758,18 @@ html.dark {
   .pending-bar[data-pending="true"] {
     animation: none;
     transform: scaleX(0.3);
+  }
+  /* 装饰层的入场全部跳过，直接给终态——装饰不该是唯一在动的东西 */
+  .hero-decor::before,
+  .hero-seal {
+    animation: none;
+    opacity: 1;
+  }
+  .hero-seal {
+    opacity: 0.75;
+  }
+  .hero-rule {
+    animation: none;
+    transform: none;
   }
 }
