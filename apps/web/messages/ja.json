@@ -26,6 +26,8 @@
   "auth_logout": "ログアウト",
   "nav_spellcard": "スペルカード",
   "nav_music": "音楽",
+  "nav_menu": "メニュー",
+  "nav_menu_close": "メニューを閉じる",
   "footer_disclaimer": "当サイトは東方Projectの二次創作プラットフォームであり、上海アリス幻樂団とは関係ありません。二次創作は公式ガイドラインに従います。",
   "home_tagline": "東方ファンのためのリソース＆データ基盤",
   "home_enter": "入る",
