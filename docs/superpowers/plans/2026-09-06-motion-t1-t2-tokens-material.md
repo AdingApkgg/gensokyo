@@ -224,7 +224,7 @@ Run:
 cd /Users/i/Code/th/apps/web && bun run build >/dev/null 2>&1
 C=$(ls -t build/client/assets/*.css | head -1)
 echo "--- 还有没有残留的 duration-100 ---"
-grep -c 'duration-100' $C || echo 0
+grep -o 'duration-100' $C | wc -l   # 用 -o|wc -l 不用 -c：压缩后的 CSS 只有两行，-c 数的是行数不是出现次数
 echo "--- duration-sumi 是否生成 ---"
 grep -o 'duration-sumi{[^}]*}' $C
 ```
@@ -414,9 +414,9 @@ Expected: 全绿
 Run:
 ```bash
 cd /Users/i/Code/th/apps/web && C=$(ls -t build/client/assets/*.css | head -1)
-grep -c 'paper-lift' $C
+grep -o 'paper-lift' $C | wc -l   # 用 -o|wc -l 不用 -c：压缩后的 CSS 只有两行，-c 数的是行数不是出现次数
 ```
-Expected: ≥ 3（工具类本体 + hover 分支 + 降级分支）
+Expected: ≥ 3（工具类本体 + hover 分支 + active + ::after 折角 + 降级分支；实测约 11）
 
 - [ ] **Step 6: 浏览器实测**
 
@@ -915,7 +915,7 @@ Run:
 ```bash
 cd /Users/i/Code/th/apps/web && bun run build >/dev/null 2>&1
 C=$(ls -t build/client/assets/*.css | head -1)
-echo "--- 远层元素 ---"; grep -c 'bg-pattern-far' $C
+echo "--- 远层元素 ---"; grep -o 'bg-pattern-far' $C | wc -l   # -o|wc -l，不是 -c
 echo "--- @supports 守卫（必须有，且 animation-timeline 只出现在它里面）---"
 grep -o '@supports (animation-timeline:scroll())' $C | head -1
 echo "--- 裸的 animation-timeline 出现次数（守卫之外不该有）---"
@@ -1052,7 +1052,7 @@ Expected: 全绿
 Run:
 ```bash
 cd /Users/i/Code/th/apps/web && C=$(ls -t build/client/assets/*.css | head -1)
-grep -c 'view-transition' $C
+grep -o 'view-transition' $C | wc -l   # -o|wc -l，不是 -c
 ```
 Expected: ≥ 2
 
