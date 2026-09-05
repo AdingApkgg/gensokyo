@@ -180,6 +180,37 @@ html.dark {
     background-repeat: no-repeat, repeat;
   }
 
+  /* 减弱动效：只掐掉位移与缩放，保留淡入淡出与颜色过渡。
+     三条都是刻意的，改之前先读 specs/2026-09-05-motion-atmosphere-design.md 第 9.1 节：
+     1) 选择器必须是 `*`——本仓库弹层的类名 token 是 `data-open:animate-in`，
+        `:where(.animate-in)` 一个元素都选不中。
+     2) 不能用 `animation: none !important`——Radix 靠 animationend 卸载弹层，
+        掐掉动画会让弹层卡住不消失。归零 tw-animate-css 的 @property 变量才是对的。
+     3) 不能用 `transition-duration: .01ms !important`——它连颜色过渡一起杀，
+        而 T3 的 MotionConfig reducedMotion="user" 只关 transform、保留 opacity，
+        两套降级语义打架。 */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      --tw-enter-translate-x: 0;
+      --tw-enter-translate-y: 0;
+      --tw-exit-translate-x: 0;
+      --tw-exit-translate-y: 0;
+      --tw-enter-scale: 1;
+      --tw-exit-scale: 1;
+      --tw-enter-rotate: 0;
+      --tw-exit-rotate: 0;
+      --tw-enter-blur: 0;
+      --tw-exit-blur: 0;
+      scroll-behavior: auto !important;
+    }
+    /* 骨架屏保留一个低幅度脉冲：完全静止的话用户分不清是在加载还是坏了 */
+    .animate-pulse {
+      animation-duration: 3s;
+    }
+  }
+
   /* 内容卡半透明 + 背景模糊，让底纹透上来 */
   [data-slot="card"],
   [data-slot="popover-content"],
