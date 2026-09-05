@@ -356,6 +356,62 @@ html.dark {
   }
 }
 
+/* 纸被掀起一角。
+   用 @utility 而不是 @layer components 里的类：@utility 生成的规则落在
+   @layer utilities，能被 hover:/focus-visible: 这类变体正常修饰。
+
+   刻意**不做**微旋转：在半透明 + backdrop-filter 的卡片上做亚度数 rotate 会让
+   CJK 衬线字形重新栅格化、整卡发虚，而 0.15deg 本身看不见（详见 spec 附录 B）。
+
+   折角三角是纯 transform + opacity 的厚度暗示，不动 box-shadow（paint 类，贵）。 */
+@utility paper-lift {
+  position: relative;
+  transition-property: transform, box-shadow;
+  transition-duration: var(--transition-duration-washi-md);
+  transition-timing-function: var(--ease-washi);
+
+  /* 折角：右上角一枚三角，常态收成 0，掀起时长出来。
+     用 accent（山吹金）而不是 primary（朱红）——朱红已经承担了 ring 的强调，
+     再用一次就分不清主次。 */
+  &::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: var(--dogear);
+    height: var(--dogear);
+    background: linear-gradient(
+      225deg,
+      var(--accent) 0 50%,
+      transparent 50%
+    );
+    border-start-end-radius: var(--radius-xl);
+    transform: scale(0);
+    transform-origin: 100% 0;
+    opacity: 0;
+    pointer-events: none;
+    transition: transform var(--transition-duration-washi-md) var(--ease-washi),
+      opacity var(--transition-duration-washi-sm) var(--ease-sumi);
+  }
+
+  /* 键盘同步：只写 :hover 的话键盘用户永远拿不到掀角。
+     :focus-visible 挂在外层 <a> 上，所以用 :has() 往下传。 */
+  &:hover,
+  &:has(:focus-visible) {
+    transform: translateY(var(--lift-y));
+    &::after {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  /* 按下：纸被压回桌面。接触是瞬时的，所以按下没有过渡；松手才走纸的回落。 */
+  &:active {
+    transform: translateY(0);
+    transition-duration: 0s;
+  }
+}
+
 @layer utilities {
   /* 数据密集区域：资源列表、数据表、搜索结果。
      实测惯例——Moriya Shrine 每行 90px 塞 9 项元数据、TouhouDB 正文 12.8px；
@@ -405,5 +461,17 @@ html.dark {
   /* 骨架屏保留一个低幅度脉冲：完全静止的话用户分不清是在加载还是坏了 */
   .animate-pulse {
     animation-duration: 3s;
+  }
+  /* 掀角是纯装饰的空间暗示，减弱动效下整条关掉——ring 的颜色变化仍在，
+     所以「这张卡可点」的信息不丢。 */
+  .paper-lift {
+    transition-property: box-shadow;
+  }
+  .paper-lift:hover,
+  .paper-lift:has(:focus-visible) {
+    transform: none;
+  }
+  .paper-lift::after {
+    display: none;
   }
 }
