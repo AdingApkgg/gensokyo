@@ -557,6 +557,27 @@ html.dark {
   }
 }
 
+/* 跨页转场。
+   **不进任何 @layer**：view transition 伪元素在 UA origin，包进 layer 会被
+   优先级问题吃掉。
+
+   交叉淡入用墨的曲线（这是颜色/不透明度类）。刻意**不做方向性转场**——
+   Firefox 首版实现不含 view transition types，靠 types 做方向的方案在那里
+   会静默退化成无方向，两套观感反而更糟。 */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--transition-duration-washi-lg);
+  animation-timing-function: var(--ease-sumi);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
 /* 减弱动效：只掐掉位移与缩放，保留淡入淡出与颜色过渡。
    **整块必须不带 @layer**：设 --tw-enter-* 与 --tw-exit-* 的工具类在 @layer utilities，
    Tailwind v4 层序 theme→base→components→utilities 晚层恒胜，放进 @layer base 会完全失效

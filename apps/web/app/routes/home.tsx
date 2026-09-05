@@ -29,7 +29,7 @@ export default function Home() {
       </section>
       <section className="grid gap-4 pb-12 sm:grid-cols-2 lg:grid-cols-5">
         {modules.map((mod) => (
-          <Link key={mod.path} to={localizeHref(mod.path)}>
+          <Link key={mod.path} to={localizeHref(mod.path)} viewTransition>
             <Card className="paper-lift h-full hover:ring-primary/50">
               <CardHeader>
                 <CardTitle className="font-heading">{mod.label()}</CardTitle>

@@ -20,6 +20,7 @@ export function BoardNav({ current }: { current?: BoardSlug }) {
         <Link
           key={b}
           to={localizeHref(`/shrine/b/${b}`)}
+          viewTransition
           aria-current={b === current ? 'page' : undefined}
         >
           <Card

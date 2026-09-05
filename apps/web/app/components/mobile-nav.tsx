@@ -53,6 +53,8 @@ export function MobileNav({ items }: { items: readonly Item[] }) {
             <NavLink
               key={item.path}
               to={localizeHref(item.path)}
+              viewTransition
+              prefetch="intent"
               // 点击已经在的那一项时 pathname 不变，上面那条 pathname effect
               // 不会触发，抽屉会留在屏幕上——两条关闭路径并存，互不干扰
               onClick={() => setOpen(false)}

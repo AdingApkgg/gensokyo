@@ -169,6 +169,7 @@ export default function KourindouList({ loaderData }: Route.ComponentProps) {
               <li key={r.id}>
                 <Link
                   to={localizeHref(`/kourindou/${r.slug}`)}
+                  viewTransition
                   className="ink-row flex items-center gap-4 py-3 pl-3 transition-colors hover:bg-muted/50"
                 >
                   {r.coverUrl ? (

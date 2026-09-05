@@ -59,6 +59,8 @@ export function SiteHeader({ user }: { user: SessionUser | null }) {
             <NavLink
               key={item.path}
               to={localizeHref(item.path)}
+              viewTransition
+              prefetch="intent"
               className={({ isActive }) =>
                 `rounded-md px-3 py-1.5 text-sm transition-colors hover:bg-muted ${
                   isActive
