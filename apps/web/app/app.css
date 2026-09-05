@@ -393,6 +393,26 @@ html.dark {
   .ink-row:has(:focus-visible)::before {
     transform: scaleY(1);
   }
+
+  /* 落点墨洇：一滴墨落在这一楼上，然后洇开淡去。
+     只动 background-color（合成友好），不动布局。
+
+     用 :target 而不是 JS：原生 hash 跳转发生在浏览器解析文档时、早于 React
+     水合，那一刻 motion 组件还不存在、接不住；而 :target 是浏览器自己维护的
+     状态，跨页深链、前进后退、手动改地址栏全覆盖。 */
+  @keyframes ink-bloom {
+    from {
+      background-color: color-mix(in oklab, var(--primary) 12%, transparent);
+    }
+    to {
+      background-color: transparent;
+    }
+  }
+  .markdown-anchor:target,
+  li[id^="p"]:target {
+    animation: ink-bloom 1.2s var(--ease-sumi);
+    border-radius: var(--radius-md);
+  }
 }
 
 /* 纸被掀起一角。
@@ -516,5 +536,12 @@ html.dark {
   /* 朱线的「画出来」是笔势，减弱动效下直接给终态：一步到位，不做过渡 */
   .ink-row::before {
     transition: none;
+  }
+  /* 墨洇是颜色动画不是位移，前庭安全；但 1.2s 的持续变化对注意力敏感用户
+     仍是干扰，压到一次极短的提示 */
+  li[id^="p"]:target,
+  .markdown-anchor:target {
+    animation-duration: 1ms;
+    background-color: color-mix(in oklab, var(--primary) 12%, transparent);
   }
 }
