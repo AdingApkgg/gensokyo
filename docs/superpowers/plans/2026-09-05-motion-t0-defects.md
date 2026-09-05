@@ -181,11 +181,21 @@ EOF
       --tw-exit-blur: 0;
       scroll-behavior: auto !important;
     }
-    /* 骨架屏保留一个低幅度脉冲：完全静止的话用户分不清是在加载还是坏了 */
-    .animate-pulse {
-      animation-duration: 3s;
-    }
   }
+```
+
+**再在 `@layer utilities { … }` 块之后、文件末尾追加这一段（注意它刻意不在任何 `@layer` 里）：**
+
+```css
+/* 骨架屏保留一个低幅度脉冲：完全静止的话用户分不清是在加载还是坏了。
+   **这一条必须不带 @layer**：Tailwind 自己的 `.animate-pulse{animation:var(--animate-pulse)}`
+   在 @layer utilities，晚层恒胜于 @layer base，而且它用的是 animation 简写、会重置
+   animation-duration。未分层的常规声明胜过任何分层声明，所以放在层外就够，不需要 !important。 */
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse {
+    animation-duration: 3s;
+  }
+}
 ```
 
 - [ ] **Step 2: 构建并断言媒体查询进了产物**
