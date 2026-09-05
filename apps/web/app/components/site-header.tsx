@@ -2,6 +2,7 @@ import { Bell, UserRound } from 'lucide-react'
 import { Link, NavLink, useRevalidator } from 'react-router'
 import { LangSwitcher } from '~/components/lang-switcher'
 import { MobileNav } from '~/components/mobile-nav'
+import { PendingBar } from '~/components/pending-bar'
 import { ThemeToggle } from '~/components/theme-toggle'
 import { Button } from '~/components/ui/button'
 import {
@@ -140,6 +141,7 @@ export function SiteHeader({ user }: { user: SessionUser | null }) {
           )}
         </div>
       </div>
+      <PendingBar />
     </header>
   )
 }

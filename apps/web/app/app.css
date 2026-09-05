@@ -454,6 +454,35 @@ html.dark {
     animation: ink-bloom 1.2s var(--ease-sumi);
     border-radius: var(--radius-md);
   }
+
+  /* 全局 pending 墨线：一道朱线从左缘运笔展开，逼近但不到达右端。
+     时长未知，所以用一条先快后极慢的曲线让它「永远在接近完成」。
+     纯 CSS 无限接近 + 到达时整条淡出，比手写百分比更省。 */
+  @keyframes ink-progress {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(0.9);
+    }
+  }
+  .pending-bar {
+    position: absolute;
+    inset-inline: 0;
+    bottom: -1px;
+    height: 2px;
+    background: var(--primary);
+    transform-origin: 0 50%;
+    transform: scaleX(0);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .pending-bar[data-pending="true"] {
+    opacity: 1;
+    /* 150ms 延迟阈值：快网下每次点击都闪一道比没有更烦 */
+    animation: ink-progress 8s var(--ease-fude) 0.15s both;
+    transition: opacity var(--transition-duration-sumi) var(--ease-sumi);
+  }
 }
 
 /* 纸被掀起一角。
@@ -633,5 +662,11 @@ html.dark {
   .markdown-anchor:target {
     animation-duration: 1ms;
     background-color: color-mix(in oklab, var(--primary) 12%, transparent);
+  }
+  /* 进度条是「还在等」的唯一视觉信号，不能整条关掉。
+     改为静止的一小段：位置固定，只靠出现/消失传达状态。 */
+  .pending-bar[data-pending="true"] {
+    animation: none;
+    transform: scaleX(0.3);
   }
 }
