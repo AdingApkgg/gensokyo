@@ -33,5 +33,13 @@
   - 版块 slug 是对外 URL，六值闭合在 `packages/shared/src/shrine/enums.ts`，DB 侧由一条 CHECK 兜底（不建 `board` 表）
   - **测试必须接 `@gensokyo/db/testing`（`packages/db/src/testing.ts`）的 track/cleanup**——测试打的是共享开发库，不是一次性容器。删账号前要先删它发的 `report`：`reporter_id` 是 ON DELETE SET NULL，留下的孤儿 open 举报会永远堆在 `/dash/reports`（真攒过 59 条）
   - 开场内容（六篇引导帖 + 站规）的编辑源是 `docs/product/2026-08-30-shrine-seed-content.md`，生成到 `seed-shrine-content.ts` 后由 `bun run seed:shrine` 入库；幂等键是「版块 + 标题 + 种子账号」，**改正文重跑即可，改标题会当成新帖**
+- 动效与样式约定（T0 已落地，详见 `docs/superpowers/specs/2026-09-05-motion-atmosphere-design.md`）：
+  - **卡片不能用 `border-*` 表达状态**：`card.tsx` 只有 `ring-1 ring-foreground/10`，Tailwind preflight 是 `border: 0 solid`，改 border 颜色是**空操作**。首页与六版块网格曾因此三处 hover 与「当前版块」高亮全部无效。一律用 `ring-*`
+  - `prefers-reduced-motion` 兜底在 `app.css` 的 `@layer base`：**归零 `--tw-enter-*` / `--tw-exit-*` 变量**，不用 `animation: none`（Radix 靠 `animationend` 卸载弹层，掐掉动画会让弹层卡住），也不用 `transition-duration: .01ms !important`（会连颜色过渡一起杀）
+  - **`.animate-pulse` 的减弱动效例外刻意放在任何 `@layer` 之外**（`app.css` 文件末尾）：Tailwind 自己的 `.animate-pulse` 在 `@layer utilities`，晚层恒胜于 `base`，且它用的是 `animation` 简写会重置 `animation-duration`。塞进任何 layer 就重新变成死代码
+  - `.markdown` 的正文排版在 `app.css` 的 `@layer components`，**不装 typography 插件**（它自带一整套与白玉楼／深夜幻想乡无关的配色与字号）
+  - 分页窗口算法只有一份：`app/lib/paging.ts` 的 `pageWindow`，香霖堂列表与讨论区楼层分页共用
+  - `apps/web` 已接 `bun test`；能抽成纯函数的逻辑请抽出来测（如 `lib/discussion-nav.ts` 的 `replyTarget`）
+  - 移动端导航抽屉用 `radix-ui` 的 `Dialog` 做侧滑，**不装 `vaul`/`sheet`**；`<768px` 的导航入口只有它一处，改 `site-header` 时别把它弄丢
 - 常用脚本：`bun run e2e`（端到端验收 40 项，跑完自清理，`E2E_KEEP=1` 保留）、`check-messages`（三语 key 审计）、`reindex`（Meili 全量重建）、`gc:images`（未引用图片巡检，带白名单熔断）、`seed:shrine`（开场内容）、`seed:demo*`（演示数据）
 - 设计文档：docs/superpowers/specs/；产品文档：docs/product/；实施计划：docs/superpowers/plans/；调研与审计：docs/superpowers/research/；legacy/ 是只读参考
