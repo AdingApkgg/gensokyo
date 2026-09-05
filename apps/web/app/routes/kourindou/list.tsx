@@ -3,6 +3,14 @@ import { Download, Star } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router'
 import { Badge } from '~/components/ui/badge'
 import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '~/components/ui/pagination'
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -17,6 +25,7 @@ import {
   licenseLabel,
   licenseVariant,
 } from '~/lib/display'
+import { pageWindow } from '~/lib/paging'
 import { m } from '~/paraglide/messages'
 import { localizeHref } from '~/paraglide/runtime'
 import type { Route } from './+types/list'
@@ -82,6 +91,19 @@ function Filter({
 
 export default function KourindouList({ loaderData }: Route.ComponentProps) {
   const { items, total, failed } = loaderData
+  // failed 分支下 loader 只返回 items/total/failed，这两个字段不存在
+  const pageSize = 'pageSize' in loaderData ? loaderData.pageSize : 20
+  const current = 'page' in loaderData ? loaderData.page : 1
+  const pages = Math.max(1, Math.ceil(total / pageSize))
+  const [params] = useSearchParams()
+  /** 翻页要保住 kind/license/sort：丢了筛选的翻页比没有翻页更让人困惑 */
+  const pageHref = (p: number) => {
+    const next = new URLSearchParams(params)
+    if (p <= 1) next.delete('page')
+    else next.set('page', String(p))
+    const qs = next.toString()
+    return qs ? `?${qs}` : '.'
+  }
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-10">
@@ -191,6 +213,32 @@ export default function KourindouList({ loaderData }: Route.ComponentProps) {
             )
           })}
         </ul>
+      )}
+
+      {!failed && pages > 1 && (
+        <Pagination className="mt-8">
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious
+                to={pageHref(current - 1)}
+                disabled={current === 1}
+              />
+            </PaginationItem>
+            {pageWindow(current, pages).map((p) => (
+              <PaginationItem key={p}>
+                <PaginationLink to={pageHref(p)} isActive={p === current}>
+                  {p}
+                </PaginationLink>
+              </PaginationItem>
+            ))}
+            <PaginationItem>
+              <PaginationNext
+                to={pageHref(current + 1)}
+                disabled={current === pages}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
       )}
     </main>
   )
