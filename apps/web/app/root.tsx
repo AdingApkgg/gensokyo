@@ -83,10 +83,17 @@ export async function loader({ request }: Route.LoaderArgs) {
 export default function App({ loaderData }: Route.ComponentProps) {
   return (
     <div className="flex min-h-screen flex-col">
-      {/* 跳至正文：键盘用户此前必须逐个 Tab 过整条导航才能到内容 */}
+      {/*
+        跳至正文：键盘用户此前必须逐个 Tab 过整条导航才能到内容。
+
+        `focus:px-3 focus:py-2` 不是画蛇添足——Tailwind 的 `not-sr-only` 自带
+        `padding: 0; margin: 0`（它要撤掉 `sr-only` 的 `margin: -1px`），而带
+        `:focus` 的它特异性 0,2,0 压得过裸 `px-3` 的 0,1,0。不把内边距也提到
+        同一级，聚焦后拿到的是一个字贴着描边的 56×20 挤扁盒子（实测过）。
+      */}
       <a
         href="#main"
-        className="sr-only rounded-md bg-background px-3 py-2 text-sm ring-1 ring-ring focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50"
+        className="sr-only rounded-md bg-background text-sm ring-1 ring-ring focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-3 focus:py-2"
       >
         {m.skip_to_content()}
       </a>
