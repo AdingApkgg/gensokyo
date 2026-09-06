@@ -13,7 +13,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu'
-import { authClient } from '~/lib/auth-client'
 import { m } from '~/paraglide/messages'
 import { localizeHref } from '~/paraglide/runtime'
 
@@ -41,6 +40,13 @@ export function SiteHeader({ user }: { user: SessionUser | null }) {
   const revalidator = useRevalidator()
 
   async function logout() {
+    /**
+     * 动态 import：`SiteHeader` 在 root.tsx 里，是所有路由的父级——顶层 import
+     * 会把 better-auth 客户端（10.7 KB gz）钉进每一个匿名访客的首屏包，
+     * 而匿名访客按定义永远不会登出。
+     * login/register 有自己的路由 chunk，不受这里影响。
+     */
+    const { authClient } = await import('~/lib/auth-client')
     await authClient.signOut()
     revalidator.revalidate()
   }
