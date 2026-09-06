@@ -1108,6 +1108,7 @@ EOF
 - **`<AnimatePresence initial={false}>` 的子元素可以写 `initial={{opacity:0, y:'var(--settle-y)'}}`**，SSR 产物仍是 `style="opacity:1;transform:none"`。这才是 `--settle-y` 一直在等的用法，且 motion 能解析 CSS 变量。
 - **`exit` 里禁止出现位移键**：reduced-motion 下 motion 对 positional keys 是**瞬移到终点**（`{type:false}`）而非跳过，`exit={{opacity:0,y:-12}}` 会让减弱动效用户看到一次 12px 瞬跳。`animate` 用 y 是安全的（终态是 0）。
 - **`features.ts` 必须独占一个模块**，且引用侧 `.then((mod) => mod.default)` 不能省（LazyMotion 直接解构 resolve 值，不剥 `.default`）。少写这句会让 `m` 组件全站变成惰性 div、静默失效——只有 `tsc` 抓得住，`react-router build` 不做类型检查。
-- **`strict` 是开发期绊线，不是保险**（生产构建里是空操作，且挡不住「在没有 LazyMotion 的地方用 `m.div`」）。真正的构建期保险是 Biome 的 `style.noRestrictedImports` 禁掉 `motion/react` 的 `motion` / `domMax` / `domMin` 具名导入。
+- **⚠️ 以上关于 `LazyMotion` / `strict` / `features.ts` / Biome `noRestrictedImports` 的建议已被 T4 的架构裁决推翻**，详见 `docs/superpowers/plans/2026-09-07-motion-t4-dash.md` 的 A1–A3：`{user && <LazyMotion>}` 是运行时条件、影响不了构建期分包，实测 `LazyMotion` 反而比全量 `motion` 贵 0.03 KB，而 rolldown 本来就把 motion 放进只被引用它的路由加载的共享 chunk。**T4 用全量 `motion`、不用 `LazyMotion`、不建 `features.ts`。** 真正的墙是「root 树五个文件禁止 import `motion/react`」的 path 断言（实测 motion 进 root 可达图 = 首屏 +37.31 KB）。
+- **⚠️ 「禁止用 `m` 作 motion 标识符」这条约定也已撤销**：实测 `check-messages` 的正则 `/\bm\.(\w+)\(/g` 不会命中 `motion.div`（`m` 后面接的是 `o` 不是 `.`），且 `motion/react-m` 在 motion 13 里不导出 `m`。全站直接写 `<motion.div>`。
 - **`whileTap` 与 `onTap` 都会往 SSR HTML 塞 `tabindex="0"`**；`whileFocus` 不会。
 - **`@starting-style` 能做 settle**（0 KB，实测同形）。所以 **motion 只该买 `exit`**——React 在退场动画开始前就卸载了节点，CSS 没有挂载点，这是 `AnimatePresence` 唯一无可替代的地方。
