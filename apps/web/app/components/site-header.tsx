@@ -45,10 +45,22 @@ export function SiteHeader({ user }: { user: SessionUser | null }) {
      * 会把 better-auth 客户端（10.7 KB gz）钉进每一个匿名访客的首屏包，
      * 而匿名访客按定义永远不会登出。
      * login/register 有自己的路由 chunk，不受这里影响。
+     *
+     * try/catch 不是形式主义：动态 import 引入了一个顶层 import 没有的失败模式——
+     * 部署之后老页面还开着、chunk 哈希已变，这里会 404。
+     * **不 rethrow**：从 async 的 onClick 里抛出去是 unhandled rejection，React 接不住，
+     * 症状和不写 catch 一样是「点了没反应」。
+     * **finally 里仍然 revalidate**：登出失败时它会如实显示「仍处于登录态」，
+     * 那正是真实状态——诚实的 UI 好过假装成功。
      */
-    const { authClient } = await import('~/lib/auth-client')
-    await authClient.signOut()
-    revalidator.revalidate()
+    try {
+      const { authClient } = await import('~/lib/auth-client')
+      await authClient.signOut()
+    } catch (err) {
+      console.error('signOut failed', err)
+    } finally {
+      revalidator.revalidate()
+    }
   }
 
   return (
