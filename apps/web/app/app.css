@@ -456,8 +456,10 @@ html.dark {
   }
 
   /* 全局 pending 墨线：一道朱线从左缘运笔展开，逼近但不到达右端。
-     时长未知，所以用一条先快后极慢的曲线让它「永远在接近完成」。
-     纯 CSS 无限接近 + 到达时整条淡出，比手写百分比更省。 */
+     用 --ease-fude（笔·运，梯形速度剖面、接近线性）——笔画的**长度**由手速决定，
+     所以进度条走匀速而不是先快后慢；「永不到达」由 scaleX 上限 0.9 保证，不靠曲线。
+     2.5s 是按「什么时候看得清」定的：500ms 的导航能长到约 230px，读得出来；
+     8s 那种量级要 1.5–2s 才可辨，与下面 150ms 的阈值差一个数量级。 */
   @keyframes ink-progress {
     from {
       transform: scaleX(0);
@@ -480,7 +482,7 @@ html.dark {
   .pending-bar[data-pending="true"] {
     opacity: 1;
     /* 150ms 延迟阈值：快网下每次点击都闪一道比没有更烦 */
-    animation: ink-progress 8s var(--ease-fude) 0.15s both;
+    animation: ink-progress 2.5s var(--ease-fude) 0.15s both;
     transition: opacity var(--transition-duration-sumi) var(--ease-sumi);
   }
 
@@ -616,9 +618,14 @@ html.dark {
       opacity var(--transition-duration-washi-sm) var(--ease-sumi);
   }
 
-  /* 键盘同步：只写 :hover 的话键盘用户永远拿不到掀角。
-     :focus-visible 挂在外层 <a> 上，所以用 :has() 往下传。 */
+  /* 键盘同步：两种形态都要。
+     `a:focus-visible > &` 处理「可聚焦的是卡片的**祖先**」——首页与六版块网格
+     都是 <a><Card/></a> 的结构，卡片内零个可聚焦元素。
+     `&:has(:focus-visible)` 处理「可聚焦的在卡片**内部**」——`:has()` 是向下看的，
+     后续香霖堂许可卡属于这一类。
+     只写其中一种都会漏掉一半调用点。 */
   &:hover,
+  a:focus-visible > &,
   &:has(:focus-visible) {
     transform: translateY(var(--lift-y));
     &::after {
@@ -739,6 +746,7 @@ html.dark {
     transition-property: box-shadow;
   }
   .paper-lift:hover,
+  a:focus-visible > .paper-lift,
   .paper-lift:has(:focus-visible) {
     transform: none;
   }
