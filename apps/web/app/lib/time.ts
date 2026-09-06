@@ -55,3 +55,20 @@ export const formatAbsolute = (iso: string) =>
     timeZone: zoneOf[getLocale()] ?? 'UTC',
     timeZoneName: 'short',
   }).format(new Date(iso))
+
+/**
+ * `RelativeTime` 的自更新间隔：距离越近刷得越勤，超过一天就不刷了
+ *（「3 天前」不会在你看着的时候变成「4 天前」）。返回 `null` 表示不起 interval。
+ *
+ * 放在这里而不是组件里，是为了能被 `bun test` 直接测——档位边界是这段逻辑里
+ * 唯一会写错的地方，而组件本身没什么可测的。
+ *
+ * `ageMs` 允许是**负数**（服务端时钟快于客户端时，帖子看起来来自未来）：
+ * 那会落进最勤的 10 秒档，几秒内就自己纠正过来，正是想要的。
+ */
+export function periodFor(ageMs: number): number | null {
+  if (ageMs < 60_000) return 10_000
+  if (ageMs < 3_600_000) return 60_000
+  if (ageMs < 86_400_000) return 600_000
+  return null
+}

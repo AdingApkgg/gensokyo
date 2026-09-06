@@ -1,13 +1,5 @@
 import { useEffect, useState } from 'react'
-import { formatAbsolute, formatRelative } from '~/lib/time'
-
-/** 距离越近刷得越勤；超过一天就不用刷了（「3 天前」不会在你看着的时候变成「4 天前」） */
-function periodFor(ageMs: number): number | null {
-  if (ageMs < 60_000) return 10_000
-  if (ageMs < 3_600_000) return 60_000
-  if (ageMs < 86_400_000) return 600_000
-  return null
-}
+import { formatAbsolute, formatRelative, periodFor } from '~/lib/time'
 
 /**
  * 相对时间。
