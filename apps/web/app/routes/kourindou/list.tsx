@@ -162,14 +162,15 @@ export default function KourindouList({ loaderData }: Route.ComponentProps) {
           </p>
         </div>
       ) : (
-        <ul className="mt-4 divide-y border-y" data-density="compact">
+        <ul className="mt-4 ink-divide border-y" data-density="compact">
           {items.map((r) => {
             const avg = averageRating(r.ratingSum, r.ratingCount)
             return (
               <li key={r.id}>
                 <Link
                   to={localizeHref(`/kourindou/${r.slug}`)}
-                  className="flex items-center gap-4 py-3 transition-colors hover:bg-muted/50"
+                  viewTransition
+                  className="ink-row flex items-center gap-4 py-3 pl-3 transition-colors hover:bg-muted/50"
                 >
                   {r.coverUrl ? (
                     <img

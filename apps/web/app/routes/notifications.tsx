@@ -159,7 +159,7 @@ export default function Notifications({ loaderData }: Route.ComponentProps) {
           </p>
         </div>
       ) : (
-        <ol className="mt-6 divide-y border-y">
+        <ol className="mt-6 ink-divide border-y">
           {items.map((n) => {
             const d = describe(n)
             const inner = (

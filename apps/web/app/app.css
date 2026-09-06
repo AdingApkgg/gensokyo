@@ -56,6 +56,56 @@ html.dark {
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* 三材 Sanzai —— 墨・纸・水
+   这三条曲线不是挑好看的库存缓动，是从物理拟合来的；改数值之前请读
+   docs/superpowers/specs/2026-09-05-motion-atmosphere-design.md 第四节。
+
+   **必须用不带 inline 的 @theme**：inline 模式下变量不会真正落到 :root，
+   而 --settle-y 这类几何 token 需要在运行时被 var() 读到。
+
+   水（青海波）的正确缓动是 linear —— 这是**禁令不是 token**：给背景波加
+   ease-in-out，循环接缝处会出现肉眼可见的「抽泵」。不要为它立一个条目，
+   否则一定有人拿去当通用缓动使。 */
+@theme {
+  /* 墨·洇：Lucas–Washburn 毛细渗透 L ∝ √t 的拟合（RMSE 0.0001）。
+     前 10% 时间走完 32%、前 25% 走完 50%，之后是极长的尾——落笔猛、越洇越慢。
+     用于一切**出现类**的颜色/不透明度：hover 底色、ring 变色、focus ring、badge、tooltip。 */
+  --ease-sumi: cubic-bezier(0, 0.408, 0.501, 0.75);
+
+  /* 纸·落：临界阻尼 ζ=1 阶跃响应在 y(T)=97.5% 处的拟合（RMSE 0.0026）。
+     p(.25)=.42、p(.5)=.78、p(.75)=.95——最后 5% 用掉 25% 的时间，这就是「长而软」。
+     ζ=1 是选定的：纸纤维内阻尼极高，掀起一角松手不会来回抖。**全域禁止 overshoot**。
+     用于一切 transform 归位。 */
+  --ease-washi: cubic-bezier(0.212, 0.091, 0.259, 0.953);
+
+  /* 笔·运：梯形速度剖面（加速 20% / 匀速 60% / 减速 20%）的位置积分，p(.5)=0.500 严格对称。
+     **只**用于「一笔画出来」的几何延展：下划线 scaleX、分隔线铺开、进度条。
+     关键区分：笔画的**长度**由手速决定（匀速），笔画的**浓淡**才由毛细决定（√t）。
+     把两者混成一条曲线，是多数所谓「墨感」动效失真的原因。 */
+  --ease-fude: cubic-bezier(0.244, 0, 0.756, 1);
+
+  /* 墨的时长是单值不做阶梯：毛细渗透深度是材料常数，与元素多大无关。 */
+  --transition-duration-sumi: 180ms;
+
+  /* 纸的时长按**纸的尺寸**挑档，不按「这个交互重不重要」：
+     sm = badge / button / 图标（<40px）
+     md = 卡片 / 列表行 / 输入框（40–200px）
+     lg = dialog / 页面区块（>200px）
+     公式 T(L) = 180ms · √(L/40)，上限 420ms。
+     元规则：**曲线取真值，标度取压缩**——形状忠于物理（薄板基频 f ∝ 1/L²），
+     但标度指数从 L² 压到 L^0.5，否则 dialog 要等 4.5 秒。压缩是设计决定，不假装它是物理。 */
+  --transition-duration-washi-sm: 180ms;
+  --transition-duration-washi-md: 280ms;
+  --transition-duration-washi-lg: 400ms;
+
+  /* 收编：把出厂默认（150ms / cubic-bezier(0.4,0,0.2,1)）换成墨。
+     仓库现存所有裸 `transition-colors` / `transition-shadow` 零 diff 全部改用墨的曲线。
+     这两行必须写字面值而不是 var(--ease-sumi)——它们在构建期被 Tailwind 读取，
+     不是运行时求值。改上面的 --ease-sumi 时记得同步这里。 */
+  --default-transition-duration: 180ms;
+  --default-transition-timing-function: cubic-bezier(0, 0.408, 0.501, 0.75);
+}
+
 /* 白玉楼 —— 和纸暖白 · 墨 · 朱红 · 山吹金 */
 :root {
   --background: oklch(0.975 0.006 84);
@@ -73,6 +123,34 @@ html.dark {
     transparent 16px 21px,
     oklch(0.26 0.018 45 / 0.05) 21px 22px,
     transparent 22px
+  );
+  /* 青海波远层：同一母题的第二个尺度（2×），线宽不变、对比度再降一半。
+     两个不同尺度的波列同向异速滚动会产生缓慢的莫尔/视差——这是真实水面的
+     深度线索，也是唯一一个「一眼认出这是那个站」的东西。
+     环宽锁死 1px——放大线宽会读作模糊而非远景（spec §4.4）。 */
+  --bg-pattern-far: radial-gradient(
+    circle at 50% 100%,
+    transparent 18px,
+    oklch(0.26 0.018 45 / 0.025) 18px 19px,
+    transparent 19px 30px,
+    oklch(0.26 0.018 45 / 0.025) 30px 31px,
+    transparent 31px 43px,
+    oklch(0.26 0.018 45 / 0.025) 43px 44px,
+    transparent 44px
+  );
+  /* 青海波 hero 层：同一母题的第三个尺度，半径取近层的 ×4，环宽仍锁 1px。
+     不能靠 --bg-pattern-far 配 background-size 放大——px 单位的渐变色标不随
+     background-size 缩放，那样只会把同一批圆环原样铺开成互相隔开的孤立弧扇，
+     所以 hero 需要自己一套 stop（颜色沿用远层）。 */
+  --bg-pattern-hero: radial-gradient(
+    circle at 50% 100%,
+    transparent 36px,
+    oklch(0.26 0.018 45 / 0.025) 36px 37px,
+    transparent 37px 60px,
+    oklch(0.26 0.018 45 / 0.025) 60px 61px,
+    transparent 61px 87px,
+    oklch(0.26 0.018 45 / 0.025) 87px 88px,
+    transparent 88px
   );
   --popover-foreground: oklch(0.26 0.018 45);
   --primary: oklch(0.57 0.205 30);
@@ -93,6 +171,21 @@ html.dark {
   --chart-4: oklch(0.55 0.14 300);
   --chart-5: oklch(0.6 0.1 150);
   --radius: 0.375rem;
+
+  /* 三材的几何量。这些不是 Tailwind 命名空间，只是给 CSS 读的普通变量。 */
+
+  /* 全站**唯一**的入场位移量，方向恒为 +y→0（纸从上方落下贴到桌面）。
+     绝不给第二个值——一旦出现 12px/24px，「远近」就被编码进了 transform，
+     而 reduced-motion 会把 transform 全部关掉，那部分信息就丢了。
+
+     **T1–T2 不使用它**：本期所有「到达」都由原生 View Transition 独占（见
+     全局约束），没有任何元素需要 settle。这里先立着是为了 T3 的 motion 层，
+     那时非导航到达（fetcher 结果、展开收起、增删）才需要它。
+     在 T3 之前谁用到它，八成是在给内容层写入场动画——那是红线。 */
+  --settle-y: 6px;
+  --lift-y: -2px; /* 卡片 hover 抬起 */
+  --dogear: 14px; /* 折角三角边长，transform-origin 在角点 */
+  --wave-period: 22px; /* 近层瓦片高，来自 body::before 的 background-size: 44px 22px */
   --sidebar: oklch(0.96 0.008 84);
   --sidebar-foreground: oklch(0.26 0.018 45);
   --sidebar-primary: oklch(0.57 0.205 30);
@@ -119,6 +212,29 @@ html.dark {
     transparent 16px 21px,
     oklch(0.92 0.012 84 / 0.055) 21px 22px,
     transparent 22px
+  );
+  /* 环宽锁死 1px——放大线宽会读作模糊而非远景（spec §4.4）。 */
+  --bg-pattern-far: radial-gradient(
+    circle at 50% 100%,
+    transparent 18px,
+    oklch(0.92 0.012 84 / 0.028) 18px 19px,
+    transparent 19px 30px,
+    oklch(0.92 0.012 84 / 0.028) 30px 31px,
+    transparent 31px 43px,
+    oklch(0.92 0.012 84 / 0.028) 43px 44px,
+    transparent 44px
+  );
+  /* 青海波 hero 层：同一母题的第三个尺度，半径取近层的 ×4，环宽仍锁 1px。
+     px 单位的渐变色标不随 background-size 缩放，所以不能复用 --bg-pattern-far。 */
+  --bg-pattern-hero: radial-gradient(
+    circle at 50% 100%,
+    transparent 36px,
+    oklch(0.92 0.012 84 / 0.028) 36px 37px,
+    transparent 37px 60px,
+    oklch(0.92 0.012 84 / 0.028) 60px 61px,
+    transparent 61px 87px,
+    oklch(0.92 0.012 84 / 0.028) 87px 88px,
+    transparent 88px
   );
   --popover-foreground: oklch(0.92 0.012 84);
   --primary: oklch(0.65 0.19 30);
@@ -178,6 +294,25 @@ html.dark {
     background-size: cover, 44px 22px;
     background-position: center, center;
     background-repeat: no-repeat, repeat;
+  }
+
+  /* 青海波远层。挂 body::after——它目前是空的，所以零新增 DOM。
+     z-index 比近层再低一层，永远在内容之下。
+     上下各出血 48px：位移最多一个周期（44px），出血必须 ≥ 位移量，否则滚到底时
+     底部露白。 */
+  body::after {
+    content: "";
+    position: fixed;
+    inset: -48px 0;
+    z-index: -2;
+    pointer-events: none;
+    background-image: var(--bg-pattern-far);
+    background-size: 88px 44px;
+    background-repeat: repeat;
+    /* 常驻图层提升：全屏图层约 8MB 显存，painted 一次之后只做合成。
+       比 will-change 的开/关更稳——后者会在滚动开始那一帧创建/销毁图层，
+       正好把抖动放在最不能抖的时刻。 */
+    transform: translate3d(0, 0, 0);
   }
 
   /* 内容卡半透明 + 背景模糊，让底纹透上来 */
@@ -289,6 +424,252 @@ html.dark {
     background: var(--muted);
     font-weight: 600;
   }
+
+  /* 墨界线：替代 divide-y 的硬线。两端渐隐，像墨在纸上洇开又淡去。
+     用 border-image 而不是 ::after，是为了不占用列表项的伪元素——
+     PostList 的 <li> 后面可能还要挂别的东西。 */
+  .ink-divide > * + * {
+    border-top: 1px solid transparent;
+    border-image: linear-gradient(
+        to right,
+        transparent 0,
+        var(--border) 8%,
+        var(--border) 92%,
+        transparent 100%
+      )
+      1;
+  }
+
+  /* 列表行落笔：左缘一道朱线由上至下画出来。
+     用 scaleY + transform-origin 而不是改 width/height——只动 transform，
+     不触发 layout。密度高的数据视图（data-density=compact）里行高只有 80px，
+     整行位移会让扫读失焦，所以**不做**任何行位移。 */
+  .ink-row {
+    position: relative;
+  }
+  .ink-row::before {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    width: 2px;
+    background: var(--primary);
+    transform: scaleY(0);
+    transform-origin: 50% 0;
+    transition: transform var(--transition-duration-sumi) var(--ease-fude);
+  }
+  .ink-row:hover::before,
+  .ink-row:focus-visible::before,
+  .ink-row:has(:focus-visible)::before {
+    transform: scaleY(1);
+  }
+
+  /* 落点墨洇：一滴墨落在这一楼上，然后洇开淡去。
+     只动 background-color（合成友好），不动布局。
+
+     用 :target 而不是 JS：原生 hash 跳转发生在浏览器解析文档时、早于 React
+     水合，那一刻 motion 组件还不存在、接不住；而 :target 是浏览器自己维护的
+     状态，跨页深链、前进后退、手动改地址栏全覆盖。 */
+  @keyframes ink-bloom {
+    from {
+      background-color: color-mix(in oklab, var(--primary) 12%, transparent);
+    }
+    to {
+      background-color: transparent;
+    }
+  }
+  .markdown-anchor:target,
+  li[id^="p"]:target {
+    animation: ink-bloom 1.2s var(--ease-sumi);
+    border-radius: var(--radius-md);
+  }
+
+  /* 全局 pending 墨线：一道朱线从左缘运笔展开，逼近但不到达右端。
+     用 --ease-fude（笔·运，梯形速度剖面、接近线性）——笔画的**长度**由手速决定，
+     所以进度条走匀速而不是先快后慢；「永不到达」由 scaleX 上限 0.9 保证，不靠曲线。
+     2.5s 是按「什么时候看得清」定的：500ms 的导航能长到约 230px，读得出来；
+     8s 那种量级要 1.5–2s 才可辨，与下面 150ms 的阈值差一个数量级。 */
+  @keyframes ink-progress {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(0.9);
+    }
+  }
+  .pending-bar {
+    position: absolute;
+    inset-inline: 0;
+    bottom: -1px;
+    height: 2px;
+    background: var(--primary);
+    transform-origin: 0 50%;
+    transform: scaleX(0);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .pending-bar[data-pending="true"] {
+    opacity: 1;
+    /* 150ms 延迟阈值：快网下每次点击都闪一道比没有更烦 */
+    animation: ink-progress 2.5s var(--ease-fude) 0.15s both;
+    transition: opacity var(--transition-duration-sumi) var(--ease-sumi);
+  }
+
+  /* Hero 装饰层。整层是**装饰**不是内容——aria-hidden + pointer-events-none，
+     所以可以自由入场（内容层的首帧零入场红线不适用于它）。
+
+     三件东西：
+     1) hero 区局部强化的青海波弧组（同一母题的第三个尺度）
+     2) 一道朱红界线，由中心向两侧运笔展开
+     3) 一枚无字的几何朱印 + 墨洇 */
+  .hero-decor {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  /* 大尺度青海波：只在 hero 区。hero 有自己的一套 stop（--bg-pattern-hero），
+     不是靠 background-size 放大远层——px 单位的渐变色标不随 background-size
+     缩放，那样只会把远层的圆环原样铺开、在 176×88 的瓦片里互相隔开成孤立弧扇。 */
+  .hero-decor::before {
+    content: "";
+    position: absolute;
+    inset-inline: -10%;
+    bottom: 0;
+    height: 60%;
+    background-image: var(--bg-pattern-hero);
+    background-size: 176px 88px;
+    background-repeat: repeat-x;
+    opacity: 0;
+    animation: hero-wash 1.2s var(--ease-sumi) 0.1s forwards;
+  }
+  @keyframes hero-wash {
+    to {
+      opacity: 1;
+    }
+  }
+
+  /* 它虽然渲染在 HeroDecor 之外（要夹在 h1 与 tagline 之间），但仍是装饰层，
+     所以 aria-hidden 与 pointer-events 一个都不能少——「每一个装饰性的、会动的
+     节点都可证明地 aria-hidden + 不可交互」是这一层的不变式，破例一次就等于取消它。 */
+  .hero-rule {
+    display: block;
+    pointer-events: none;
+    height: 1px;
+    width: min(18rem, 60%);
+    margin-inline: auto;
+    background: linear-gradient(
+      to right,
+      transparent,
+      var(--primary) 20%,
+      var(--primary) 80%,
+      transparent
+    );
+    transform: scaleX(0);
+    animation: hero-stroke 0.52s var(--ease-fude) 0.25s forwards;
+  }
+  @keyframes hero-stroke {
+    to {
+      transform: scaleX(1);
+    }
+  }
+
+  /* 落款朱印：一枚无字的几何印，墨洇式淡入 */
+  .hero-seal {
+    position: absolute;
+    inset-inline-end: clamp(1rem, 8vw, 5rem);
+    bottom: 15%;
+    width: 3rem;
+    height: 3rem;
+    border: 2px solid var(--primary);
+    border-radius: var(--radius-sm);
+    opacity: 0;
+    animation: hero-seal-ink 0.9s var(--ease-sumi) 0.5s forwards;
+  }
+  .hero-seal::before,
+  .hero-seal::after {
+    content: "";
+    position: absolute;
+    background: var(--primary);
+  }
+  .hero-seal::before {
+    inset: 0.65rem 0.5rem;
+    clip-path: polygon(0 0, 100% 0, 100% 22%, 0 22%, 0 44%, 100% 44%, 100% 66%, 0 66%);
+  }
+  .hero-seal::after {
+    inset-block: 0.5rem;
+    inset-inline-start: 50%;
+    width: 2px;
+    translate: -1px 0;
+  }
+  @keyframes hero-seal-ink {
+    to {
+      opacity: 0.75;
+    }
+  }
+}
+
+/* 纸被掀起一角。
+   用 @utility 而不是 @layer components 里的类：@utility 生成的规则落在
+   @layer utilities，能被 hover:/focus-visible: 这类变体正常修饰。
+
+   刻意**不做**微旋转：在半透明 + backdrop-filter 的卡片上做亚度数 rotate 会让
+   CJK 衬线字形重新栅格化、整卡发虚，而 0.15deg 本身看不见（详见 spec 附录 B）。
+
+   折角三角是纯 transform + opacity 的厚度暗示，不动 box-shadow（paint 类，贵）。 */
+@utility paper-lift {
+  position: relative;
+  transition-property: transform, box-shadow;
+  transition-duration: var(--transition-duration-washi-md);
+  transition-timing-function: var(--ease-washi);
+
+  /* 折角：右上角一枚三角，常态收成 0，掀起时长出来。
+     用 accent（山吹金）而不是 primary（朱红）——朱红已经承担了 ring 的强调，
+     再用一次就分不清主次。 */
+  &::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: var(--dogear);
+    height: var(--dogear);
+    background: linear-gradient(
+      225deg,
+      var(--accent) 0 50%,
+      transparent 50%
+    );
+    border-start-end-radius: var(--radius-xl);
+    transform: scale(0);
+    transform-origin: 100% 0;
+    opacity: 0;
+    pointer-events: none;
+    transition: transform var(--transition-duration-washi-md) var(--ease-washi),
+      opacity var(--transition-duration-washi-sm) var(--ease-sumi);
+  }
+
+  /* 键盘同步：两种形态都要。
+     `a:focus-visible > &` 处理「可聚焦的是卡片的**祖先**」——首页与六版块网格
+     都是 <a><Card/></a> 的结构，卡片内零个可聚焦元素。
+     `&:has(:focus-visible)` 处理「可聚焦的在卡片**内部**」——`:has()` 是向下看的，
+     后续香霖堂许可卡属于这一类。
+     只写其中一种都会漏掉一半调用点。 */
+  &:hover,
+  a:focus-visible > &,
+  &:has(:focus-visible) {
+    transform: translateY(var(--lift-y));
+    &::after {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  /* 按下：纸被压回桌面。接触是瞬时的，所以按下没有过渡；松手才走纸的回落。 */
+  &:active {
+    transform: translateY(0);
+    transition-duration: 0s;
+  }
 }
 
 @layer utilities {
@@ -306,6 +687,50 @@ html.dark {
   [data-density="compact"] :is(h2, h3) {
     font-size: 0.9375rem;
   }
+}
+
+/* 青海波远层的滚动驱动漂移。
+   **必须用 @supports 包住**：不支持 animation-timeline 的浏览器会忽略该属性、
+   却照常把 animation 当成基于时间的动画跑——那就变成了空闲循环，页面静止时
+   持续让每张 backdrop-filter 卡重算模糊，正是我们要避免的东西。
+   支持度：Chrome/Edge 115+、Safari 26+（含 iOS）、Firefox 158+，约 87%。
+   其余浏览器得到一个静止的远层，与 reduced-motion 下表现一致，可接受。
+
+   与 spec §4.3 的一处刻意偏离：spec 写的是「位移 = scrollY × 0.06」这样的
+   固定速率，而原生 scroll timeline 把进度归一化到滚动范围，表达不了速率。
+   改为「整页滚动范围内恰好漂移一个远层周期（44px）」——首尾无缝，代价是
+   漂移速率随页面长度变化。 */
+@keyframes wave-drift {
+  to {
+    /* 远层周期是近层的两倍（88×44 对 44×22），所以位移一个远层周期
+       = --wave-period × 2。写成 calc 而不是字面 44px，改 token 时不会漏。 */
+    transform: translate3d(0, calc(var(--wave-period) * -2), 0);
+  }
+}
+
+@supports (animation-timeline: scroll()) {
+  @media not (prefers-reduced-motion: reduce) {
+    body::after {
+      /* 这两行的**顺序是承重的**：`animation` 简写会把 animation-timeline 重置为
+         auto，所以必须简写在前、animation-timeline 在后。对调即静默退化成时间驱动
+         动画，不报错也没有门禁能抓。 */
+      animation: wave-drift linear both;
+      animation-timeline: scroll(root block);
+    }
+  }
+}
+
+/* 跨页转场。
+   **不进任何 @layer**：view transition 伪元素在 UA origin，包进 layer 会被
+   优先级问题吃掉。
+
+   交叉淡入用墨的曲线（这是颜色/不透明度类）。刻意**不做方向性转场**——
+   Firefox 首版实现不含 view transition types，靠 types 做方向的方案在那里
+   会静默退化成无方向，两套观感反而更糟。 */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--transition-duration-washi-lg);
+  animation-timing-function: var(--ease-sumi);
 }
 
 /* 减弱动效：只掐掉位移与缩放，保留淡入淡出与颜色过渡。
@@ -337,8 +762,60 @@ html.dark {
     --tw-exit-blur: 0;
     scroll-behavior: auto !important;
   }
+  /* 跨页转场的降级规则并到这一块里，不另起 @media——新增任何降级规则
+     一律加进这一块，这是本分支自己的约定（唯一要看的地方）。
+     这里可以直接用 `animation: none`：VT 伪元素不经历 Radix 那种
+     animationend 卸载流程，掐掉动画不会卡住任何东西。 */
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
   /* 骨架屏保留一个低幅度脉冲：完全静止的话用户分不清是在加载还是坏了 */
   .animate-pulse {
     animation-duration: 3s;
+  }
+  /* 掀角是纯装饰的空间暗示，减弱动效下整条关掉——ring 的颜色变化仍在，
+     所以「这张卡可点」的信息不丢。 */
+  .paper-lift {
+    transition-property: box-shadow;
+  }
+  .paper-lift:hover,
+  a:focus-visible > .paper-lift,
+  .paper-lift:has(:focus-visible) {
+    transform: none;
+  }
+  .paper-lift::after {
+    display: none;
+  }
+  /* 朱线的「画出来」是笔势，减弱动效下直接给终态：一步到位，不做过渡 */
+  .ink-row::before {
+    transition: none;
+  }
+  /* 墨洇是颜色动画不是位移，前庭安全；但 1.2s 的持续变化对注意力敏感用户
+     仍是干扰，压到一次极短的提示 */
+  li[id^="p"]:target,
+  .markdown-anchor:target {
+    animation-duration: 1ms;
+    background-color: color-mix(in oklab, var(--primary) 12%, transparent);
+  }
+  /* 进度条是「还在等」的唯一视觉信号，不能整条关掉。
+     改为静止的一小段：位置固定，只靠出现/消失传达状态。 */
+  .pending-bar[data-pending="true"] {
+    animation: none;
+    transform: scaleX(0.3);
+  }
+  /* 装饰层的入场全部跳过，直接给终态——装饰不该是唯一在动的东西 */
+  .hero-decor::before,
+  .hero-seal {
+    animation: none;
+    opacity: 1;
+  }
+  .hero-seal {
+    opacity: 0.75;
+  }
+  .hero-rule {
+    animation: none;
+    transform: none;
   }
 }

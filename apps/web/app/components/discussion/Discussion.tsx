@@ -100,10 +100,16 @@ export function Discussion({
   const pages = Math.max(1, Math.ceil(page.total / page.pageSize))
   const current = Math.floor((page.from - 1) / page.pageSize) + 1
   const hrefFor = (p: number) => {
-    // 带 hash：ScrollRestoration 先处理 hash 再看 preventScrollReset，
-    // 没有它翻页后视口停在原地，新一页的第一楼在上方 50 层之外
+    /**
+     * 带 hash：ScrollRestoration 先处理 hash 再看 preventScrollReset，
+     * 没有它翻页后视口停在原地，新一页的第一楼在上方 50 层之外。
+     *
+     * hash 指向列表容器 `#floors` 而不是首楼 `#p{from}`：后者会让 `:target`
+     * 的落点墨洇在**每一次翻页**给当页第一楼闪一下，而那一楼什么也没发生。
+     * 墨洇只该服务「有人特意指向这一楼」——引用锚点与楼层自链接。
+     */
     const from = (p - 1) * page.pageSize + 1
-    return `${pathname}?floor=${from}#p${from}`
+    return `${pathname}?floor=${from}#floors`
   }
 
   return (

@@ -20,10 +20,11 @@ export function BoardNav({ current }: { current?: BoardSlug }) {
         <Link
           key={b}
           to={localizeHref(`/shrine/b/${b}`)}
+          viewTransition
           aria-current={b === current ? 'page' : undefined}
         >
           <Card
-            className={`h-full transition-shadow ${b === current ? 'ring-2 ring-primary hover:ring-primary' : 'hover:ring-primary/50'}`}
+            className={`paper-lift h-full ${b === current ? 'ring-2 ring-primary hover:ring-primary' : 'hover:ring-primary/50'}`}
           >
             <CardHeader>
               <CardTitle className="font-heading text-base">
