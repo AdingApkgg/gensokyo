@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+      - run: bun run typecheck
+      - run: bun run check-messages
+      # 只跑不依赖外部服务的两个包。api / db / api-client 的 test 脚本带
+      # `--env-file=../../.env`，而 .env 不入库，且它们 import @gensokyo/db——
+      # 在裸 runner 上必红。要把它们接进来得先起 postgres/redis/Meili/MinIO，
+      # 那是另一个决策，与下面不跑 e2e 是同一条理由。
+      - run: bunx turbo run test --filter=@gensokyo/web --filter=@gensokyo/shared
+      - run: cd apps/web && bun run build
+      - run: bun run check-css-layers
+      - run: bun run check-bundle-size
