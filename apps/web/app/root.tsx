@@ -83,8 +83,15 @@ export async function loader({ request }: Route.LoaderArgs) {
 export default function App({ loaderData }: Route.ComponentProps) {
   return (
     <div className="flex min-h-screen flex-col">
+      {/* 跳至正文：键盘用户此前必须逐个 Tab 过整条导航才能到内容 */}
+      <a
+        href="#main"
+        className="sr-only rounded-md bg-background px-3 py-2 text-sm ring-1 ring-ring focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50"
+      >
+        {m.skip_to_content()}
+      </a>
       <SiteHeader user={loaderData.user} />
-      <div className="flex-1">
+      <div id="main" className="flex-1 scroll-mt-20">
         <Outlet />
       </div>
       <SiteFooter />

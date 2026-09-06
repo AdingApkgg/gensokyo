@@ -1,5 +1,6 @@
 import type { NotificationView } from '@gensokyo/shared'
 import { Link, redirect, useFetcher } from 'react-router'
+import { LiveRegion } from '~/components/live-region'
 import { RelativeTime } from '~/components/relative-time'
 import { Button } from '~/components/ui/button'
 import { apiFor } from '~/lib/api'
@@ -44,7 +45,10 @@ export async function action({ request }: Route.ActionArgs) {
   const res = await api.api.notifications.read.$post({
     json: upTo ? { upTo } : { ids: [id] },
   })
-  return { ok: res.ok }
+  // API 已经算好了 marked，此前被丢掉——于是连一句「已标记 N 条」都印不出来
+  if (!res.ok) return { ok: false as const }
+  const { marked } = (await res.json()) as { marked: number }
+  return { ok: true as const, marked }
 }
 
 const rejectLabel = (r: unknown) =>
@@ -125,11 +129,16 @@ function describe(n: NotificationView): {
 export default function Notifications({ loaderData }: Route.ComponentProps) {
   const { items, failed } = loaderData
   const fetcher = useFetcher<typeof action>()
+  const marked =
+    fetcher.state === 'idle' && fetcher.data?.ok ? fetcher.data.marked : null
   const unread = items.filter((n) => !n.read)
   const newest = items[0]
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
+      <LiveRegion>
+        {marked !== null ? m.notif_marked_n({ n: marked }) : null}
+      </LiveRegion>
       <header className="flex items-center gap-4">
         <h1 className="font-heading text-2xl font-bold">{m.notif_title()}</h1>
         {unread.length > 0 && newest && (
