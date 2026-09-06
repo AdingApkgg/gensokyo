@@ -126,16 +126,31 @@ html.dark {
   );
   /* 青海波远层：同一母题的第二个尺度（2×），线宽不变、对比度再降一半。
      两个不同尺度的波列同向异速滚动会产生缓慢的莫尔/视差——这是真实水面的
-     深度线索，也是唯一一个「一眼认出这是那个站」的东西。 */
+     深度线索，也是唯一一个「一眼认出这是那个站」的东西。
+     环宽锁死 1px——放大线宽会读作模糊而非远景（spec §4.4）。 */
   --bg-pattern-far: radial-gradient(
     circle at 50% 100%,
     transparent 18px,
-    oklch(0.26 0.018 45 / 0.025) 18px 20px,
-    transparent 20px 30px,
-    oklch(0.26 0.018 45 / 0.025) 30px 32px,
-    transparent 32px 42px,
-    oklch(0.26 0.018 45 / 0.025) 42px 44px,
+    oklch(0.26 0.018 45 / 0.025) 18px 19px,
+    transparent 19px 30px,
+    oklch(0.26 0.018 45 / 0.025) 30px 31px,
+    transparent 31px 43px,
+    oklch(0.26 0.018 45 / 0.025) 43px 44px,
     transparent 44px
+  );
+  /* 青海波 hero 层：同一母题的第三个尺度，半径取近层的 ×4，环宽仍锁 1px。
+     不能靠 --bg-pattern-far 配 background-size 放大——px 单位的渐变色标不随
+     background-size 缩放，那样只会把同一批圆环原样铺开成互相隔开的孤立弧扇，
+     所以 hero 需要自己一套 stop（颜色沿用远层）。 */
+  --bg-pattern-hero: radial-gradient(
+    circle at 50% 100%,
+    transparent 36px,
+    oklch(0.26 0.018 45 / 0.025) 36px 37px,
+    transparent 37px 60px,
+    oklch(0.26 0.018 45 / 0.025) 60px 61px,
+    transparent 61px 87px,
+    oklch(0.26 0.018 45 / 0.025) 87px 88px,
+    transparent 88px
   );
   --popover-foreground: oklch(0.26 0.018 45);
   --primary: oklch(0.57 0.205 30);
@@ -198,15 +213,28 @@ html.dark {
     oklch(0.92 0.012 84 / 0.055) 21px 22px,
     transparent 22px
   );
+  /* 环宽锁死 1px——放大线宽会读作模糊而非远景（spec §4.4）。 */
   --bg-pattern-far: radial-gradient(
     circle at 50% 100%,
     transparent 18px,
-    oklch(0.92 0.012 84 / 0.028) 18px 20px,
-    transparent 20px 30px,
-    oklch(0.92 0.012 84 / 0.028) 30px 32px,
-    transparent 32px 42px,
-    oklch(0.92 0.012 84 / 0.028) 42px 44px,
+    oklch(0.92 0.012 84 / 0.028) 18px 19px,
+    transparent 19px 30px,
+    oklch(0.92 0.012 84 / 0.028) 30px 31px,
+    transparent 31px 43px,
+    oklch(0.92 0.012 84 / 0.028) 43px 44px,
     transparent 44px
+  );
+  /* 青海波 hero 层：同一母题的第三个尺度，半径取近层的 ×4，环宽仍锁 1px。
+     px 单位的渐变色标不随 background-size 缩放，所以不能复用 --bg-pattern-far。 */
+  --bg-pattern-hero: radial-gradient(
+    circle at 50% 100%,
+    transparent 36px,
+    oklch(0.92 0.012 84 / 0.028) 36px 37px,
+    transparent 37px 60px,
+    oklch(0.92 0.012 84 / 0.028) 60px 61px,
+    transparent 61px 87px,
+    oklch(0.92 0.012 84 / 0.028) 87px 88px,
+    transparent 88px
   );
   --popover-foreground: oklch(0.92 0.012 84);
   --primary: oklch(0.65 0.19 30);
@@ -270,11 +298,12 @@ html.dark {
 
   /* 青海波远层。挂 body::after——它目前是空的，所以零新增 DOM。
      z-index 比近层再低一层，永远在内容之下。
-     上下各出血 24px：位移最多一个周期（44px），出血保证边缘不会露白。 */
+     上下各出血 48px：位移最多一个周期（44px），出血必须 ≥ 位移量，否则滚到底时
+     底部露白。 */
   body::after {
     content: "";
     position: fixed;
-    inset: -24px 0;
+    inset: -48px 0;
     z-index: -2;
     pointer-events: none;
     background-image: var(--bg-pattern-far);
@@ -501,14 +530,16 @@ html.dark {
     pointer-events: none;
   }
 
-  /* 大尺度青海波：只在 hero 区，尺度是远层的两倍 */
+  /* 大尺度青海波：只在 hero 区。hero 有自己的一套 stop（--bg-pattern-hero），
+     不是靠 background-size 放大远层——px 单位的渐变色标不随 background-size
+     缩放，那样只会把远层的圆环原样铺开、在 176×88 的瓦片里互相隔开成孤立弧扇。 */
   .hero-decor::before {
     content: "";
     position: absolute;
     inset-inline: -10%;
     bottom: 0;
     height: 60%;
-    background-image: var(--bg-pattern-far);
+    background-image: var(--bg-pattern-hero);
     background-size: 176px 88px;
     background-repeat: repeat-x;
     opacity: 0;
@@ -680,6 +711,9 @@ html.dark {
 @supports (animation-timeline: scroll()) {
   @media not (prefers-reduced-motion: reduce) {
     body::after {
+      /* 这两行的**顺序是承重的**：`animation` 简写会把 animation-timeline 重置为
+         auto，所以必须简写在前、animation-timeline 在后。对调即静默退化成时间驱动
+         动画，不报错也没有门禁能抓。 */
       animation: wave-drift linear both;
       animation-timeline: scroll(root block);
     }
@@ -697,14 +731,6 @@ html.dark {
 ::view-transition-new(root) {
   animation-duration: var(--transition-duration-washi-lg);
   animation-timing-function: var(--ease-sumi);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  ::view-transition-group(*),
-  ::view-transition-old(*),
-  ::view-transition-new(*) {
-    animation: none !important;
-  }
 }
 
 /* 减弱动效：只掐掉位移与缩放，保留淡入淡出与颜色过渡。
@@ -735,6 +761,15 @@ html.dark {
     --tw-enter-blur: 0;
     --tw-exit-blur: 0;
     scroll-behavior: auto !important;
+  }
+  /* 跨页转场的降级规则并到这一块里，不另起 @media——新增任何降级规则
+     一律加进这一块，这是本分支自己的约定（唯一要看的地方）。
+     这里可以直接用 `animation: none`：VT 伪元素不经历 Radix 那种
+     animationend 卸载流程，掐掉动画不会卡住任何东西。 */
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
   }
   /* 骨架屏保留一个低幅度脉冲：完全静止的话用户分不清是在加载还是坏了 */
   .animate-pulse {
