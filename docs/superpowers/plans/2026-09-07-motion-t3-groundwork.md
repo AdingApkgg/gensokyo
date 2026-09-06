@@ -34,7 +34,7 @@
 | 前四大 | `entry.client` 55.9、`jsx-runtime` 27.6、Radix collection/dropdown/dialog 20.1、`errorBoundaries` 11.4 |
 | `/kourindou` | 200.5 KB gz |
 | `/dash` | 201.8 KB gz（其中 dash 独有 40.0 KB） |
-| **`/shrine/t/:id`（全站最重）** | **256.2 KB gz**（`Markdown` 单 chunk 48.3 KB） |
+| `/shrine/t/:id` | 256.2 KB gz（`Markdown` 单 chunk 48.3 KB）——注：Task 2 实测后最重的是 `/kourindou/:slug` 250.99 KB，此处 256.2 是更早产物 |
 
 口径：解析 `apps/web/build/server/index.js` 内联的 RR manifest，首屏集 = `entry.module ∪ entry.imports ∪ routes.root.module ∪ routes.root.imports`，**逐文件 gzip -9 求和**（不是拼起来压一次——拼压会互相蹭字典，实测乐观 6.9 KB）。
 
@@ -161,7 +161,7 @@ EOF
 - 失败时打印**最重的 6 个 chunk**，否则报错等于没报。
 - 只用 Bun 内置（`node:fs`/`node:path`/`node:zlib`）。
 
-预算取值理由写进脚本注释：Task 1 之后首屏约 150.5 KB，留 4.5 KB 余量；最重路由 `/shrine/t/:id` 约 256 KB（其中 `Markdown` 48.3 KB），留 14 KB。**T4 装 motion 后要重新校准并在那时说明理由。**
+预算取值理由写进脚本注释：Task 1 之后首屏约 150.5 KB，留 4.5 KB 余量；最重路由实测是 `/kourindou/:slug` 250.99 KB（**不是** `/shrine/t/:id`，那条估算已过期），留约 19 KB。**T4 装 motion 后要重新校准并在那时说明理由。**
 
 - [ ] **Step 2: 挂进 package.json**
 
