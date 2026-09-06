@@ -478,7 +478,6 @@ html.dark {
       background-color: transparent;
     }
   }
-  .markdown-anchor:target,
   li[id^="p"]:target {
     animation: ink-bloom 1.2s var(--ease-sumi);
     border-radius: var(--radius-md);
@@ -649,14 +648,16 @@ html.dark {
       opacity var(--transition-duration-washi-sm) var(--ease-sumi);
   }
 
-  /* 键盘同步：两种形态都要。
-     `a:focus-visible > &` 处理「可聚焦的是卡片的**祖先**」——首页与六版块网格
-     都是 <a><Card/></a> 的结构，卡片内零个可聚焦元素。
-     `&:has(:focus-visible)` 处理「可聚焦的在卡片**内部**」——`:has()` 是向下看的，
-     后续香霖堂许可卡属于这一类。
-     只写其中一种都会漏掉一半调用点。 */
+  /* 键盘同步：可聚焦元素与卡片的关系有三种，三种都要写。
+     `a:focus-visible > &` —— 可聚焦的是卡片的**祖先**（首页与六版块网格是
+       <a><Card/></a>，卡片内零个可聚焦元素）。
+     `&:focus-visible` —— 卡片**自身**可聚焦（香霖堂许可卡是 upload.tsx 的
+       <button>，自身可聚焦、内部零可聚焦后代；前两种形态都选不中它）。
+     `&:has(:focus-visible)` —— 可聚焦的在卡片**内部**（`:has()` 是向下看的）。
+     漏掉任何一种都会让对应调用点的键盘用户拿不到掀角，而且没有门禁能抓。 */
   &:hover,
   a:focus-visible > &,
+  &:focus-visible,
   &:has(:focus-visible) {
     transform: translateY(var(--lift-y));
     &::after {
@@ -782,6 +783,7 @@ html.dark {
   }
   .paper-lift:hover,
   a:focus-visible > .paper-lift,
+  .paper-lift:focus-visible,
   .paper-lift:has(:focus-visible) {
     transform: none;
   }
@@ -794,8 +796,7 @@ html.dark {
   }
   /* 墨洇是颜色动画不是位移，前庭安全；但 1.2s 的持续变化对注意力敏感用户
      仍是干扰，压到一次极短的提示 */
-  li[id^="p"]:target,
-  .markdown-anchor:target {
+  li[id^="p"]:target {
     animation-duration: 1ms;
     background-color: color-mix(in oklab, var(--primary) 12%, transparent);
   }
