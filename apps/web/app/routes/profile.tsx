@@ -1,4 +1,5 @@
 import { data, Link } from 'react-router'
+import { RelativeTime } from '~/components/relative-time'
 import { Alert, AlertDescription } from '~/components/ui/alert'
 import {
   Pagination,
@@ -9,7 +10,7 @@ import {
 } from '~/components/ui/pagination'
 import { apiFor } from '~/lib/api'
 import { boardLabel, displayTitle } from '~/lib/display'
-import { formatAbsolute, formatRelative } from '~/lib/time'
+import { formatAbsolute } from '~/lib/time'
 import { m } from '~/paraglide/messages'
 import { localizeHref } from '~/paraglide/runtime'
 import type { Route } from './+types/profile'
@@ -85,14 +86,10 @@ export default function Profile({ loaderData }: Route.ComponentProps) {
                         {boardLabel(p.topic.boardSlug)}
                       </span>
                     )}
-                    <time
-                      dateTime={p.createdAt}
-                      title={formatAbsolute(p.createdAt)}
-                      suppressHydrationWarning
+                    <RelativeTime
+                      iso={p.createdAt}
                       className="ml-auto text-xs text-muted-foreground"
-                    >
-                      {formatRelative(p.createdAt)}
-                    </time>
+                    />
                   </div>
                   <p className="mt-1 line-clamp-3 text-sm whitespace-pre-wrap">
                     {p.excerpt}

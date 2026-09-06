@@ -1,8 +1,8 @@
 import type { PostView } from '@gensokyo/shared'
 import { useState } from 'react'
 import { Link } from 'react-router'
+import { RelativeTime } from '~/components/relative-time'
 import { Button } from '~/components/ui/button'
-import { formatAbsolute, formatRelative } from '~/lib/time'
 import { m } from '~/paraglide/messages'
 import { localizeHref } from '~/paraglide/runtime'
 import { DeletePostDialog } from './DeletePostDialog'
@@ -95,14 +95,10 @@ function PostItem({
         >
           #{p.floor}
         </a>
-        <time
-          dateTime={p.createdAt}
-          title={formatAbsolute(p.createdAt)}
-          suppressHydrationWarning
+        <RelativeTime
+          iso={p.createdAt}
           className="text-xs text-muted-foreground"
-        >
-          {formatRelative(p.createdAt)}
-        </time>
+        />
         {edited && (
           <span className="text-xs text-muted-foreground">
             {m.shrine_edited()}

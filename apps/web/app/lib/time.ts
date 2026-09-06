@@ -16,8 +16,11 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
 ]
 
 /**
- * 相对时间。SSR 与水合时钟不同，调用方要给 `<time>` 加 suppressHydrationWarning——
- * 这是相对时间的固有属性，不是 bug。
+ * 相对时间。首帧用服务端时钟是对的——SSR 与水合时钟不同，调用方要给 `<time>`
+ * 加 `suppressHydrationWarning` 才能避免水合不匹配。但光靠这个文本就会永远
+ * 停在 SSR 那一刻：`suppressHydrationWarning` 只是让 React 跳过水合时的文本
+ * 修补，客户端并不会重新计算。水合后的接管在 `~/components/relative-time`
+ * 的 `RelativeTime` 组件——用它而不是裸调这个函数拼 `<time>`。
  */
 export function formatRelative(iso: string, now = Date.now()): string {
   const diff = (new Date(iso).getTime() - now) / 1000

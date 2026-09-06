@@ -1,9 +1,9 @@
 import type { NotificationView } from '@gensokyo/shared'
 import { Link, redirect, useFetcher } from 'react-router'
+import { RelativeTime } from '~/components/relative-time'
 import { Button } from '~/components/ui/button'
 import { apiFor } from '~/lib/api'
 import { displayTitle, reportReasonLabel } from '~/lib/display'
-import { formatAbsolute, formatRelative } from '~/lib/time'
 import { m } from '~/paraglide/messages'
 import { localizeHref } from '~/paraglide/runtime'
 import type { Route } from './+types/notifications'
@@ -176,14 +176,10 @@ export default function Notifications({ loaderData }: Route.ComponentProps) {
                   >
                     {d.text}
                   </span>
-                  <time
-                    dateTime={n.createdAt}
-                    title={formatAbsolute(n.createdAt)}
-                    suppressHydrationWarning
+                  <RelativeTime
+                    iso={n.createdAt}
                     className="ml-auto text-xs text-muted-foreground"
-                  >
-                    {formatRelative(n.createdAt)}
-                  </time>
+                  />
                 </div>
                 {d.sub && (
                   <p className="mt-1 text-sm text-muted-foreground">{d.sub}</p>
