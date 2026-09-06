@@ -24,11 +24,25 @@ export function RelativeTime({
   const [now, setNow] = useState<number | null>(null)
 
   useEffect(() => {
+    const at = new Date(iso).getTime()
     setNow(Date.now())
-    const period = periodFor(Date.now() - new Date(iso).getTime())
-    if (period === null) return
-    const timer = setInterval(() => setNow(Date.now()), period)
-    return () => clearInterval(timer)
+
+    /**
+     * 自排队的 setTimeout 而不是 setInterval：档位要**每次都重算**。
+     * 定时器只在挂载时算一次的话，一条挂载时才 30 秒的通知会以 10 秒的节奏
+     * 一直刷到标签页关闭——哪怕它早已过了一天、`periodFor` 已经该返回 null。
+     */
+    let timer: ReturnType<typeof setTimeout>
+    const tick = () => {
+      const period = periodFor(Date.now() - at)
+      if (period === null) return
+      timer = setTimeout(() => {
+        setNow(Date.now())
+        tick()
+      }, period)
+    }
+    tick()
+    return () => clearTimeout(timer)
   }, [iso])
 
   return (

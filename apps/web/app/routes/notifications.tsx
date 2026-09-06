@@ -4,6 +4,7 @@ import { LiveRegion } from '~/components/live-region'
 import { RelativeTime } from '~/components/relative-time'
 import { Button } from '~/components/ui/button'
 import { apiFor } from '~/lib/api'
+import { apiErrorCode, errorMessage } from '~/lib/api-error'
 import { displayTitle, reportReasonLabel } from '~/lib/display'
 import { m } from '~/paraglide/messages'
 import { localizeHref } from '~/paraglide/runtime'
@@ -46,7 +47,12 @@ export async function action({ request }: Route.ActionArgs) {
     json: upTo ? { upTo } : { ids: [id] },
   })
   // API 已经算好了 marked，此前被丢掉——于是连一句「已标记 N 条」都印不出来
-  if (!res.ok) return { ok: false as const }
+  //
+  // 失败也要带原因：这条路径能发 401（会话过期）与 404（upTo 游标指向的通知
+  // 已经不在了），而 `{ ok: false }` 会把两者一起吞掉——点了没反应、角标不变、
+  // 一个字都没有。/dash 的审核队列犯过一模一样的错。
+  const code = await apiErrorCode(res)
+  if (code) return { ok: false as const, code }
   const { marked } = (await res.json()) as { marked: number }
   return { ok: true as const, marked }
 }
@@ -129,8 +135,9 @@ function describe(n: NotificationView): {
 export default function Notifications({ loaderData }: Route.ComponentProps) {
   const { items, failed } = loaderData
   const fetcher = useFetcher<typeof action>()
-  const marked =
-    fetcher.state === 'idle' && fetcher.data?.ok ? fetcher.data.marked : null
+  const settled = fetcher.state === 'idle' ? fetcher.data : undefined
+  const marked = settled?.ok ? settled.marked : null
+  const failCode = settled?.ok === false ? settled.code : undefined
   const unread = items.filter((n) => !n.read)
   const newest = items[0]
 
@@ -139,6 +146,13 @@ export default function Notifications({ loaderData }: Route.ComponentProps) {
       <LiveRegion>
         {marked !== null ? m.notif_marked_n({ n: marked }) : null}
       </LiveRegion>
+      {/* 失败要看得见也听得见。`role="alert"` 自带播报，所以它不进 LiveRegion——
+          同一句话播两遍比不播更糟。 */}
+      {failCode && (
+        <p role="alert" className="mb-4 text-sm text-destructive">
+          {errorMessage(failCode)}
+        </p>
+      )}
       <header className="flex items-center gap-4">
         <h1 className="font-heading text-2xl font-bold">{m.notif_title()}</h1>
         {unread.length > 0 && newest && (

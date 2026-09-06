@@ -44,9 +44,12 @@ export async function action({ request }: Route.ActionArgs) {
   const decision = form.get('decision') === 'approve' ? 'approve' : 'reject'
   const rejectReason = form.get('rejectReason')
 
-  // 客户端本该拦住，这里是兜底。code 与 API 错误分开，否则 403 会显示成「请填写驳回理由」
+  // 客户端本该拦住（驳回按钮 `disabled={busy || !reason}`），这里是兜底。
+  //
+  // 这个 code **不能**叫 `validation_failed`：API 自己也会发这个码（note 超过
+  // 1000 字就是），撞名之后连「通过」时备注写长了都会显示成「请填写驳回理由」。
   if (decision === 'reject' && !rejectReason) {
-    return { ok: false as const, code: 'validation_failed' as const }
+    return { ok: false as const, code: 'reject_reason_required' as const }
   }
 
   const res = await apiFor(request).api.moderation.resources[
@@ -118,7 +121,7 @@ function ReviewActions({ id }: { id: string }) {
       )}
       {failCode && (
         <p className="text-xs text-destructive" role="alert">
-          {failCode === 'validation_failed'
+          {failCode === 'reject_reason_required'
             ? m.dash_reject_required()
             : errorMessage(failCode)}
         </p>
