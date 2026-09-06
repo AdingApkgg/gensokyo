@@ -75,7 +75,11 @@ export default function Profile({ loaderData }: Route.ComponentProps) {
                     <span className="text-muted-foreground">
                       {m.profile_in()}
                     </span>
-                    <Link to={href} className="font-medium hover:underline">
+                    <Link
+                      to={href}
+                      viewTransition
+                      className="font-medium hover:underline"
+                    >
                       {title}
                     </Link>
                     <span className="text-xs text-muted-foreground">

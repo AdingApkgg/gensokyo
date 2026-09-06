@@ -69,6 +69,7 @@ export function SiteHeader({ user }: { user: SessionUser | null }) {
         <MobileNav items={NAV_ITEMS} />
         <Link
           to={localizeHref('/')}
+          viewTransition
           className="font-heading text-lg font-bold tracking-wide"
         >
           {m.site_name()}
@@ -99,6 +100,7 @@ export function SiteHeader({ user }: { user: SessionUser | null }) {
             <Button variant="ghost" size="icon" asChild>
               <Link
                 to={localizeHref('/notifications')}
+                viewTransition
                 aria-label={
                   user.unread > 0
                     ? m.notif_unread_n({
@@ -133,13 +135,15 @@ export function SiteHeader({ user }: { user: SessionUser | null }) {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link to={localizeHref(`/u/${user.handle}`)}>
+                  <Link to={localizeHref(`/u/${user.handle}`)} viewTransition>
                     {m.nav_profile()}
                   </Link>
                 </DropdownMenuItem>
                 {(user.role === 'moderator' || user.role === 'admin') && (
                   <DropdownMenuItem asChild>
-                    <Link to={localizeHref('/dash')}>{m.dash()}</Link>
+                    <Link to={localizeHref('/dash')} viewTransition>
+                      {m.dash()}
+                    </Link>
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem onClick={logout}>
@@ -150,10 +154,14 @@ export function SiteHeader({ user }: { user: SessionUser | null }) {
           ) : (
             <div className="flex items-center gap-2 pl-2">
               <Button variant="ghost" size="sm" asChild>
-                <Link to={localizeHref('/login')}>{m.auth_login()}</Link>
+                <Link to={localizeHref('/login')} viewTransition>
+                  {m.auth_login()}
+                </Link>
               </Button>
               <Button size="sm" asChild>
-                <Link to={localizeHref('/register')}>{m.auth_register()}</Link>
+                <Link to={localizeHref('/register')} viewTransition>
+                  {m.auth_register()}
+                </Link>
               </Button>
             </div>
           )}

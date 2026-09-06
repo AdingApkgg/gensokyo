@@ -202,7 +202,7 @@ export default function Reports({ loaderData }: Route.ComponentProps) {
               </div>
               <CardTitle className="mt-2 text-base">
                 {t.href ? (
-                  <Link to={t.href} className="hover:underline">
+                  <Link to={t.href} viewTransition className="hover:underline">
                     {t.label}
                   </Link>
                 ) : (

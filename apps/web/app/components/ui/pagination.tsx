@@ -69,6 +69,7 @@ function PaginationLink({
         className,
       )}
       preventScrollReset
+      viewTransition
     >
       {children}
     </Link>

@@ -170,6 +170,7 @@ export function Discussion({
           <p className="text-sm text-muted-foreground">
             <Link
               to={`${localizeHref('/login')}?next=${encodeURIComponent(loginNext)}`}
+              viewTransition
               className="underline underline-offset-4"
             >
               {m.shrine_login_to_post()}

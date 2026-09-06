@@ -71,7 +71,7 @@ function Filter({
         if (v === '__all') next.delete(param)
         else next.set(param, v)
         next.delete('page')
-        setParams(next, { preventScrollReset: true })
+        setParams(next, { preventScrollReset: true, viewTransition: true })
       }}
     >
       <SelectTrigger className="w-auto min-w-32" aria-label={label}>

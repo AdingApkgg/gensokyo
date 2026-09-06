@@ -80,6 +80,7 @@ export function TopicList({
                       ? `${localizeHref(`/kourindou/${t.resource.slug}`)}#discussion`
                       : localizeHref(`/shrine/t/${t.id}`)
                   }
+                  viewTransition
                   className="font-medium hover:underline"
                 >
                   {t.resource ? displayTitle(t.resource) : t.title}

@@ -193,6 +193,7 @@ export default function ReviewQueue({ loaderData }: Route.ComponentProps) {
             <CardTitle className="mt-2 leading-snug">
               <Link
                 to={localizeHref(`/kourindou/${r.slug}`)}
+                viewTransition
                 className="hover:underline"
               >
                 {displayTitle(r)}

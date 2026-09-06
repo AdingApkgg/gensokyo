@@ -127,6 +127,7 @@ export default function Register() {
               {registered && (
                 <Link
                   to={home}
+                  viewTransition
                   className="text-xs underline underline-offset-4"
                 >
                   {m.auth_handle_skip()}
@@ -168,6 +169,7 @@ export default function Register() {
                   ? `${localizeHref('/login')}?next=${encodeURIComponent(next)}`
                   : localizeHref('/login')
               }
+              viewTransition
               className="text-center text-sm text-muted-foreground hover:text-foreground"
             >
               {m.auth_have_account()}

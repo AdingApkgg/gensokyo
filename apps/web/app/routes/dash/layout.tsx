@@ -73,6 +73,7 @@ export default function DashLayout({ loaderData }: Route.ComponentProps) {
             key={t.to}
             to={localizeHref(t.to)}
             end={t.end}
+            viewTransition
             className={({ isActive }) =>
               `-mb-px border-b-2 px-3 py-2 text-sm transition-colors ${
                 isActive

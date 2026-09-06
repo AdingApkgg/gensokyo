@@ -35,7 +35,9 @@ export default function ShrineIndex({ loaderData }: Route.ComponentProps) {
       <header className="flex items-center gap-4">
         <h1 className="font-heading text-2xl font-bold">{m.nav_shrine()}</h1>
         <Button size="sm" className="ml-auto" asChild>
-          <Link to={localizeHref('/shrine/new')}>{m.shrine_new_topic()}</Link>
+          <Link to={localizeHref('/shrine/new')} viewTransition>
+            {m.shrine_new_topic()}
+          </Link>
         </Button>
       </header>
       <section className="mt-6">

@@ -200,6 +200,7 @@ export default function Notifications({ loaderData }: Route.ComponentProps) {
                 {d.href ? (
                   <Link
                     to={d.href}
+                    viewTransition
                     className="block"
                     // 点进去就算读过：不等用户回来手动点
                     onClick={() => {

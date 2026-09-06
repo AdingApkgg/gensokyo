@@ -310,6 +310,7 @@ export default function ResourceDetail({
           )}
           <Link
             to={localizeHref('/shrine')}
+            viewTransition
             className="text-muted-foreground underline-offset-4 hover:underline"
           >
             {m.shrine_back_to_shrine()} →
@@ -376,6 +377,7 @@ export function ErrorBoundary() {
         </h1>
         <Link
           to={localizeHref('/kourindou')}
+          viewTransition
           className="mt-4 inline-block text-sm underline underline-offset-4"
         >
           {m.kourindou_title()}

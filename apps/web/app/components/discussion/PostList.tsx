@@ -75,6 +75,7 @@ function PostItem({
         {p.author ? (
           <Link
             to={localizeHref(`/u/${p.author.handle}`)}
+            viewTransition
             className="font-medium hover:underline"
           >
             {p.author.name}
