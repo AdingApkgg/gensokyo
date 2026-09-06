@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from '~/components/ui/select'
 import { apiFor } from '~/lib/api'
+import { apiErrorCode, errorMessage } from '~/lib/api-error'
 import {
   displayTitle,
   kindLabel,
@@ -43,8 +44,9 @@ export async function action({ request }: Route.ActionArgs) {
   const decision = form.get('decision') === 'approve' ? 'approve' : 'reject'
   const rejectReason = form.get('rejectReason')
 
+  // 客户端本该拦住，这里是兜底。code 与 API 错误分开，否则 403 会显示成「请填写驳回理由」
   if (decision === 'reject' && !rejectReason) {
-    return { ok: false as const }
+    return { ok: false as const, code: 'validation_failed' as const }
   }
 
   const res = await apiFor(request).api.moderation.resources[
@@ -59,7 +61,8 @@ export async function action({ request }: Route.ActionArgs) {
       note: String(form.get('note') ?? '') || undefined,
     },
   })
-  return { ok: res.ok }
+  const code = await apiErrorCode(res)
+  return code ? { ok: false as const, code } : { ok: true as const }
 }
 
 const reasonLabel = (r: RejectReason) =>
@@ -79,7 +82,7 @@ function ReviewActions({ id }: { id: string }) {
   const [reason, setReason] = useState<RejectReason | ''>('')
   const [note, setNote] = useState('')
   const busy = fetcher.state !== 'idle'
-  const missingReason = fetcher.data?.ok === false
+  const failCode = fetcher.data?.ok === false ? fetcher.data.code : undefined
 
   return (
     <div className="grid gap-3 border-t pt-3">
@@ -113,8 +116,12 @@ function ReviewActions({ id }: { id: string }) {
           {m.dash_strike_warning()}
         </p>
       )}
-      {missingReason && (
-        <p className="text-xs text-destructive">{m.dash_reject_required()}</p>
+      {failCode && (
+        <p className="text-xs text-destructive" role="alert">
+          {failCode === 'validation_failed'
+            ? m.dash_reject_required()
+            : errorMessage(failCode)}
+        </p>
       )}
 
       <div className="flex gap-2">
@@ -133,7 +140,7 @@ function ReviewActions({ id }: { id: string }) {
         <Button
           size="sm"
           variant="destructive"
-          disabled={busy}
+          disabled={busy || !reason}
           onClick={() =>
             fetcher.submit(
               { id, decision: 'reject', rejectReason: reason, note },
