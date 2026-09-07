@@ -1,10 +1,13 @@
 import { AlertTriangle } from 'lucide-react'
+import { motion, useReducedMotion } from 'motion/react'
 import { useState } from 'react'
 import { redirect, useFetcher } from 'react-router'
+import { AlertLine } from '~/components/alert-line'
 import { Button } from '~/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { Input } from '~/components/ui/input'
 import { apiFor } from '~/lib/api'
+import { confirmStagger } from '~/lib/motion'
 import { m } from '~/paraglide/messages'
 import { localizeHref } from '~/paraglide/runtime'
 import type { Route } from './+types/trash'
@@ -57,6 +60,21 @@ function TrashActions({ id }: { id: string }) {
   const busy = fetcher.state !== 'idle'
   const missing = fetcher.data?.reason === 'missing_reason'
 
+  /**
+   * 全站唯一一处 `staggerChildren`，也是唯一一处**刻意让操作变慢**的地方。
+   * 销毁是全 /dash 唯一不可逆的操作，三段递延把完成时间从 0ms 抬到约 420ms
+   * （0.12 × 2 个间隔 + 最后一个 0.18 的时长），让手在按下之前多一次看清的机会。
+   * 正当性不来自曝光量。
+   *
+   * **必须自己门控减弱动效**：`MotionConfig reducedMotion="user"` 只关
+   * transform/positional 键，opacity 动画连同 stagger 算出来的 delay 照跑。
+   * 不门控的话，开了减弱动效的人看到的仍是三段递延淡入——而此时它是页面上
+   * 唯一在动的东西，还落在唯一不可逆的操作上，比不做还糟。
+   */
+  const { container: confirmVariants, item: itemVariants } = confirmStagger(
+    !!useReducedMotion(),
+  )
+
   if (!confirming) {
     return (
       <div className="flex gap-2 border-t pt-3">
@@ -82,21 +100,38 @@ function TrashActions({ id }: { id: string }) {
   }
 
   return (
-    <div className="grid gap-2 border-t pt-3">
-      <p className="flex items-start gap-2 text-xs text-destructive">
+    // relative：AlertLine 的 popLayout 用 offsetParent 定位退场元素（红线 9）
+    <motion.div
+      variants={confirmVariants}
+      initial="hidden"
+      animate="show"
+      className="relative grid gap-2 border-t pt-3"
+    >
+      <motion.p
+        variants={itemVariants}
+        role="alert"
+        className="flex items-start gap-2 text-xs text-destructive"
+      >
         <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
         {m.admin_purge_warning()}
-      </p>
-      <Input
-        value={reason}
-        onChange={(e) => setReason(e.target.value)}
-        placeholder={m.admin_reason()}
-        aria-label={m.admin_reason()}
-      />
-      {missing && (
-        <p className="text-xs text-destructive">{m.admin_reason_required()}</p>
-      )}
-      <div className="flex gap-2">
+      </motion.p>
+      <motion.div variants={itemVariants}>
+        <Input
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder={m.admin_reason()}
+          aria-label={m.admin_reason()}
+        />
+      </motion.div>
+      {/*
+        这一行不参与 stagger：它定义了自己的 initial/animate 对象，
+        不继承父级的 variants 标签。它是提交失败之后才出现的，
+        与「点开确认」那三拍不是同一件事。
+      */}
+      <AlertLine show={missing} className="text-xs text-destructive">
+        {m.admin_reason_required()}
+      </AlertLine>
+      <motion.div variants={itemVariants} className="flex gap-2">
         <Button
           size="sm"
           variant="destructive"
@@ -115,8 +150,8 @@ function TrashActions({ id }: { id: string }) {
         >
           {m.admin_cancel()}
         </Button>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
 }
 
