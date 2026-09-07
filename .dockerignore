@@ -10,3 +10,5 @@ docs
 dumps
 .env
 deploy/.env
+# Claude Code 的本地状态；worktrees 里是整份仓库的副本（实测 877 MB）
+.claude
