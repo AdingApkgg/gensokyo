@@ -16,6 +16,12 @@
 
 ---
 
+> **2026-09-07 修订（T3 合并之后）**：本计划成文于 T3 落地**之前**，而 T3 改动了这里要碰的
+> 绝大多数文件。执行前做了一轮九任务前提审计（每个任务一名只读审计员比对计划与实际代码，
+> 每条「计划有误」再由独立审查员尝试反驳），提出 59 条、站住 33 条，其中 4 条会直接把生产
+> 打 500 或让验收必然失败。**下面的正文已按审计结果就地修订**，被改动处都留了「修订：」标注。
+> 审计与裁定的完整记录在 `.superpowers/sdd/2026-09-07-motion-t4-dash/progress.md`。
+
 ## 三条架构裁决（它们推翻了此前几轮的共同前提，先读这里）
 
 ### A1. 不用 `LazyMotion`，用全量 `motion`
@@ -70,7 +76,17 @@ m.site_name()                -> ['site_name']
 
 **九条红线**（写进 CLAUDE.md）：
 
-1. **零入场动画。** 没有 stagger 入场、没有 `useInView` 触发的显现、没有内容层的 `initial={{opacity:0}}`。**这个站的内容永远第一帧就在。** 本计划里没有任何一条是「东西出现」。
+> *修订*：Goal 说本期把 motion 用在**三件事**上，第三件是「常驻状态（我现在处在什么模式）」——
+> 但下面的曲线语义表只有三格且没有它，批次 2 的四条任务也没有一条认领它。裁定：
+> **dash tab 下划线同时是这两件事**——它**怎么动**属位置连续性（走 washi），它**意味着什么**
+> 属常驻状态（「我现在在哪个 tab」）。收尾写进 CLAUDE.md 的那三问因此有了referent；
+> 否则「这是常驻状态」将是一句无法被证伪的挡箭牌。
+
+1. **内容层零入场动画。** 没有 stagger 入场、没有 `useInView` 触发的显现、**任何会进 SSR HTML 的节点都不许有 `initial={{opacity:0}}`**。**这个站的内容永远第一帧就在。**
+   *修订*：原文写的是「零入场动画……本计划里没有任何一条是『东西出现』」，而 Task 8 的错误行与
+   Task 9 的确认块都是 `initial={{opacity:0}}`——它俩都是**纯客户端交互后才存在**的临时节点，
+   不进 SSR、也不是内容。红线的真正边界在 spec §5.1：**限定词是「会进 SSR HTML 的」**。
+   原措辞若原样进 CLAUDE.md，就是一条写着「无例外」却在同一期被违反三次的禁令。
 2. `useInView` 在这个站的**唯一**用途是给 `layout` 做规模门控，不是入场触发。
 3. **`backdrop-filter` 卡片上只用 `layout="position"`，永不用 `layout`（both）**——both 会做 scale 校正 → 背板模糊重算 + CJK 正文被拉伸 280ms。全站唯一允许 both 的是 dash tab 下划线（纯色条，无内容可失真）。
 4. **`exit` 里零位移键。** reduced-motion 下 motion 对 positional keys 是**瞬移到终点**而非跳过。本计划全部 `exit={{opacity:0}}`。
@@ -79,6 +95,9 @@ m.site_name()                -> ['site_name']
 7. **`Reorder` 必须有键盘替代**（`Reorder.Item` 不自带键盘重排）。本计划不涉及，计划五涉及。
 8. **`popLayout` 移除后的焦点会掉回 `<body>`**——走 T3 的 `<LiveRegion>` 播报。
 9. **`popLayout` 的容器要 `position: relative`**（`PopChild` 用 `offsetTop`/`offsetLeft` 定位）；它往 `document.head` 注 `<style>`，将来加 CSP 时 `MotionConfig` 必须同时给 `nonce`。
+   *修订*：这条**Task 7 遵守了、Task 8 忘了**（同一份计划里一处写 `relative` 一处没写）。
+   Task 8 的四个容器现已逐个点名要加。另外「CSP 要给 nonce」这条线索必须落成
+   `root.tsx` 里 `MotionConfig` 旁的一行注释——留在 1089 行计划的红线表里等于没留。
 
 **其余：**
 - 文案走 Paraglide，新增 key 三语齐全。
@@ -102,19 +121,37 @@ m.site_name()                -> ['site_name']
 
 **Files:**
 - Modify: `apps/web/app/routes/kourindou/detail.tsx`
+- Modify: `apps/web/app/lib/api-error.ts`（*修订*：403 的码是 `self_action_forbidden`，映射表里没有它）
+- Modify: `apps/web/messages/{zh,ja,en}.json`（*修订*：同上，要补 `err_self_action_forbidden` 三语）
 
 **Interfaces:**
-- Consumes: `apiErrorCode`（`~/lib/api-error`）
-- Produces: rate 的 action 返回 `{ ok, code?, score? }`；loader 返回 `myRating`。**批次 5 的星条（计划五）以此为前置。**
+- Consumes: `apiErrorCode`、`errorMessage`（`~/lib/api-error`）、`<LiveRegion>`（`~/components/live-region`）
+- Produces: rate 的 action 返回 `{ ok, code?, score? }`，**并且组件真的把它渲染出来**。
+
+> *修订（loader 的 `myRating` 本期不做）*：它需要改 `apps/api/src/modules/kourindou/index.ts` 的
+> `GET /resources/:slug` 加一次 rating 查询。而本期**没有任何消费者**——星条是计划五的事。
+> 裁定：`myRating` 连同它的 API 改动一并推到计划五，本任务只修「谎报成功」。
+> 计划五开工时这是它的第一步前置。
 
 - [ ] **Step 1: 核实 API 侧的 403**
 
 Run:
 ```bash
-cd /Users/i/Code/th && grep -n -B3 -A6 "uploaderId" apps/api/src/modules/kourindou/interactions.ts | head -30
-grep -rn "'favorite'" apps/web/app
+cd /Users/i/Code/th && grep -n -B3 -A6 "uploaderId" apps/api/src/modules/interactions.ts | head -30
+grep -rn "favorite" apps/web/app
 ```
 把两条输出贴进报告——第一条是 403 的依据，第二条应当只有 `detail.tsx` 那两行（证明是死分支）。若还有别的引用点，**不要删它**，在报告里说明。
+
+> *修订两处*：① 路径原写作 `apps/api/src/modules/kourindou/interactions.ts`，**该文件不存在**，
+> 真实位置没有 `kourindou/` 这一层。② 原 grep 带单引号 `'favorite'` 只能命中一行——
+> `detail.tsx` 的第二处是 `.favorite.$put(`，两侧没有引号。
+>
+> **③ 最要紧的一条**：403 的码不是泛泛的 `forbidden`，而是
+> `apps/api/src/modules/interactions.ts:38` 的 **`self_action_forbidden`**，
+> 而 `apps/web/app/lib/api-error.ts` 的 `MESSAGES` 表里**没有这个键**——
+> 不补的话 `errorMessage()` 会回落到「操作没有成功，请稍后再试。」，
+> 对一个**永远** 403 的操作这是错误引导（它不是「稍后再试」能解决的）。
+> 所以本任务必须同时补 `api-error.ts` 的映射与三语文案。
 
 - [ ] **Step 2: rate 分支读响应**
 
@@ -155,11 +192,33 @@ grep -rn "'favorite'" apps/web/app
 
 把整个 `if (intent === 'favorite') { … }` 块删掉。**前提是 Step 1 的 grep 确认它没有任何调用点。**
 
-- [ ] **Step 4: loader 补 `myRating`**
+- [ ] **Step 4（*已替换*）: 把错误码真的渲染出来**
 
-星条需要知道「我评过几分」，而 loader 现在不返回它。读 loader，找到取资源详情的地方，把 API 返回里的当前用户评分一并带出来。
+> 原 Step 4 是「loader 补 `myRating`」，已按上面的裁定推到计划五。**取而代之的是这一步，
+> 它才是本任务标题成立的必要条件。**
 
-**若 API 不返回这个字段**，停下来报告——那需要改 api 侧，是本任务范围之外的决定，由控制者裁定。
+`detail.tsx` 的组件现在是这样（实测）：
+
+```tsx
+  actionData,
+  …
+  void actionData
+```
+
+**组件显式丢弃了 action 的返回值。** 只做 Step 2 的话，错误码从 action 流出来后死在组件门口，
+标题里「UI 说成功」那个症状一个字都没变——只是从「谎报成功」变成「什么也不说」。
+这同时踩掉 T3 刚立进 CLAUDE.md 的约定：**新增任何「操作成功了」的反馈，先问有没有一行文字。**
+
+所以：
+
+1. 删掉 `void actionData`。
+2. 星条那一带渲染失败提示——`errorMessage(actionData.code)`，`role="alert"`，
+   照 `dash/queue.tsx` 与 `dash/reports.tsx` 已经做对的形状（T3 落地），**不要发明第二套**。
+3. 成功时把「已评 N 星」送进 `<LiveRegion>`（`~/components/live-region`，T3 建的）。
+   评分是纯视觉反馈，读屏用户此前完全听不到。
+
+**验收就是这一条**：以投稿者身份点自己的资源的星，屏幕上出现一句说明为什么不行的话，
+而不是一片沉默。
 
 - [ ] **Step 5: 门禁**
 
@@ -178,8 +237,14 @@ detail.tsx 的 rate 分支 await 了请求却不读响应，无条件 return { o
 而 api 侧禁止投稿者给自己的资源评分（403），hc 对 4xx 不抛异常——
 于是这个错误一路静默到用户眼前。
 
-顺带删掉 favorite 死分支（整个 apps/web 只出现在这两行），
-并让 loader 带出 myRating（星条至今没有「我评过了」这个状态）。
+光把码送到 action 的返回值里还不够：组件里写着 void actionData，显式丢弃它。
+不删掉那一句，症状只是从「谎报成功」变成「什么也不说」。所以一并接上
+errorMessage(code) + role="alert"，成功时走 LiveRegion 播报。
+
+顺带删掉 favorite 死分支（整个 apps/web 只出现在这两行），并补上
+err_self_action_forbidden 三语——api 发的码是 self_action_forbidden 而不是
+泛泛的 forbidden，映射表里原本没有它，会回落到「请稍后再试」，
+而这是一个永远 403 的操作，不是稍后能解决的。
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 EOF
@@ -209,7 +274,36 @@ grep -rn "Pagination" app/routes/dash app/routes/notifications.tsx || echo "（�
 ```
 输出贴进报告。
 
-- [ ] **Step 2: 照 T0 在香霖堂列表用过的形状加**
+- [ ] **Step 2（*新增，必须最先做*）: 先让 loader 真的读 `?page`**
+
+> **这一步是审计新加的，原计划完全没有它——而没有它，整个 Task 2 是死的。**
+
+实测：`queue.tsx` 与 `reports.tsx` 的 loader **整个函数里没有 `new URL(request.url)`**，
+只写死 `query: { pageSize: '50' }`。API 侧 `paginationQuerySchema` 的 `page` 默认 1，
+于是**无论 URL 上写什么，服务端永远返回第 1 页**。只加控件的话，点「下一页」是
+URL 变、`total` 不变、列表内容一模一样，Step 4 的验收「翻到第 2 页内容不同」必红。
+
+两个文件各照 `notifications.tsx` 已经做对的形状改（**它是三处里唯一读了 `?page` 的**）：
+
+```ts
+export async function loader({ request }: Route.LoaderArgs) {
+  const page = Number(new URL(request.url).searchParams.get('page') ?? '1') || 1
+  const res = await apiFor(request).api.moderation.queue.$get({
+    query: { page: String(page), pageSize: '50' },
+  })
+  const body = await res.json()
+  // 失败分支也要给全形状：少了 page/pageSize，loaderData 是联合类型，
+  // 组件里读 loaderData.page 直接是 TS 错误，Step 4 的 typecheck 必红
+  if ('error' in body) return { items: [], page: 1, pageSize: 50, total: 0 }
+  return body
+}
+```
+
+**`pageSize` 保持 50 不动**——改它是产品决定，不在本任务范围。副作用是开发库现有数据量下
+分页控件几乎不出现（`pages > 1` 为假），所以 Step 4 的实测要手工构造 `?page=2`，
+验的是「翻页真的换了内容」而不只是「不崩」。
+
+- [ ] **Step 3: 照 T0 在香霖堂列表用过的形状加控件**
 
 三处各加一段分页控件。**照抄 `apps/web/app/routes/kourindou/list.tsx` 的写法**（T0 已经把这件事做对了：`pageWindow` 共用、第 1 页不写 `?page=1`、翻页保住现有 query），不要发明第二套。
 
@@ -220,7 +314,18 @@ grep -rn "Pagination" app/routes/dash app/routes/notifications.tsx || echo "（�
 
 **`ui/pagination.tsx` 的 `<Link>` 在 T3 已经带上 `viewTransition`**，所以这三处的翻页自动获得跨页转场，不需要额外做什么。
 
-- [ ] **Step 3: 门禁 + 浏览器实测**
+> *修订（notifications 有一处必须一起改，否则分页会造出一个静默的正确性 bug）*：
+> 「全部标为已读」的游标 `upTo` 是**当前页的第一条**，而 API 对 `upTo` 的语义是
+> 「标记该游标**及更旧**的全部未读」。今天 `?page=2` 只能手打 URL、几乎没人走到；
+> **一旦分页控件成为常规入口**，在第 2 页点「全部已读」只会标掉第 2 页及更旧的，
+> 第 1 页的未读一条不动——而 T3 加的 `<LiveRegion>` 还会播报一句看起来成功的「已标记 N 条」。
+>
+> 修法：loader 已经返回 `page`，把按钮限死在第 1 页——
+> `{page === 1 && unread.length > 0 && newest && (…)}`，并在旁边留一行注释写清
+> `upTo` 是「游标及更旧」、只有第 1 页的 `items[0]` 才是全局最新一条。
+> 要让它在任意页可用，得先给 api 的 `markReadSchema` 加「全部」语义——那是另一条。
+
+- [ ] **Step 4: 门禁 + 浏览器实测**
 
 Run: `cd /Users/i/Code/th && bun run check && bun run typecheck && (cd apps/web && bun test)`
 
@@ -228,7 +333,7 @@ Run: `cd /Users/i/Code/th && bun run check && bun run typecheck && (cd apps/web 
 
 **若某个页面的数据量不足一页**，在报告里说明，并用手工构造 `?page=2` 确认不崩。
 
-- [ ] **Step 4: 提交**
+- [ ] **Step 5: 提交**
 
 ```bash
 cd /Users/i/Code/th
@@ -237,8 +342,14 @@ git commit -m "$(cat <<'EOF'
 fix(web): 审核队列/举报/通知三处取了 total 却没有分页控件
 
 超过一页的内容在 UI 上不可达——与 T0 修过的香霖堂列表是同一个病。
+但 queue/reports 比那次更糟：它们的 loader 根本不读 ?page，只写死 pageSize，
+所以服务端永远返回第 1 页——只加控件的话点下一页是 URL 变、内容不变。
+
 照抄 T0 已经做对的形状：pageWindow 共用、第 1 页不写 ?page=1、翻页保住现有 query。
 ui/pagination 在 T3 已带 viewTransition，三处自动获得跨页转场。
+
+notifications 的「全部已读」一并限死在第 1 页：upTo 的语义是「游标及更旧」，
+第 2 页点它会静默漏掉第 1 页的未读，而 LiveRegion 还会播报一句看起来成功的话。
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 EOF
@@ -267,7 +378,10 @@ EOF
 - Modify: `apps/web/app/routes/kourindou/list.tsx`（行体抽成组件）
 - Modify: `apps/web/app/routes/kourindou/detail.tsx`
 - Modify: `apps/web/app/app.css`
-- Modify: `scripts/check-css-layers.ts`（加一条断言）
+- ~~Modify: `scripts/check-css-layers.ts`（加一条断言）~~ *修订：不改它*。该脚本是通用断言
+  （命中 `::view-transition-` 即计数并检查是否分层），不含硬编码计数或规则名白名单，
+  `kourindou-cover` 自动被覆盖。照原 Files 去「加一条断言」反而会引入一个
+  每次新增 VT 规则都要同步的硬编码。Step 5 改为**只跑不改**。
 
 **Interfaces:**
 - Consumes: `useViewTransitionState`（react-router，稳定 API）
@@ -400,7 +514,7 @@ EOF
 **Files:**
 - Modify: `apps/web/app/components/site-header.tsx`（A）
 - Modify: `apps/web/app/routes/kourindou/detail.tsx`（B）
-- Modify: `apps/web/app/routes/notifications.tsx`、`apps/web/app/routes/profile.tsx`（C）
+- Modify: `apps/web/app/routes/notifications.tsx`（C）　*修订：`profile.tsx` 已从 C 划掉，理由见 Step C1*
 
 - [ ] **Step A1: 未读徽章不卸载节点**
 
@@ -445,18 +559,33 @@ EOF
 
 用兄弟选择器修：给 `<Form>`（或包裹容器）加 `group/stars`，然后让每个按钮在「自己或自己右边的兄弟被 hover」时点亮。
 
-最直接的写法是**反向排列 + 兄弟选择器**：把按钮容器改成 `flex-row-reverse`，星序 `[5,4,3,2,1]`，这样「hover 第 n 颗时点亮 1..n」就等价于 `:hover ~ *`：
+> *修订：原方案（`flex-row-reverse` + `[5,4,3,2,1]`）已否决。* 它把 DOM 序与视觉序解耦：
+> 视觉上仍是 1→5，但 Tab 序与读屏朗读序变成 5→4→3→2→1——键盘用户第一次 Tab 进来落在
+> 最右边的「5 星」，继续 Tab 往左走。而每颗星都带着 `aria-label={\`${m.detail_rate()} ${n}\`}`。
+> **这是 WCAG 2.4.3（Focus Order）/ 1.3.2（Meaningful Sequence）的典型形态**——
+> 原方案为键盘用户补了 `:focus-visible` 的填充，却在同一改动里把他们的遍历方向倒过来了。
+>
+> 另外原代码块凭空造了一个 `<div className="ml-auto flex flex-row-reverse items-center gap-1">`，
+> 而**当前文件里没有这个 div**：按钮是 `<Form>` 的直接子元素，`ml-auto flex items-center gap-1`
+> 这三个类正长在 `<Form>` 上，`<Form>` 里还有决定 action 分支的
+> `<input type="hidden" name="intent" value="rate" />`。照抄那个代码块最省事的做法
+> 就是拿它替换 `<Form>` 那一行——表单会当场坏掉。
+
+**保留 `[1, 2, 3, 4, 5]` 与现有 DOM／视觉同序**，改用**向后看**的 `:has()` 兄弟选择器
+（「我后面有任何一个兄弟被 hover」就点亮自己）：
 
 ```tsx
-            <div className="ml-auto flex flex-row-reverse items-center gap-1">
-              {[5, 4, 3, 2, 1].map((n) => (
                 <button
                   …
-                  className="text-muted-foreground transition-colors hover:text-chart-2 [&:hover~*]:text-chart-2 [&:focus-visible~*]:text-chart-2"
+                  className="text-muted-foreground transition-colors hover:text-chart-2 focus-visible:text-chart-2 [&:has(~*:hover)]:text-chart-2 [&:has(~*:focus-visible)]:text-chart-2"
                 >
 ```
 
-**`:focus-visible` 的那一份不能省**——键盘用户同样需要看到累积填充。
+**`:focus-visible` 的那两份不能省**——键盘用户同样需要看到累积填充。
+`<Form>` 与那个 hidden input 一个字都不要动。
+
+`:has()` 的浏览器支持与 T1–T2 已经在用的 `.paper-lift:has(:focus-visible)` / `.ink-row:has(:focus-visible)`
+同档，不引入新的兼容负担。
 
 - [ ] **Step B2: 浏览器实测 + 提交**
 
@@ -478,23 +607,42 @@ EOF
 
 - [ ] **Step C1: 通知行与个人页帖子行加 `.ink-row`**
 
-`notifications.tsx` 的通知条目是可点 `<Link className="block">`，**零 hover/focus 反馈**。`profile.tsx` 的帖子行同理。
+`notifications.tsx` 的通知条目是可点 `<Link className="block">`，**零 hover/focus 反馈**。
 
 而 T1–T2 建的 `.ink-row`（左缘朱线，含 hover / focus-visible / `:has(:focus-visible)` 三个分支与减弱动效降级）**全仓只有 `kourindou/list.tsx` 一处在用**。
 
-两处的 `<Link>` 各加 `ink-row` 与 `pl-3`（给朱线让位）。
+> *修订两处*：
+>
+> **① `profile.tsx` 从本步划掉。** 那里根本没有「可点的帖子行」：`<li>` 不可点，
+> 唯一的 `<Link>` 是夹在 `{m.profile_in()}` 之后的**行内标题链接**，而且**它已经有
+> `hover:underline`**——不是「零反馈」。把 `ink-row pl-3` 挂上去，会在句子中段
+> （「在」和标题之间）竖起一根 2px 朱线，并给行内元素塞 12px 左内边距。那不是行反馈，是排版事故。
+>
+> **② `ink-row` 挂 `<li>` 而不是内层 `<Link>`。** notifications 的行内边距长在
+> `<li className="py-3">` 上（与被抄的 `list.tsx` 正相反），而 `.ink-row::before` 用
+> `inset-block: 0`——挂在内层 `<Link>` 上，朱线只有正文那么高、上下各缺 12px。
+> `.ink-row` 的 `:has(:focus-visible)` 分支正好覆盖内部的 `<Link>`，键盘反馈不丢。
+
+`notifications.tsx` 的 `<li className="py-3">` 加 `ink-row` 与 `pl-3`（给朱线让位）。
 
 - [ ] **Step C2: 浏览器实测 + 提交**
 
-确认两个页面的行都有朱线（常态 `scaleY(0)`，注入终态后 `scaleY(1)`、色为 `--primary`），且无横向溢出。
+确认通知页的行有朱线（常态 `scaleY(0)`，注入终态后 `scaleY(1)`、色为 `--primary`），
+朱线**高度等于整个 `<li>`**（不是只有正文那么高），且无横向溢出。
 
 ```bash
-git add apps/web/app/routes/notifications.tsx apps/web/app/routes/profile.tsx
+git add apps/web/app/routes/notifications.tsx
 git commit -m "$(cat <<'EOF'
 fix(web): 通知行与个人页帖子行补上 hover/focus 反馈
 
-两处都是可点的 <Link> 却零反馈。T1–T2 建的 .ink-row（左缘朱线，含三个分支
+通知条目是可点的 <Link> 却零反馈。T1–T2 建的 .ink-row（左缘朱线，含三个分支
 与减弱动效降级）全仓只有香霖堂列表一处在用。
+
+挂在 <li> 而不是内层 <Link> 上：行内边距长在 <li> 上，而 .ink-row::before 用
+inset-block: 0，挂内层朱线会上下各缺 12px。
+
+profile.tsx 不在此列——那里没有可点的帖子行，只有一个夹在句子中间、
+已经带 hover:underline 的行内标题链接。
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 EOF
@@ -518,9 +666,14 @@ EOF
 - Create: `apps/web/app/lib/motion.ts`
 - Create: `apps/web/app/lib/motion.test.ts`
 - Modify: `apps/web/app/root.tsx`
-- Modify: `biome.json`
+- ~~Modify: `biome.json`~~ *修订：不改它*。它是 A3 亲手撤销的那条 `noRestrictedImports` 方案的残留——
+  Step 1–7 没有任何一步说要把它改成什么，仓库里也从没加过那条规则。**留在 Files 与 `git add` 里
+  最可能的后果，是照单办事的实现者把本计划亲手撤销的规则加回来。**
 - Create: `scripts/check-motion-boundary.ts`
 - Modify: `package.json`（根，scripts）
+- Modify: `.github/workflows/ci.yml`　*修订：新增*。根 `package.json` 的 `check` 就是
+  `biome check .` 一条命令，`check-motion-boundary` 折不进去，就必须在 CI 里单列一行——
+  否则这道门禁只存在于本地，等于没有。
 
 **Interfaces:**
 - Consumes: 无
@@ -592,26 +745,53 @@ describe('三材曲线的 TS 字面值与 app.css 一致', () => {
 `apps/web/app/root.tsx` 的 `App` 里，把最外层那个 `<div className="flex min-h-screen flex-col">` 包一层：
 
 ```tsx
-    <MotionConfig
-      reducedMotion="user"
-      transition={{ type: 'spring', visualDuration: 0.28, bounce: 0 }}
-    >
+    {/**
+      * root 树里唯一允许的 motion 用法（见 A2）。两个 prop 都是承重的：
+      *   reducedMotion —— 默认是 "never"，不写它 app.css 末尾那个不分层的兜底块
+      *     管不到 motion 的任何一条
+      *   transition —— 布局动画的兜底是 { duration: 0.45, ease: [0.4,0,0.1,1] }，
+      *     不给就是 450ms 的外来缓动
+      *
+      * 将来加 CSP 时这里要同时给 nonce：AnimatePresence 的 popLayout 会往
+      * document.head 注 <style>（PopChild 用它定位退场元素）。没有 nonce
+      * 就是生产上弹层与退场动画静默失效——而症状离原因很远。
+      */}
+    <MotionConfig reducedMotion="user" transition={SPRING_WASHI}>
       <div className="flex min-h-screen flex-col">
         …
       </div>
     </MotionConfig>
 ```
 
-import：`import { MotionConfig } from 'motion/react'`。
+import：`import { MotionConfig } from 'motion/react'` 与 `import { SPRING_WASHI } from '~/lib/motion'`。
 
-**两条都不能省**：`reducedMotion` 的默认是 `"never"`（不写它，`app.css` 的兜底块管不到 motion）；`transition` 的布局动画兜底是 450ms 的外来缓动。
+> *修订两处*：① 原文让这里**手抄** `{ type: 'spring', visualDuration: 0.28, bounce: 0 }`
+> 的字面值，而同一个任务的上一步刚建了 `SPRING_WASHI` 这个常量，Task 6/7 也都是正经
+> import 它——同一条曲线在同一份计划里出现第三份权威，第一次改它就会漏掉这处。
+> ② 红线 9 后半句「CSP 要给 nonce」原本只留在红线表里，现在落成这里的注释。
+
+**两条 prop 都不能省**：`reducedMotion` 的默认是 `"never"`；`transition` 不给就是 450ms 的外来缓动。
 
 - [ ] **Step 4: 边界断言脚本**
 
 创建 `scripts/check-motion-boundary.ts`，体例照 `scripts/check-css-layers.ts`（中文注释讲清为什么、`✓`/`✗` + 退出码）。断言两条：
 
 1. **`app/root.tsx` 是 root 树里唯一允许出现 `motion/react` 的文件，且只允许 `MotionConfig`**——即它的 import 语句里不得出现 `motion`、`AnimatePresence`、`LazyMotion`、`domMax` 等其他名字
-2. **这四个文件零命中 `motion/react`**：`app/components/site-header.tsx`、`app/components/mobile-nav.tsx`、`app/components/pending-bar.tsx`、`app/components/ui/button.tsx`
+2. **root 可达图里的其余文件零命中 `motion/react`**
+
+> *修订：不要硬编码文件名单。* 原文列了四个文件，而实测 root 可达图不止这些——
+> `root.tsx` → `site-header.tsx` / `site-footer.tsx`；`site-header.tsx` → `lang-switcher.tsx` /
+> `mobile-nav.tsx` / `pending-bar.tsx` / `theme-toggle.tsx` / `ui/dropdown-menu.tsx`。
+> 漏掉的四个（`site-footer` / `lang-switcher` / `theme-toggle` / `ui/dropdown-menu`）里，
+> **后两个恰是最想加 motion 的位置**（主题切换的 `startViewTransition`、Radix 弹层动效）。
+>
+> 更根本的问题是**硬编码名单会腐烂**：T3 刚往 root 树旁边加了 `live-region.tsx`，
+> 名单在写下来的那一刻就开始过期。
+>
+> **正确形状：从 `app/root.tsx` 出发递归解析本地 import（相对路径与 `~/` 别名），
+> 对整棵可达集断言零命中 `motion/react`**（`root.tsx` 例外且只许 `MotionConfig`）。
+> 这样新增 root 树文件自动纳入，不需要有人记得回来改名单。
+> 脚本要把**解析出的可达集文件数**打印出来——数字变化本身就是信号。
 
 理由写进脚本注释：实测 motion 出现在 root 的可达图里 = **首屏 +37.31 KB**，而这个站流量最大的页面是被外链进来的 `/kourindou/:slug` 匿名读者。
 
@@ -643,7 +823,7 @@ cd /Users/i/Code/th && bun run check && bun run typecheck && bun run check-messa
 
 ```bash
 cd /Users/i/Code/th
-git add apps/web/package.json bun.lock apps/web/app/lib/motion.ts apps/web/app/lib/motion.test.ts apps/web/app/root.tsx biome.json scripts/check-motion-boundary.ts package.json
+git add apps/web/package.json bun.lock apps/web/app/lib/motion.ts apps/web/app/lib/motion.test.ts apps/web/app/root.tsx scripts/check-motion-boundary.ts package.json .github/workflows/ci.yml
 git commit -m "$(cat <<'EOF'
 feat(web): 装 motion 并立边界——全量 motion，不用 LazyMotion
 
@@ -690,15 +870,42 @@ EOF
 
 Run: `cd /Users/i/Code/th/apps/web && grep -n "viewTransition" app/routes/dash/layout.tsx || echo "（无，正确）"`
 
-**若有，必须先摘掉**——原生 VT 会把整页截快照，`layoutId` 的滑动会被压进 `::view-transition-new(root)` 的快照里看不见。T3 的 `viewTransition` 补全扫描应当已经把这五个显式判为「不加」，若没有请在报告里说明并摘掉。
+**它一定在**（不是「应当没有」）——*修订*：T3 的补全是**无差别**的 33/33，不存在原文说的
+「T3 已把这五个显式判为不加」这回事，控制者当时的裁定就是「VT 是导航机制，/dash 也加」。
+所以本步是**确定要做的一次摘除**，不是条件分支。
+
+摘掉的理由：原生 VT 会把整页截快照，`layoutId` 的滑动会被压进 `::view-transition-new(root)`
+的快照里，看不见。
+
+**三条硬约束：**
+
+1. **只摘 `app/routes/dash/layout.tsx` 的那一个 `NavLink`。绝不能顺手摘
+   `app/components/ui/pagination.tsx` 的**——那一处覆盖香霖堂列表、讨论区楼层、个人页三处分页，
+   而 Task 2 刚给 /dash 加的分页控件也复用它。摘掉会把三个页面的翻页转场一起打掉。
+2. 删除处**留一行注释**说明：dash tab 是全站唯一不带 `viewTransition` 的导航链接，
+   因为原生 VT 的 root 快照会吞掉 `layoutId` 下划线的滑动。没有这行注释，
+   下一次「viewTransition 补全扫描」会把它加回来。
+3. **必须就地修订 `CLAUDE.md`**——它现在写着「全站导航链接一律带 `viewTransition`
+   （33/33，含 `/dash`）」。改成 32/33 并写明唯一例外。这条约定 CLAUDE.md 自己
+   写着「没有门禁能抓」，留着矛盾就是留着一个必然复发的 bug。
 
 - [ ] **Step 2: 用 `layoutId` + 抢跑的 active 判定**
 
 `apps/web/app/routes/dash/layout.tsx`：
 
+> ⚠️ ***修订：原文这段逐字代码会把 `/dash` 全部打成 500，而门禁全绿放行。***
+> 原文写的是 `navigation.location?.pathname ?? location.pathname`，但
+> `dash/layout.tsx` **只 import 了 `NavLink, Outlet, redirect`，没有任何 `location` 绑定**。
+> SSR 时 `navigation.state === 'idle'`、`navigation.location === undefined`，
+> 右侧一定会被求值 → 落到全局 `location`，而 Bun 与 Node 都没有这个全局
+> （`bun -e 'console.log(typeof location)'` → `undefined`）→ `ReferenceError` → 五个 tab 页全 500。
+>
+> **而 `bun run typecheck` 不会报**：`apps/web/tsconfig.json` 的 `"lib": ["DOM", …]`
+> 让 `location` 有全局类型。照抄 + 全绿 = 生产 500。**必须显式绑定 `useLocation()`。**
+
 ```tsx
 import { motion } from 'motion/react'
-import { useNavigation } from 'react-router'
+import { useLocation, useNavigation } from 'react-router'
 import { SPRING_WASHI } from '~/lib/motion'
 ```
 
@@ -706,12 +913,21 @@ import { SPRING_WASHI } from '~/lib/motion'
 
 ```tsx
   const navigation = useNavigation()
+  const location = useLocation()   // ← 不能省；没有它右边那个 location 是不存在的全局
   /**
    * 抢跑：NavLink 的 isActive 读的是已提交的 location，要等 loader 回来才翻转。
    * 而每个 tab 的 loader 都要打 API，切一次有 150–400ms 页面完全不动。
    * 用 pending location 让下划线在**点击那一刻**就走。
+   *
+   * useNavigation() 是**全局**导航状态，不限于 dash 内部——从 /dash 点去
+   * /kourindou 时它也会给出 pending location。所以只在目标仍属于 dash 时才抢跑，
+   * 否则下划线会在离开 dash 的那一瞬间先跳到一个不存在的 tab 上。
    */
-  const activePath = navigation.location?.pathname ?? location.pathname
+  const pending = navigation.location?.pathname
+  const activePath =
+    pending && TABS.some((t) => pending.startsWith(localizeHref(t.to)))
+      ? pending
+      : location.pathname
 ```
 
 把每个 tab 的渲染改成：外层 `NavLink` 加 `relative`、去掉 `border-b-2 border-primary`（**保留 `border-transparent` 占位**，否则高度会跳），active 的那个内部渲染：
@@ -721,12 +937,18 @@ import { SPRING_WASHI } from '~/lib/motion'
                 <motion.span
                   layoutId="dash-tab-underline"
                   transition={SPRING_WASHI}
-                  className="absolute inset-x-0 -bottom-px h-0.5 bg-primary"
+                  className="absolute inset-x-0 -bottom-0.5 h-0.5 bg-primary"
                 />
               )}
 ```
 
 其中 `isActive` 用上面的 `activePath` 判定，**不用 NavLink 的 render prop**。
+
+> *修订（几何）*：原文用 `-bottom-px`。绝对定位的包含块是父元素的 **padding box**，
+> 不含那 2px 的 `border-transparent` 占位——`bottom: -1px` 的 2px 条会落在 border-box
+> 底边**上方** 1px–3px 处，比今天的 `border-b-2` 高一格，也不再压住 nav 自己的底线。
+> `-bottom-0.5`（-2px）才与被替换的 `border-b-2` 对齐。**Step 4 的实测要量这一条**：
+> 切换前后下划线的 `getBoundingClientRect().bottom` 应与 NavLink 的 border-box 底边重合。
 
 **这是全站唯一允许用 `layout`（both）语义的地方**——它是纯色条，没有内容可失真（红线 3）。
 
@@ -794,7 +1016,9 @@ EOF
 
 **Files:**
 - Modify: `apps/web/app/routes/dash/queue.tsx`、`apps/web/app/routes/dash/reports.tsx`
-- Modify: `apps/web/app/app.css`（`.ink-divide` 跳过退场元素）
+- Modify: `apps/web/messages/{zh,ja,en}.json`　*修订新增*：红线 8 的播报文案
+- ~~Modify: `apps/web/app/app.css`（`.ink-divide` 跳过退场元素）~~　*修订：不改*。
+  实测两个列表容器是 `grid gap-*` 而不是 `.ink-divide`，详见 Step 4。
 
 **Interfaces:**
 - Consumes: `motion`、`AnimatePresence`、`useInView`、`SPRING_WASHI`、`EASE_SUMI`
@@ -817,16 +1041,56 @@ EOF
 
 **RR8 的 fetcher persistence 是这套方案成立的前提**（已读源码确认）：在途 fetcher 在组件卸载后仍留在 `state.fetchers` 直到结算，所以乐观移除的集合不会闪断。
 
-**但 `fetcher.data` 会被主动丢弃**——卡片卸载后拿不回错误。所以 **T3 Task 3 的错误码修复是硬前置**：卡片飞出去又飞回来时如果没有真实错误码，审核员只会看到一次无法解释的抖动。失败时把 code 抬到列表层：
+**但 `fetcher.data` 会被主动丢弃**——卡片卸载后拿不回错误。所以 **T3 Task 3 的错误码修复是硬前置**：卡片飞出去又飞回来时如果没有真实错误码，审核员只会看到一次无法解释的抖动。
+
+> ⚠️ ***修订：原文给的 effect 永远不会触发。***
+> 它的守卫是 `fetcher.state === 'idle' && fetcher.data?.ok === false`，
+> 而卡片正是因为 `f.state !== 'idle'` 才被过滤出 `visible` 的——
+> **两个条件互斥**。fetcher 一进 `submitting`，卡片当帧就从列表里消失、`ReviewActions` 卸载；
+> 等到 `state === 'idle'` 时组件早已不在，effect 不可能再跑。
+> 计划自己标注「最要紧」的那条验收（Step 5 第 3 条：失败卡飞回来且带真实文案）必然失败。
+
+**正确形状：把「盯梢」从卡片里搬到列表层，让它在卡片卸载之后仍然活着。**
+
+hooks 不能在循环里调，所以每个在途 id 需要一个自己的小组件——它**不渲染任何东西**，
+只持有那个 key 的 fetcher 并在结算时上报：
 
 ```tsx
-  // effect 在卸载前跑，是把 data 救出来的唯一时机
+/**
+ * 只做一件事：替一个已经飞出去的卡片守着它的 fetcher，结算时把失败码交给列表层。
+ *
+ * 为什么不能写在卡片里：卡片是因为 fetcher 非 idle 才被移出 visible 的，
+ * 它在 submitting 的那一帧就卸载了，而 data 要到 idle 才有——两个时刻不重叠。
+ *
+ * 它挂在 AnimatePresence **之外**，所以不参与退场、也不影响 layout 测量。
+ * 它持有同一个 key，因此那个 fetcher 始终有一个活着的订阅者，
+ * RR 不会把它排进 queueFetcherForDeletion，data 也就不会被清掉。
+ */
+function PendingWatcher({
+  id,
+  onSettled,
+}: {
+  id: string
+  onSettled: (id: string, code?: string) => void
+}) {
+  const fetcher = useFetcher<typeof action>({ key: `review:${id}` })
   useEffect(() => {
-    if (fetcher.state === 'idle' && fetcher.data?.ok === false) {
-      onFailed(id, fetcher.data.code)
-    }
-  }, [fetcher.state, fetcher.data, id, onFailed])
+    if (fetcher.state !== 'idle' || !fetcher.data) return
+    onSettled(id, fetcher.data.ok === false ? fetcher.data.code : undefined)
+  }, [fetcher.state, fetcher.data, id, onSettled])
+  return null
+}
 ```
+
+列表层为每个在途 id 渲染一个，并把失败码收进 state 显示出来。
+`onSettled` 必须是 `useCallback` 稳定引用（它进了那边 effect 的依赖）。
+
+**reports.tsx 的三处不同，派工必须写清**（实测）：
+1. 组件不叫 `ReviewActions`，是 `function Actions({ r }: { r: Item })`，**收整行不收 id**；
+2. key 前缀必须是 `report:` 而**不能与 queue 共用 `review:`**——两个页面的 action 返回形状不同；
+3. 它一个 fetcher 承载三个 intent（`delete_post` / `resolved` / `rejected`），
+   所以「在途 = 该行要移除」这个等式在 reports 上**未必成立**——
+   实现者要先判断哪些 intent 才意味着「这一行从列表里走了」，报告里写清判断依据。
 
 - [ ] **Step 2: `AnimatePresence popLayout` + 兄弟 `layout="position"`**
 
@@ -842,7 +1106,6 @@ EOF
               initial={false}
               exit={{ opacity: 0 }}
               transition={{ ...SPRING_WASHI, opacity: { duration: 0.18, ease: EASE_SUMI } }}
-              data-exiting-safe
             >
               <Card>…</Card>
             </motion.div>
@@ -857,7 +1120,12 @@ EOF
 
 - [ ] **Step 3: `useInView` 门控 layout 的规模（红线 2）**
 
-`layout` 会在每次布局变化时测量**全部**带 `layout` 的子元素。实测判定线是 ≤50 项，而队列可能更长。
+`layout` 会在每次布局变化时测量**全部**带 `layout` 的子元素。实测判定线是 ≤50 项。
+
+> *修订（理由要换，结论不变）*：原文说「而队列可能更长」——**不成立**。两个 loader 都硬编码
+> `pageSize: '50'`（Task 2 之后仍是 50），API 侧 schema 上限 100，所以列表**恒 ≤50**。
+> 但 50 **正好压在判定线上**（≈30ms，一帧半），门控之后降到约 4–6 张（≈17ms）。
+> 「刚好踩线所以门控」是真理由；「可能更长」是假的，留着它下一个人会据此把 pageSize 调大。
 
 给每张卡加视口门控：只有在视口内（`margin: '200px'`）时才带 `layout="position"`，视口外的不带。门控后 FLIP 规模降到约 4–6 张卡（≈17ms），观感一模一样。
 
@@ -877,25 +1145,56 @@ EOF
 
 并在退场元素上加 `data-exiting`（用 `AnimatePresence` 的 `custom` 或在 `exit` 时通过 `onAnimationStart` 打标——**具体写法由实现者选，但必须在报告里说明选了哪种及为什么**）。
 
-**若 dash 的容器用的不是 `.ink-divide`**（Step 2 用的是 `grid gap-4`），这一步只需在报告里确认「本任务不涉及 `.ink-divide`」，并把这条留给计划五的楼层列表。
+> ***修订：本步已确认不适用，整步作废。*** 实测两个列表容器用的是 `grid gap-*`，
+> 不是 `.ink-divide`（`.ink-divide` 全仓只有讨论区楼层列表在用）。所以：
+>
+> - **`app/app.css` 从本任务的 Files 里划掉**，`.ink-divide > * + *` 一个字不改；
+> - Step 2 代码块里那个 `data-exiting-safe` 属性也**一并删掉**——它是个孤儿：
+>   全计划只出现那一次，没有任何 CSS 或代码读它，本步用的还是另一个名字 `data-exiting`；
+> - 「退场元素仍在 DOM 里、`+` 选择器照常匹配」这个**真问题**留给计划五的楼层列表，
+>   到时候连同 `data-exiting` 的打标方式一起决定。
+>
+> 实现者**只需在报告里贴出两个容器的实际 className 作为确认**，不做任何改动。
+
+- [ ] **Step 4b（*修订新增*）: 补上红线 8 要求的播报**
+
+> 红线 8 写着「`popLayout` 移除后的焦点会掉回 `<body>`——走 T3 的 `<LiveRegion>` 播报」，
+> 而原计划**六个 Step 里一处都没执行它**：Files 不含 `messages/`，`git add` 也没有。
+> **Task 7 是全 T4 唯一「被点击的按钮随卡片一起卸载」的地方，红线 8 就是为它写的。**
+>
+> 不做的后果：读屏审核员点一次「通过」，卡片消失、零播报；键盘审核员每处理一条
+> 就要从文档顶部重新 Tab 一遍。而审核员一次会话处理几十条。
+
+两个列表页各挂一个 `<LiveRegion>`（`~/components/live-region`，T3 建的），
+内容由上面 `PendingWatcher` 的 `onSettled` 驱动：成功播「已处理《标题》」，失败播错误文案。
+
+新增 Paraglide key **三语齐全**，跑 `bun run check-messages`。
+**Files 因此要加上 `apps/web/messages/{zh,ja,en}.json`，`git add` 同步。**
 
 - [ ] **Step 5: 门禁 + 浏览器实测**
 
-Run: 全量门禁（同 Task 6 Step 5）
+Run: 全量门禁（同 Task 6 Step 5）**外加 `bun run check-messages`**（原文漏了它，
+而本任务现在会新增三语 key——`check-messages` 是硬失败门禁）。
 
 用 Browser pane，以审核员身份：
 1. 处理一条 → 卡片淡出、**下方卡片平移上来而不是瞬跳**
 2. 连续快速处理三条 → 确认动画可中断、不排队、不累积延迟
-3. 制造一次失败（缺理由或 403）→ 卡片飞回来，且**带着真实的错误文案**
+3. 制造一次失败（缺理由或 409）→ 卡片飞回来，且**带着真实的错误文案**
 4. 减弱动效下 → 卡片瞬时消失、下方瞬时补位，无位移瞬跳
+5. **播报**（*修订新增*）：读屏路径上处理一条之后，`[data-slot="live-region"]` 里出现一句回执
 
-四条输出贴进报告。**第 3 条最要紧**——它是 T3 错误码修复与本任务乐观移除的交汇点。
+五条输出贴进报告。**第 3 与第 5 条最要紧**——前者是 T3 错误码修复与本任务乐观移除的交汇点，
+后者是红线 8 的唯一落点。
+
+> *修订*：原文的「403」在这个端点上不会出现——`/resources/:id/review` 实测只发
+> 401 / 404 / **409**（非 staff 与「已被别人审过」都走 `canTransition` 的 409）。
+> 制造失败的可行办法：两个标签页同时打开队列，在 A 里处理一条，再在 B 里处理同一条。
 
 - [ ] **Step 6: 提交**
 
 ```bash
 cd /Users/i/Code/th
-git add apps/web/app/routes/dash/queue.tsx apps/web/app/routes/dash/reports.tsx apps/web/app/app.css
+git add apps/web/app/routes/dash/queue.tsx apps/web/app/routes/dash/reports.tsx apps/web/messages/
 git commit -m "$(cat <<'EOF'
 feat(dash): 条目移除用 popLayout + 兄弟 layout="position"，配乐观移除
 
@@ -925,17 +1224,42 @@ EOF
 
 ### Task 8: dash 卡内二段展开与错误行
 
-`queue.tsx` / `reports.tsx` / `users.tsx` 里有四处高度增删——驳回理由展开、「记违规」警告、内联错误、危险区——**全都发生在按钮附近**。每一次跳变都在移动一个可点击目标，而失败路径恰恰最需要「再点一次」。
+`queue.tsx` / `reports.tsx` / `users.tsx` 里有一批由客户端交互驱动的高度增删。每一次跳变都在移动一个可点击目标，而失败路径恰恰最需要「再点一次」。
 
 `height: auto` 是 CSS 至今动不了的东西。280ms 的可见位移让手能跟上。
+
+> ***修订：原文那句「四处——驳回理由展开、「记违规」警告、内联错误、危险区——全都发生在按钮附近」
+> 有三处不成立。***
+>
+> ① **「驳回理由展开」在这三个文件里不存在。** queue.tsx 的驳回理由 `<Select>` 与备注 `<Input>`
+> 是**无条件渲染**的，没有任何展开/收起状态。全 /dash 唯一的「两段展开」是 `trash.tsx`
+> 的 `confirming`——那是 Task 9 的文件。
+> ② **「危险区」也不在这三个文件里**，同样归 `trash.tsx`。
+> ③ **不是四处，实测是八处**，其中 `users.tsx` 独占五处（原文只算作一处）。
+> ④ **「全都发生在按钮附近」只对 queue.tsx 的两处成立。** reports.tsx 与 users.tsx 的错误行
+> 全部在按钮**之后**，它们出现/消失时按钮位置根本不变——在那两个文件给按钮行加
+> `layout="position"` 是**纯空操作**。
+>
+> **所以 Step 1 的落点清单必须在 Task 7 落地之后重新生成**，不能沿用正文——
+> Task 7 的乐观移除会让 queue/reports 的内联错误行要么被删除、要么迁到列表层。
 
 **Files:**
 - Modify: `apps/web/app/routes/dash/queue.tsx`、`reports.tsx`、`users.tsx`
 
-- [ ] **Step 1: 找出四处**
+- [ ] **Step 1: 重新生成落点清单**
 
-Run: `cd /Users/i/Code/th/apps/web && grep -n "&& (" app/routes/dash/queue.tsx app/routes/dash/reports.tsx app/routes/dash/users.tsx | grep -i "warn\|error\|reason\|danger\|strike"`
-输出贴进报告，逐处对上号。
+Run: `cd /Users/i/Code/th/apps/web && grep -n "&& (" app/routes/dash/queue.tsx app/routes/dash/reports.tsx app/routes/dash/users.tsx`
+
+> *修订*：原文在这条命令后面还接了 `| grep -i "warn\|error\|reason\|danger\|strike"`——
+> **实测那样只返回 1 行**，因为关键词落在 JSX 正文里而不是条件行上
+> （`{failCode && (`、`{missing && (`、`{fetcher.data?.code && (` 全被过滤掉）。**去掉第二段过滤。**
+
+逐处判断它是不是「客户端交互驱动的高度增删」，把清单贴进报告。**必须写出每一处的
+file + 锚点文本（不写行号）**，并说明：它在按钮**之前**还是**之后**——只有在按钮之前的
+才需要给按钮行加 `layout="position"`，之后的加了是空操作。
+
+**Task 7 刚改过 queue.tsx 与 reports.tsx**，所以以你**当下读到的文件**为准，
+不要相信本计划正文里任何关于这两个文件的结构描述。
 
 - [ ] **Step 2: 各处包 `AnimatePresence popLayout`**
 
@@ -961,9 +1285,23 @@ Run: `cd /Users/i/Code/th/apps/web && grep -n "&& (" app/routes/dash/queue.tsx a
 
 **`initial={{opacity:0}}` 在 `<AnimatePresence initial={false}>` 内是安全的**（已实测：SSR 产物是 `style="opacity:1"`）。但这四处本来就只在客户端交互后出现，首屏不存在。
 
-**`role="alert"` 必须保留**——它是这些提示的语义，不能因为包了一层就丢掉。
+**`role="alert"` 不能因为包了一层就丢掉。**
 
-给按钮行加 `layout="position"` 吸收高度变化。
+> *修订*：原文说「必须**保留**」，但实测八处里**只有两处现在带 `role="alert"`**，
+> 其余六处没有可保留的东西——尤其 Step 3 点名要验的那条「记违规」警告本身就没有 role，
+> 所以那条实测断言在当前代码上必红。
+> 正确说法：**该有 role 的补上、已有的不许丢**。判据是它是不是「操作失败/后果警告」类的
+> 即时提示；纯说明性文字不要滥挂 `role="alert"`（那会让读屏在无关时刻打断用户）。
+
+**容器要 `position: relative`（红线 9）。**
+
+> *修订*：原文没提这条，而同一份计划的 Task 7 Step 2 是明写了 `relative` 的——
+> **同一条红线在同一份计划里一处遵守、一处遗忘**。`PopChild` 用 `offsetTop`/`offsetLeft` +
+> `position: absolute` 定位退场元素；没有定位祖先时 `offsetParent` 一路落到 `<body>`，
+> 退场的 `<p role="alert">` 会在淡出的 180ms 里**飞到页面左上角**。
+> Step 1 清单里的每一处，都要确认它 `AnimatePresence` 的直接父容器有 `relative`，没有就加。
+
+**只给「错误行在按钮之前」的那几处**给按钮行加 `layout="position"` 吸收高度变化（见 Step 1）。
 
 - [ ] **Step 3: 门禁 + 实测**
 
@@ -1006,16 +1344,32 @@ EOF
 
 确认按钮出现时，三个元素（警告文案、输入框/复选框、销毁按钮）按 120ms 递延出现。这是全站 `staggerChildren` 的**唯一**落点。
 
+**variants 必须写在组件内**，因为它要读 `useReducedMotion()`：
+
 ```tsx
-const confirmVariants = {
-  hidden: {},
-  show: { transition: { staggerChildren: 0.12 } },
-}
-const itemVariants = {
-  hidden: { opacity: 0 },
-  show: { opacity: 1, transition: { duration: 0.18, ease: EASE_SUMI } },
-}
+  /**
+   * 这是全站唯一一处 staggerChildren，也是唯一一处刻意让操作变慢的地方。
+   *
+   * 自己门控减弱动效：MotionConfig reducedMotion="user" 只关 transform/positional 键，
+   * opacity 动画连同 stagger 算出来的 delay 照跑（红线 6 的三类之一）。
+   * 不门控的话，开了减弱动效的用户看到的仍是三段递延淡入——
+   * 而此时它是页面上唯一在动的东西，落在全 /dash 唯一不可逆的操作上。
+   */
+  const reduce = useReducedMotion()
+  const confirmVariants = {
+    hidden: {},
+    show: { transition: { staggerChildren: reduce ? 0 : 0.12 } },
+  }
+  const itemVariants = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: { duration: reduce ? 0 : 0.18, ease: EASE_SUMI },
+    },
+  }
 ```
+
+import：`import { motion, useReducedMotion } from 'motion/react'`。
 
 **注意：`hidden` 里只有 `opacity`，没有位移**——这几个元素会进 SSR 吗？不会（只在点了「销毁」之后出现），但保持与红线 4 同形，避免后人照抄到会进 SSR 的地方。
 
@@ -1023,7 +1377,22 @@ const itemVariants = {
 
 Run: 全量门禁（同 Task 6 Step 5）
 
-实测：点「销毁」后三个元素依次出现、总时长约 360ms（用 `setTimeout` 分段采样各元素的 `opacity`，**不要用 `requestAnimationFrame`**——隐藏面板里它不触发）；减弱动效下三者同帧出现（信息一点不丢）。
+实测：点「销毁」后三个元素依次出现、**总时长约 420ms**（用 `setTimeout` 分段采样各元素的
+`opacity`，**不要用 `requestAnimationFrame`**——隐藏面板里它不触发）；
+**减弱动效下三者同帧出现**（信息一点不丢）。
+
+> *修订两处*：
+>
+> ① **「360ms」算错了。** 按 Step 1 给的参数，最后一个子节点在 `0.12 × 2 + 0.18 = 0.42s`
+> 完成。360ms 是「3 × 120ms」的算法——漏掉了 stagger 是 **n−1** 个间隔，且最后一个子节点
+> 自己还有 180ms 时长。任务标题里的「抬到 360ms」同理，实际是 420ms。
+>
+> ② **「减弱动效下三者同帧出现」不会自动成立，必须自己写。**
+> `MotionConfig reducedMotion="user"` 只关 transform/positional 键，**opacity 动画连同
+> `staggerChildren` 算出来的 delay 照跑**（spec:209 已实测记下这一条）。不门控的话，
+> 开启减弱动效的用户看到的仍是三段 120ms 递延的淡入——**而此时它是页面上唯一在动的东西**，
+> 落在全 /dash 唯一不可逆的操作上。spec 的原话：比不做还糟。
+> 这正是红线 6 说的「`MotionConfig` 管不到的三类」之一。
 
 - [ ] **Step 3: 提交**
 
@@ -1065,9 +1434,48 @@ cd /Users/i/Code/th && \
 Run: `bun run check-bundle-size`
 Expected: 首屏集与 Task 5 Step 6 记录的数字**一致**（只多 `MotionConfig` 的 +0.46 KB）；`/dash` 路由自身增量约 39–46 KB。**这两个数字都要贴进报告**——它们是 A2 边界成立的最终证据。
 
+- [ ] **重新校准 `scripts/check-bundle-size.ts`（*修订新增，这是 T3 留下的明确交接*）**
+
+该脚本自己的头注释粗体写着：「**T4 往里装 motion 之后必须重新构建、重新称重、重新校准这两个
+常量**……如果新读数比这里记的还低，也要如实更新注释，不能让注释继续写着过时的旧读数」。
+而 T4 原文从头到尾只要求「把数字贴进报告」——**没有一步接住它**。
+
+- 把注释里的 `150.62` / `250.99` 两处读数改成本次全量构建的实测值；
+- 复核 `SHARED_BUDGET_KB = 155` 与 `ROUTE_BUDGET_KB = 270` 两个常量在装了 motion 之后是否仍合理
+  （实测参考：装 motion 前 `/dash/queue` 是 193.14 KB，加 39–46 KB 后约 232–239 KB，仍在 270 内，
+  **所以这条不会自己报红**——它只会静静地让注释永远停在过时读数上）；
+- 若调整了预算常量，注释里写清新数字是怎么来的。
+
+**这一步归收尾、不归 Task 5**：Task 5 那次只有 +0.46 KB，校准完立刻被 Task 6–9 作废。
+
 - [ ] **更新 CLAUDE.md**
 
-追加九条红线的摘要 + 三条曲线的语义分工 + A2 的 root 树禁令 + 「新增 motion 用法前先问：它是位置连续性、远端回执、还是常驻状态？三者之外不做」。
+> *修订*：**先 `grep -n "viewTransition" CLAUDE.md` 确认 Task 6 的修订已经在。**
+> 那条现在写着「全站导航链接一律带 `viewTransition`（33/33，含 `/dash`）」，
+> Task 6 必须已把它改成 32/33 + 唯一例外。**若还没改，先补上再动笔**——
+> 否则追加完会出现「全站一律带」与「dash tab 不带」两条并存且互相矛盾的约定，
+> 而这条约定 CLAUDE.md 自己写着「没有门禁能抓」。
+
+追加：九条红线的摘要（**红线 1 用修订后的措辞：限定词是「会进 SSR HTML 的」**）
++ 三条曲线的语义分工 + A2 的 root 树禁令（**说明 `check-motion-boundary` 是按 root 可达图
+算的、不是硬编码名单**）+ 「新增 motion 用法前先问：它是位置连续性、远端回执、还是常驻状态？
+三者之外不做」（**常驻状态的referent是 dash tab 下划线，见 Global Constraints 的修订注**）。
+
+- [ ] **提交收尾（*修订新增：原文没有这一步***）
+
+```bash
+cd /Users/i/Code/th
+git add CLAUDE.md scripts/check-bundle-size.ts
+git commit -m "$(cat <<'EOF'
+docs: CLAUDE.md 记下 T4 的红线与曲线分工，并校准体积门禁的读数
+
+check-bundle-size 的头注释自己写着「T4 装 motion 之后必须重新称重、
+重新校准」——这是 T3 留给 T4 的明确交接，本次接住。
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+EOF
+)"
+```
 
 ---
 
@@ -1085,5 +1493,13 @@ Expected: 首屏集与 Task 5 Step 6 记录的数字**一致**（只多 `MotionC
 - **`mode="wait"` —— 零落点。** 工作界面上是净损失；内容界面上与原生 VT 抢同一次替换。
 - **`useInView` 作为入场触发 —— 零落点**；只作为 `layout` 的规模门控。
 - **跨路由 `layoutId` —— 零落点。** 跨页到达 100% 归原生 View Transition。
+- **红线 6 的三类（MotionValue 直连 `style`、`useAnimate` 驱动 `window.scrollTo`、命令式 `animate()`）
+  —— 本期零落点。** *修订补入*：它们会以「必须自己走 `useReducedMotion()`」的形态进 CLAUDE.md，
+  却在仓库里没有一处示范可对照。计划五的 MotionValue 星条、`useAnimate` 落款、
+  上传进度 `useSpring` 全是这三类——**那时才有第一个示范**。
+  本期唯一自走 `useReducedMotion()` 的是 Task 9 的 stagger（因为 opacity + delay 同样不受
+  `MotionConfig` 管），它可以充当那个示范的雏形。
+- **`myRating` 与它的 api 改动 —— 推到计划五。** *修订补入*：本期没有消费者（星条是计划五的事），
+  为一个无人读的字段改 `GET /resources/:slug` 是提前支出。计划五开工时它是第一步前置。
 
 **实测那条数字是这份清单的底气：门票 39.4 KB，把 `layout` / `drag` / MotionValue / `useAnimate` / `LayoutGroup` / `variants` 全用上只多 6.4 KB。所以「用满」不花钱，克制才花钱——花的是想清楚每一处该不该动的时间。**
