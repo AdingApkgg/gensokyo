@@ -2,6 +2,7 @@ import { REPORT_REASON, type ReportReason } from '@gensokyo/shared'
 import { AnimatePresence } from 'motion/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useFetcher, useFetchers, useSearchParams } from 'react-router'
+import { AlertLine } from '~/components/alert-line'
 import { LiveRegion } from '~/components/live-region'
 import { RemovableRow } from '~/components/removable-row'
 import { Badge } from '~/components/ui/badge'
@@ -160,7 +161,8 @@ function Actions({ r }: { r: Item }) {
   const canDelete =
     r.targetKind === 'post' && !!r.postTopicId && !r.postDeletedAt
   return (
-    <div className="grid gap-2">
+    // relative：AlertLine 的 popLayout 用 offsetParent 定位退场元素（红线 9）
+    <div className="relative grid gap-2">
       <div className="flex flex-wrap gap-2">
         {canDelete && (
           <Button
@@ -203,11 +205,19 @@ function Actions({ r }: { r: Item }) {
           {m.dash_report_dismiss()}
         </Button>
       </div>
-      {fetcher.data && !fetcher.data.ok && (
-        <p role="alert" className="text-xs text-destructive">
-          {errorMessage(fetcher.data.code)}
-        </p>
-      )}
+      {/*
+        这一行在按钮**之后**，出现时按钮位置不动——所以按钮行不加 layout，
+        加了是纯空操作。canDelete 那个条件不在本任务范围：它由行数据决定
+        （targetKind/postTopicId/postDeletedAt），不是客户端交互驱动的。
+      */}
+      <AlertLine
+        show={!!fetcher.data && !fetcher.data.ok}
+        className="text-xs text-destructive"
+      >
+        {fetcher.data && !fetcher.data.ok
+          ? errorMessage(fetcher.data.code)
+          : null}
+      </AlertLine>
     </div>
   )
 }

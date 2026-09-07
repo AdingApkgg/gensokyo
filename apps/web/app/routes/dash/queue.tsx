@@ -1,8 +1,9 @@
 import { REJECT_REASON, type RejectReason } from '@gensokyo/shared'
 import { AlertTriangle } from 'lucide-react'
-import { AnimatePresence } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useFetcher, useFetchers, useSearchParams } from 'react-router'
+import { AlertLine } from '~/components/alert-line'
 import { LiveRegion } from '~/components/live-region'
 import { RemovableRow } from '~/components/removable-row'
 import { Badge } from '~/components/ui/badge'
@@ -148,7 +149,8 @@ function ReviewActions({ id }: { id: string }) {
   const failCode = fetcher.data?.ok === false ? fetcher.data.code : undefined
 
   return (
-    <div className="grid gap-3 border-t pt-3">
+    // relative：AlertLine 的 popLayout 用 offsetParent 定位退场元素（红线 9）
+    <div className="relative grid gap-3 border-t pt-3">
       <div className="grid gap-2 sm:grid-cols-2">
         <Select
           value={reason || undefined}
@@ -173,19 +175,24 @@ function ReviewActions({ id }: { id: string }) {
         />
       </div>
 
-      {reason && STRIKING.includes(reason) && (
-        <p className="flex items-start gap-2 text-xs text-destructive">
-          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-          {m.dash_strike_warning()}
-        </p>
-      )}
-      {failCode && (
-        <p className="text-xs text-destructive" role="alert">
-          {failLabel(failCode)}
-        </p>
-      )}
+      <AlertLine
+        show={!!reason && STRIKING.includes(reason)}
+        className="flex items-start gap-2 text-xs text-destructive"
+      >
+        <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+        {m.dash_strike_warning()}
+      </AlertLine>
+      <AlertLine show={!!failCode} className="text-xs text-destructive">
+        {failCode ? failLabel(failCode) : null}
+      </AlertLine>
 
-      <div className="flex gap-2">
+      {/*
+        本任务八处落点里**只有 queue 这两处在按钮之前**，所以只有这一行
+        需要 layout 去吸收上方的高度变化；reports 与 users 的错误行都在
+        按钮之后，那里加 layout 是纯空操作。
+        position 不是 both：卡片挂着 backdrop-filter，both 会做 scale 校正。
+      */}
+      <motion.div layout="position" className="flex gap-2">
         <Button
           size="sm"
           disabled={busy}
@@ -211,7 +218,7 @@ function ReviewActions({ id }: { id: string }) {
         >
           {m.dash_reject()}
         </Button>
-      </div>
+      </motion.div>
     </div>
   )
 }

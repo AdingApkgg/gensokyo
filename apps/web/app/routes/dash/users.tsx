@@ -1,6 +1,7 @@
 import type { UserRole } from '@gensokyo/shared'
 import { useState } from 'react'
 import { Form, redirect, useFetcher, useSearchParams } from 'react-router'
+import { AlertLine } from '~/components/alert-line'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
@@ -101,7 +102,8 @@ function RoleActions({ id, role }: { id: string; role: UserRole }) {
   const next: UserRole = role === 'moderator' ? 'user' : 'moderator'
 
   return (
-    <div className="grid gap-2 border-t pt-3 sm:grid-cols-[1fr_auto]">
+    // relative：AlertLine 的 popLayout 用 offsetParent 定位退场元素（红线 9）
+    <div className="relative grid gap-2 border-t pt-3 sm:grid-cols-[1fr_auto]">
       <Input
         value={reason}
         onChange={(e) => setReason(e.target.value)}
@@ -118,16 +120,19 @@ function RoleActions({ id, role }: { id: string; role: UserRole }) {
       >
         {next === 'moderator' ? m.admin_promote() : m.admin_demote()}
       </Button>
-      {missing && (
-        <p className="text-xs text-destructive sm:col-span-2">
-          {m.admin_reason_required()}
-        </p>
-      )}
-      {fetcher.data?.code && (
-        <p className="text-xs text-destructive sm:col-span-2">
-          {errorMessage(fetcher.data.code)}
-        </p>
-      )}
+      {/* 两行都在按钮之后：按钮位置不受它们影响，不加 layout */}
+      <AlertLine
+        show={missing}
+        className="text-xs text-destructive sm:col-span-2"
+      >
+        {m.admin_reason_required()}
+      </AlertLine>
+      <AlertLine
+        show={!!fetcher.data?.code}
+        className="text-xs text-destructive sm:col-span-2"
+      >
+        {fetcher.data?.code ? errorMessage(fetcher.data.code) : null}
+      </AlertLine>
     </div>
   )
 }
@@ -152,7 +157,8 @@ function StrikeActions({ id, strikes }: { id: string; strikes: number }) {
   }
 
   return (
-    <div className="grid gap-2 border-t pt-3">
+    // relative：AlertLine 的 popLayout 用 offsetParent 定位退场元素（红线 9）
+    <div className="relative grid gap-2 border-t pt-3">
       <p className="text-xs text-muted-foreground">
         {m.admin_reset_strikes_hint()}
       </p>
@@ -177,14 +183,16 @@ function StrikeActions({ id, strikes }: { id: string; strikes: number }) {
           {m.admin_reset_strikes()}
         </Button>
       </div>
-      {missing && (
-        <p className="text-xs text-destructive">{m.admin_reason_required()}</p>
-      )}
-      {fetcher.data?.code && (
-        <p className="text-xs text-destructive">
-          {errorMessage(fetcher.data.code)}
-        </p>
-      )}
+      {/* 同样在按钮之后 */}
+      <AlertLine show={missing} className="text-xs text-destructive">
+        {m.admin_reason_required()}
+      </AlertLine>
+      <AlertLine
+        show={!!fetcher.data?.code}
+        className="text-xs text-destructive"
+      >
+        {fetcher.data?.code ? errorMessage(fetcher.data.code) : null}
+      </AlertLine>
     </div>
   )
 }
