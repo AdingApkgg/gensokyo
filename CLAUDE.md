@@ -49,7 +49,7 @@
   - **相对时间用 `<RelativeTime>`（`app/components/relative-time.tsx`），不要手写 `formatRelative` + `suppressHydrationWarning`**：后者会让 React 在水合时跳过文本差异修补，屏幕上那个「3 分钟前」会永远停在 SSR 那一刻，慢网与 bfcache 下一开始就是错的
   - `paper-lift` 的键盘分支有**三种**（可聚焦元素是卡片的**祖先** `a:focus-visible > &` / **自身** `&:focus-visible` / **内部** `&:has(:focus-visible)`），漏一种就有一类调用点的键盘用户拿不到掀角，且**没有门禁能抓**。另：`sr-only` 元素要在聚焦时露出，内边距必须写成 `focus:px-3 focus:py-2`——Tailwind 的 `not-sr-only` 自带 `padding: 0`，带 `:focus` 时特异性压得过裸 `px-3`
   - 播报走 `<LiveRegion>`（`aria-live="polite" aria-atomic`，用 `sr-only` 而非 `hidden`——后者会从可访问性树里消失）。它**由用到的页面自己挂**，不在 root：播报文本几乎总是已经存在于某个 fetcher 的返回值里，做成全局命令式 API 只会多一层会漂移的状态机。**新增任何「操作成功了」的反馈，先问有没有一行文字，再问要不要动画**
-  - 全站导航链接一律带 `viewTransition`（33/33，含 `/dash`；`ui/pagination.tsx` 一处覆盖三个页面）。新增 `<Link>`/`<NavLink>` 时别忘了它——**没有门禁能抓**，因为漏掉的表现是「什么都不发生」
+  - 全站导航链接一律带 `viewTransition`（**32/33**；`ui/pagination.tsx` 一处覆盖三个页面）。新增 `<Link>`/`<NavLink>` 时别忘了它——**没有门禁能抓**，因为漏掉的表现是「什么都不发生」。**唯一例外是 `dash/layout.tsx` 的五个 tab**：原生 VT 会把整页截进 `::view-transition-*(root)` 快照，把那条 `layoutId` 下划线的滑动一起压进去，一帧都看不见。那里源码留了注释，补全扫描请跳过
   - CI 在 `.github/workflows/ci.yml`，跑 check / typecheck / check-messages / build / check-css-layers / check-bundle-size，以及 **web 与 shared 两个包的 test**。`api` / `db` / `api-client` 的测试与 `e2e` 都要真实的 postgres/redis/Meili/MinIO，**刻意不进 CI**——接它们是另一个决策
 - 常用脚本：`bun run e2e`（端到端验收 40 项，跑完自清理，`E2E_KEEP=1` 保留）、`check-messages`（三语 key 审计）、`reindex`（Meili 全量重建）、`gc:images`（未引用图片巡检，带白名单熔断）、`seed:shrine`（开场内容）、`seed:demo*`（演示数据）
 - 设计文档：docs/superpowers/specs/；产品文档：docs/product/；实施计划：docs/superpowers/plans/；调研与审计：docs/superpowers/research/；legacy/ 是只读参考
