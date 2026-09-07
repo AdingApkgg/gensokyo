@@ -291,7 +291,7 @@ export default function ResourceDetail({
                     name="score"
                     value={n}
                     aria-label={`${m.detail_rate()} ${n}`}
-                    className="text-muted-foreground transition-colors hover:text-chart-2"
+                    className="text-muted-foreground transition-colors hover:text-chart-2 focus-visible:text-chart-2 [&:has(~*:hover)]:text-chart-2 [&:has(~*:focus-visible)]:text-chart-2"
                   >
                     <Star className="size-4" />
                   </button>
