@@ -300,5 +300,7 @@
   "dash_target_resource": "资源",
   "dash_delete_and_resolve": "删楼并结案",
   "dash_target_deleted": "该楼层已删除",
-  "dash_target_gone": "目标已不存在"
+  "dash_target_gone": "目标已不存在",
+  "dash_announce_done": "已处理：{title}",
+  "dash_announce_failed": "处理失败：{reason}"
 }

@@ -300,5 +300,7 @@
   "dash_target_resource": "リソース",
   "dash_delete_and_resolve": "削除して処理済みにする",
   "dash_target_deleted": "この投稿は削除済み",
-  "dash_target_gone": "対象は存在しません"
+  "dash_target_gone": "対象は存在しません",
+  "dash_announce_done": "処理しました：{title}",
+  "dash_announce_failed": "処理に失敗しました：{reason}"
 }

@@ -1,5 +1,9 @@
 import { REPORT_REASON, type ReportReason } from '@gensokyo/shared'
-import { Link, useFetcher, useSearchParams } from 'react-router'
+import { AnimatePresence } from 'motion/react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link, useFetcher, useFetchers, useSearchParams } from 'react-router'
+import { LiveRegion } from '~/components/live-region'
+import { RemovableRow } from '~/components/removable-row'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
@@ -13,6 +17,11 @@ import {
 } from '~/components/ui/pagination'
 import { apiFor } from '~/lib/api'
 import { apiErrorCode, errorMessage } from '~/lib/api-error'
+import {
+  mergeWatched,
+  pendingIdsFrom,
+  withoutPending,
+} from '~/lib/dash-pending'
 import { displayTitle, reportReasonLabel } from '~/lib/display'
 import { pageWindow } from '~/lib/paging'
 import { formatAbsolute } from '~/lib/time'
@@ -116,8 +125,37 @@ function targetOf(r: Item): {
   }
 }
 
+/**
+ * 前缀**不能与 queue 的 `review:` 共用**：两个页面的 action 返回形状不同，
+ * 共用会让一边的列表层读到另一边的 data。
+ */
+const FETCHER_PREFIX = 'report:'
+
+/**
+ * 替一张已经飞出去的卡片守着它的 fetcher，结算时把结果交回列表层。
+ * 理由同 queue.tsx 的同名组件：卡片在 submitting 那一帧就卸载，
+ * 而 data 要到 idle 才有，写在卡片里的 effect 永远不触发。
+ */
+function PendingWatcher({
+  id,
+  onSettled,
+}: {
+  id: string
+  onSettled: (id: string, code?: string) => void
+}) {
+  const fetcher = useFetcher<typeof action>({ key: `${FETCHER_PREFIX}${id}` })
+  const { state, data } = fetcher
+  useEffect(() => {
+    if (state !== 'idle' || !data) return
+    onSettled(id, data.ok === false ? data.code : undefined)
+  }, [state, data, id, onSettled])
+  return null
+}
+
 function Actions({ r }: { r: Item }) {
-  const fetcher = useFetcher<typeof action>()
+  const fetcher = useFetcher<typeof action>({
+    key: `${FETCHER_PREFIX}${r.id}`,
+  })
   const busy = fetcher.state !== 'idle'
   const canDelete =
     r.targetKind === 'post' && !!r.postTopicId && !r.postDeletedAt
@@ -187,67 +225,125 @@ export default function Reports({ loaderData }: Route.ComponentProps) {
     return qs ? `?${qs}` : '.'
   }
 
+  /**
+   * 乐观移除。这里「在途 = 该行要走」**三个 intent 全都成立**：
+   * api 的 /moderation/reports 只列 `status = 'open'`，而删楼并结案、已处理、
+   * 驳回三个动作都把 status 推离 open。唯一的例外是 delete_post 在删楼那步
+   * 就失败、没走到 resolve——那条会以失败结算，卡片飞回来，正是该有的样子。
+   */
+  const pendingIds = pendingIdsFrom(useFetchers(), FETCHER_PREFIX)
+  const visible = withoutPending(items, pendingIds)
+
+  /**
+   * 盯梢集合是**并集不是当前在途集**。`fetcher.data` 恰好在它变回 idle 的
+   * 那一帧才有，而那一帧它已经不在在途集里了——只渲染在途集的话，
+   * PendingWatcher 会在拿到结果的同一次提交里卸载，effect 永远不触发。
+   * 实测踩过这个坑：处理一条之后 LiveRegion 全程是空字符串。
+   */
+  const [watched, setWatched] = useState<string[]>([])
+  const pendingKey = pendingIds.join(',')
+  useEffect(() => {
+    if (!pendingKey) return
+    setWatched((w) => mergeWatched(w, pendingKey.split(',')))
+  }, [pendingKey])
+
+  /** 结算时 loaderData 多半已 revalidate 掉那一行，播报要的标题只能提前存 */
+  const labels = useRef(new Map<string, string>())
+  for (const r of items) labels.current.set(r.id, targetOf(r).label)
+
+  const [announce, setAnnounce] = useState('')
+  const onSettled = useCallback((id: string, code?: string) => {
+    setAnnounce(
+      code
+        ? m.dash_announce_failed({ reason: errorMessage(code) })
+        : m.dash_announce_done({ title: labels.current.get(id) ?? '' }),
+    )
+  }, [])
+
+  /** 红线 8：卡片连同被点的按钮一起卸载，焦点掉回 <body>，读屏用户零回执 */
+  const watchers = (
+    <>
+      {watched.map((id) => (
+        <PendingWatcher key={id} id={id} onSettled={onSettled} />
+      ))}
+      <LiveRegion>{announce}</LiveRegion>
+    </>
+  )
+
   if (items.length === 0) {
     return (
-      <div className="py-20 text-center">
-        <p className="font-heading text-lg">{m.dash_empty_reports()}</p>
-      </div>
+      <>
+        {watchers}
+        <div className="py-20 text-center">
+          <p className="font-heading text-lg">{m.dash_empty_reports()}</p>
+        </div>
+      </>
     )
   }
 
   return (
     <>
-      <div className="mt-6 grid gap-4">
-        {items.map((r) => {
-          const t = targetOf(r)
-          return (
-            <Card key={r.id}>
-              <CardHeader>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge
-                    variant={
-                      URGENT.includes(r.reason) ? 'destructive' : 'secondary'
-                    }
-                  >
-                    {reportReasonLabel(r.reason)}
-                  </Badge>
-                  <Badge variant="outline">
-                    {r.targetKind === 'post'
-                      ? m.dash_target_post()
-                      : m.dash_target_resource()}
-                  </Badge>
-                  {r.targetKind === 'post' && r.postDeletedAt && (
-                    <Badge variant="outline">{m.dash_target_deleted()}</Badge>
-                  )}
-                  <span className="ml-auto text-xs text-muted-foreground">
-                    {formatAbsolute(r.createdAt)}
-                  </span>
-                </div>
-                <CardTitle className="mt-2 text-base">
-                  {t.href ? (
-                    <Link
-                      to={t.href}
-                      viewTransition
-                      className="hover:underline"
-                    >
-                      {t.label}
-                    </Link>
-                  ) : (
-                    <span className="text-muted-foreground">{t.label}</span>
-                  )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-3">
-                {r.detail && (
-                  <p className="text-sm whitespace-pre-wrap text-muted-foreground">
-                    {r.detail}
-                  </p>
-                )}
-                <Actions r={r} />
-              </CardContent>
-            </Card>
-          )
-        })}
+      {watchers}
+      {/* relative：popLayout 的 PopChild 用 offsetTop/offsetLeft 定位退场元素 */}
+      <div className="relative mt-6 grid gap-4">
+        <AnimatePresence mode="popLayout" initial={false}>
+          {visible.map((r) => {
+            const t = targetOf(r)
+            return (
+              <RemovableRow key={r.id}>
+                <Card>
+                  <CardHeader>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge
+                        variant={
+                          URGENT.includes(r.reason)
+                            ? 'destructive'
+                            : 'secondary'
+                        }
+                      >
+                        {reportReasonLabel(r.reason)}
+                      </Badge>
+                      <Badge variant="outline">
+                        {r.targetKind === 'post'
+                          ? m.dash_target_post()
+                          : m.dash_target_resource()}
+                      </Badge>
+                      {r.targetKind === 'post' && r.postDeletedAt && (
+                        <Badge variant="outline">
+                          {m.dash_target_deleted()}
+                        </Badge>
+                      )}
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        {formatAbsolute(r.createdAt)}
+                      </span>
+                    </div>
+                    <CardTitle className="mt-2 text-base">
+                      {t.href ? (
+                        <Link
+                          to={t.href}
+                          viewTransition
+                          className="hover:underline"
+                        >
+                          {t.label}
+                        </Link>
+                      ) : (
+                        <span className="text-muted-foreground">{t.label}</span>
+                      )}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="grid gap-3">
+                    {r.detail && (
+                      <p className="text-sm whitespace-pre-wrap text-muted-foreground">
+                        {r.detail}
+                      </p>
+                    )}
+                    <Actions r={r} />
+                  </CardContent>
+                </Card>
+              </RemovableRow>
+            )
+          })}
+        </AnimatePresence>
       </div>
       {pages > 1 && (
         <Pagination className="mt-6">

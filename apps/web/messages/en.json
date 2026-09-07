@@ -300,5 +300,7 @@
   "dash_target_resource": "Resource",
   "dash_delete_and_resolve": "Delete post & resolve",
   "dash_target_deleted": "Post already deleted",
-  "dash_target_gone": "Target no longer exists"
+  "dash_target_gone": "Target no longer exists",
+  "dash_announce_done": "Handled: {title}",
+  "dash_announce_failed": "Failed: {reason}"
 }
