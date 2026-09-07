@@ -153,9 +153,13 @@ export default function ResourceDetail({
             src={resource.coverUrl}
             alt=""
             className="size-28 shrink-0 rounded-lg object-cover"
+            style={{ viewTransitionName: 'kourindou-cover' }}
           />
         ) : (
-          <div className="size-28 shrink-0 rounded-lg bg-muted" />
+          <div
+            className="size-28 shrink-0 rounded-lg bg-muted"
+            style={{ viewTransitionName: 'kourindou-cover' }}
+          />
         )}
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
