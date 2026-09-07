@@ -1,5 +1,6 @@
 import { Pin } from 'lucide-react'
 import { Link } from 'react-router'
+import { RelativeTime } from '~/components/relative-time'
 import { Alert, AlertDescription } from '~/components/ui/alert'
 import { Badge } from '~/components/ui/badge'
 import {
@@ -11,7 +12,6 @@ import {
 } from '~/components/ui/pagination'
 import type { apiFor } from '~/lib/api'
 import { boardLabel, displayTitle } from '~/lib/display'
-import { formatAbsolute, formatRelative } from '~/lib/time'
 import { m } from '~/paraglide/messages'
 import { localizeHref } from '~/paraglide/runtime'
 
@@ -80,6 +80,7 @@ export function TopicList({
                       ? `${localizeHref(`/kourindou/${t.resource.slug}`)}#discussion`
                       : localizeHref(`/shrine/t/${t.id}`)
                   }
+                  viewTransition
                   className="font-medium hover:underline"
                 >
                   {t.resource ? displayTitle(t.resource) : t.title}
@@ -93,13 +94,7 @@ export function TopicList({
               <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
                 {t.author && <span>{t.author.name}</span>}
                 <span>{m.shrine_replies_n({ n: t.replyCount })}</span>
-                <time
-                  dateTime={t.lastPostAt}
-                  title={formatAbsolute(t.lastPostAt)}
-                  suppressHydrationWarning
-                >
-                  {formatRelative(t.lastPostAt)}
-                </time>
+                <RelativeTime iso={t.lastPostAt} />
               </div>
             </div>
           </li>

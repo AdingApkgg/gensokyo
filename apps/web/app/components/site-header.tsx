@@ -13,7 +13,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu'
-import { authClient } from '~/lib/auth-client'
 import { m } from '~/paraglide/messages'
 import { localizeHref } from '~/paraglide/runtime'
 
@@ -41,8 +40,27 @@ export function SiteHeader({ user }: { user: SessionUser | null }) {
   const revalidator = useRevalidator()
 
   async function logout() {
-    await authClient.signOut()
-    revalidator.revalidate()
+    /**
+     * 动态 import：`SiteHeader` 在 root.tsx 里，是所有路由的父级——顶层 import
+     * 会把 better-auth 客户端（10.7 KB gz）钉进每一个匿名访客的首屏包，
+     * 而匿名访客按定义永远不会登出。
+     * login/register 有自己的路由 chunk，不受这里影响。
+     *
+     * try/catch 不是形式主义：动态 import 引入了一个顶层 import 没有的失败模式——
+     * 部署之后老页面还开着、chunk 哈希已变，这里会 404。
+     * **不 rethrow**：从 async 的 onClick 里抛出去是 unhandled rejection，React 接不住，
+     * 症状和不写 catch 一样是「点了没反应」。
+     * **finally 里仍然 revalidate**：登出失败时它会如实显示「仍处于登录态」，
+     * 那正是真实状态——诚实的 UI 好过假装成功。
+     */
+    try {
+      const { authClient } = await import('~/lib/auth-client')
+      await authClient.signOut()
+    } catch (err) {
+      console.error('signOut failed', err)
+    } finally {
+      revalidator.revalidate()
+    }
   }
 
   return (
@@ -51,6 +69,7 @@ export function SiteHeader({ user }: { user: SessionUser | null }) {
         <MobileNav items={NAV_ITEMS} />
         <Link
           to={localizeHref('/')}
+          viewTransition
           className="font-heading text-lg font-bold tracking-wide"
         >
           {m.site_name()}
@@ -81,6 +100,7 @@ export function SiteHeader({ user }: { user: SessionUser | null }) {
             <Button variant="ghost" size="icon" asChild>
               <Link
                 to={localizeHref('/notifications')}
+                viewTransition
                 aria-label={
                   user.unread > 0
                     ? m.notif_unread_n({
@@ -115,13 +135,15 @@ export function SiteHeader({ user }: { user: SessionUser | null }) {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link to={localizeHref(`/u/${user.handle}`)}>
+                  <Link to={localizeHref(`/u/${user.handle}`)} viewTransition>
                     {m.nav_profile()}
                   </Link>
                 </DropdownMenuItem>
                 {(user.role === 'moderator' || user.role === 'admin') && (
                   <DropdownMenuItem asChild>
-                    <Link to={localizeHref('/dash')}>{m.dash()}</Link>
+                    <Link to={localizeHref('/dash')} viewTransition>
+                      {m.dash()}
+                    </Link>
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem onClick={logout}>
@@ -132,10 +154,14 @@ export function SiteHeader({ user }: { user: SessionUser | null }) {
           ) : (
             <div className="flex items-center gap-2 pl-2">
               <Button variant="ghost" size="sm" asChild>
-                <Link to={localizeHref('/login')}>{m.auth_login()}</Link>
+                <Link to={localizeHref('/login')} viewTransition>
+                  {m.auth_login()}
+                </Link>
               </Button>
               <Button size="sm" asChild>
-                <Link to={localizeHref('/register')}>{m.auth_register()}</Link>
+                <Link to={localizeHref('/register')} viewTransition>
+                  {m.auth_register()}
+                </Link>
               </Button>
             </div>
           )}

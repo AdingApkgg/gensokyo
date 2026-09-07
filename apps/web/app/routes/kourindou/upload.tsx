@@ -300,7 +300,7 @@ export default function UploadWizard() {
         </p>
         <div className="mt-6 flex justify-center gap-3">
           <Button asChild>
-            <Link to={localizeHref(`/kourindou/${result.slug}`)}>
+            <Link to={localizeHref(`/kourindou/${result.slug}`)} viewTransition>
               {m.upload_view()}
             </Link>
           </Button>

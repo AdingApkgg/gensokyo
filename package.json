@@ -18,7 +18,8 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "check-messages": "bun run scripts/check-messages.ts",
-    "check-css-layers": "bun run scripts/check-css-layers.ts"
+    "check-css-layers": "bun run scripts/check-css-layers.ts",
+    "check-bundle-size": "bun run scripts/check-bundle-size.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.11",

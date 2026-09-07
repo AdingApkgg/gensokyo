@@ -86,7 +86,9 @@ export default function Topic({ loaderData, matches }: Route.ComponentProps) {
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
-              <Link to={localizeHref('/shrine')}>{m.nav_shrine()}</Link>
+              <Link to={localizeHref('/shrine')} viewTransition>
+                {m.nav_shrine()}
+              </Link>
             </BreadcrumbLink>
           </BreadcrumbItem>
           {board && (
@@ -94,7 +96,7 @@ export default function Topic({ loaderData, matches }: Route.ComponentProps) {
               <BreadcrumbSeparator />
               <BreadcrumbItem>
                 <BreadcrumbLink asChild>
-                  <Link to={localizeHref(`/shrine/b/${board}`)}>
+                  <Link to={localizeHref(`/shrine/b/${board}`)} viewTransition>
                     {boardLabel(board)}
                   </Link>
                 </BreadcrumbLink>
@@ -147,6 +149,7 @@ export function ErrorBoundary() {
         </h1>
         <Link
           to={localizeHref('/shrine')}
+          viewTransition
           className="mt-4 inline-block text-sm underline underline-offset-4"
         >
           {m.nav_shrine()}

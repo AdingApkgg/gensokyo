@@ -65,6 +65,7 @@ export default function Login() {
             </Button>
             <Link
               to={registerHref}
+              viewTransition
               className="text-center text-sm text-muted-foreground hover:text-foreground"
             >
               {m.auth_no_account()}

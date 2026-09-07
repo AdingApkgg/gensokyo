@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from '~/components/ui/select'
 import { apiFor } from '~/lib/api'
+import { apiErrorCode, errorMessage } from '~/lib/api-error'
 import {
   displayTitle,
   kindLabel,
@@ -43,8 +44,12 @@ export async function action({ request }: Route.ActionArgs) {
   const decision = form.get('decision') === 'approve' ? 'approve' : 'reject'
   const rejectReason = form.get('rejectReason')
 
+  // 客户端本该拦住（驳回按钮 `disabled={busy || !reason}`），这里是兜底。
+  //
+  // 这个 code **不能**叫 `validation_failed`：API 自己也会发这个码（note 超过
+  // 1000 字就是），撞名之后连「通过」时备注写长了都会显示成「请填写驳回理由」。
   if (decision === 'reject' && !rejectReason) {
-    return { ok: false as const }
+    return { ok: false as const, code: 'reject_reason_required' as const }
   }
 
   const res = await apiFor(request).api.moderation.resources[
@@ -59,7 +64,8 @@ export async function action({ request }: Route.ActionArgs) {
       note: String(form.get('note') ?? '') || undefined,
     },
   })
-  return { ok: res.ok }
+  const code = await apiErrorCode(res)
+  return code ? { ok: false as const, code } : { ok: true as const }
 }
 
 const reasonLabel = (r: RejectReason) =>
@@ -79,7 +85,7 @@ function ReviewActions({ id }: { id: string }) {
   const [reason, setReason] = useState<RejectReason | ''>('')
   const [note, setNote] = useState('')
   const busy = fetcher.state !== 'idle'
-  const missingReason = fetcher.data?.ok === false
+  const failCode = fetcher.data?.ok === false ? fetcher.data.code : undefined
 
   return (
     <div className="grid gap-3 border-t pt-3">
@@ -113,8 +119,12 @@ function ReviewActions({ id }: { id: string }) {
           {m.dash_strike_warning()}
         </p>
       )}
-      {missingReason && (
-        <p className="text-xs text-destructive">{m.dash_reject_required()}</p>
+      {failCode && (
+        <p className="text-xs text-destructive" role="alert">
+          {failCode === 'reject_reason_required'
+            ? m.dash_reject_required()
+            : errorMessage(failCode)}
+        </p>
       )}
 
       <div className="flex gap-2">
@@ -133,7 +143,7 @@ function ReviewActions({ id }: { id: string }) {
         <Button
           size="sm"
           variant="destructive"
-          disabled={busy}
+          disabled={busy || !reason}
           onClick={() =>
             fetcher.submit(
               { id, decision: 'reject', rejectReason: reason, note },
@@ -186,6 +196,7 @@ export default function ReviewQueue({ loaderData }: Route.ComponentProps) {
             <CardTitle className="mt-2 leading-snug">
               <Link
                 to={localizeHref(`/kourindou/${r.slug}`)}
+                viewTransition
                 className="hover:underline"
               >
                 {displayTitle(r)}
