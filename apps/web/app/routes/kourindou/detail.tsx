@@ -4,12 +4,14 @@ import { useState } from 'react'
 import { data, Form, Link, redirect, useFetcher } from 'react-router'
 import { Discussion } from '~/components/discussion/Discussion'
 import { ReportDialog } from '~/components/discussion/ReportDialog'
+import { LiveRegion } from '~/components/live-region'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { Input } from '~/components/ui/input'
 import { Separator } from '~/components/ui/separator'
 import { apiFor } from '~/lib/api'
+import { apiErrorCode, errorMessage } from '~/lib/api-error'
 import { discussionAction, floorParam } from '~/lib/discussion-action'
 import {
   averageRating,
@@ -78,18 +80,18 @@ export async function action({ request, params }: Route.ActionArgs) {
   if (shared) return shared
 
   if (intent === 'rate') {
-    await api.api.kourindou.resources[':slug'].rating.$put({
+    const score = Number(form.get('score'))
+    const res = await api.api.kourindou.resources[':slug'].rating.$put({
       param: { slug },
-      json: { score: Number(form.get('score')) },
+      json: { score },
     })
-    return { ok: true as const }
-  }
-
-  if (intent === 'favorite') {
-    await api.api.kourindou.resources[':slug'].favorite.$put({
-      param: { slug },
-    })
-    return { ok: true as const }
+    /**
+     * 必须读响应：hc 对 4xx 不抛异常，而 api 侧禁止投稿者给自己的资源评分（403）。
+     * 此前这里无条件 return { ok: true }，于是投稿者点星、界面显示成功，
+     * 数据库一动不动，错误一路静默到用户眼前。
+     */
+    const code = await apiErrorCode(res)
+    return code ? { ok: false as const, code } : { ok: true as const, score }
   }
 
   /**
@@ -125,10 +127,23 @@ export default function ResourceDetail({
   matches,
 }: Route.ComponentProps) {
   const { resource, circle, tags, versions, discussion, topicId } = loaderData
-  void actionData
   const user = matches[0]?.loaderData?.user
   const avg = averageRating(resource.ratingSum, resource.ratingCount)
   const locale = getLocale()
+
+  /**
+   * actionData 是这个页面全部 intent（评论/编辑/删除/举报/评分/下架）共用的返回值。
+   * 讨论区的失败自己处理（PostForm 走 fetcher），下架由 AdminZone 读自己的
+   * fetcher.data——这里只挑评分专属的形状。discussionAction 的结果一定带
+   * `intent` 字段，rate 分支不带，用它把两者分开，避免把讨论区的错误
+   * 误显示在星条旁边。
+   */
+  const rateResult =
+    actionData && !('intent' in actionData) ? actionData : undefined
+  const rateError =
+    rateResult && 'code' in rateResult ? rateResult.code : undefined
+  const ratedScore =
+    rateResult && 'score' in rateResult ? rateResult.score : undefined
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-10">
@@ -257,27 +272,42 @@ export default function ResourceDetail({
       <Separator className="my-8" />
 
       <section>
-        <div className="mb-3 flex items-center gap-3">
-          <h2 className="font-heading text-lg font-semibold">
-            {m.detail_comments()}
-          </h2>
-          {user && (
-            <Form method="post" className="ml-auto flex items-center gap-1">
-              <input type="hidden" name="intent" value="rate" />
-              {[1, 2, 3, 4, 5].map((n) => (
-                <button
-                  key={n}
-                  type="submit"
-                  name="score"
-                  value={n}
-                  aria-label={`${m.detail_rate()} ${n}`}
-                  className="text-muted-foreground transition-colors hover:text-chart-2"
-                >
-                  <Star className="size-4" />
-                </button>
-              ))}
-            </Form>
+        <div className="mb-3">
+          <div className="flex items-center gap-3">
+            <h2 className="font-heading text-lg font-semibold">
+              {m.detail_comments()}
+            </h2>
+            {user && (
+              <Form method="post" className="ml-auto flex items-center gap-1">
+                <input type="hidden" name="intent" value="rate" />
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button
+                    key={n}
+                    type="submit"
+                    name="score"
+                    value={n}
+                    aria-label={`${m.detail_rate()} ${n}`}
+                    className="text-muted-foreground transition-colors hover:text-chart-2"
+                  >
+                    <Star className="size-4" />
+                  </button>
+                ))}
+              </Form>
+            )}
+          </div>
+          {rateError && (
+            <p
+              role="alert"
+              className="mt-1 text-right text-xs text-destructive"
+            >
+              {errorMessage(rateError)}
+            </p>
           )}
+          <LiveRegion>
+            {ratedScore !== undefined
+              ? m.detail_rated_n({ n: ratedScore })
+              : null}
+          </LiveRegion>
         </div>
 
         {topicId && discussion ? (
