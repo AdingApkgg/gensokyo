@@ -1,11 +1,20 @@
 import { REPORT_REASON, type ReportReason } from '@gensokyo/shared'
-import { Link, useFetcher } from 'react-router'
+import { Link, useFetcher, useSearchParams } from 'react-router'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '~/components/ui/pagination'
 import { apiFor } from '~/lib/api'
 import { apiErrorCode, errorMessage } from '~/lib/api-error'
 import { displayTitle, reportReasonLabel } from '~/lib/display'
+import { pageWindow } from '~/lib/paging'
 import { formatAbsolute } from '~/lib/time'
 import { m } from '~/paraglide/messages'
 import { localizeHref } from '~/paraglide/runtime'
@@ -17,11 +26,14 @@ export function meta() {
 
 /** api 已按紧急度排好（版权/违法 → 骚扰 → 灌水 → 其他），这里不再重排 */
 export async function loader({ request }: Route.LoaderArgs) {
+  const page = Number(new URL(request.url).searchParams.get('page') ?? '1') || 1
   const res = await apiFor(request).api.moderation.reports.$get({
-    query: { pageSize: '50' },
+    query: { page: String(page), pageSize: '50' },
   })
   const body = await res.json()
-  if ('error' in body) return { items: [], total: 0 }
+  // 失败分支也要给全形状：少了 page/pageSize，loaderData 会是联合类型，
+  // 组件里读 loaderData.page 直接是 TS 错误
+  if ('error' in body) return { items: [], page: 1, pageSize: 50, total: 0 }
   return body
 }
 
@@ -163,7 +175,17 @@ function Actions({ r }: { r: Item }) {
 }
 
 export default function Reports({ loaderData }: Route.ComponentProps) {
-  const { items } = loaderData
+  const { items, total, page, pageSize } = loaderData
+  const pages = Math.max(1, Math.ceil(total / pageSize))
+  const [params] = useSearchParams()
+  /** 照抄 kourindou/list.tsx：第 1 页不写 ?page=1，翻页保住现有 query */
+  const pageHref = (p: number) => {
+    const next = new URLSearchParams(params)
+    if (p <= 1) next.delete('page')
+    else next.set('page', String(p))
+    const qs = next.toString()
+    return qs ? `?${qs}` : '.'
+  }
 
   if (items.length === 0) {
     return (
@@ -174,53 +196,84 @@ export default function Reports({ loaderData }: Route.ComponentProps) {
   }
 
   return (
-    <div className="mt-6 grid gap-4">
-      {items.map((r) => {
-        const t = targetOf(r)
-        return (
-          <Card key={r.id}>
-            <CardHeader>
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge
-                  variant={
-                    URGENT.includes(r.reason) ? 'destructive' : 'secondary'
-                  }
-                >
-                  {reportReasonLabel(r.reason)}
-                </Badge>
-                <Badge variant="outline">
-                  {r.targetKind === 'post'
-                    ? m.dash_target_post()
-                    : m.dash_target_resource()}
-                </Badge>
-                {r.targetKind === 'post' && r.postDeletedAt && (
-                  <Badge variant="outline">{m.dash_target_deleted()}</Badge>
+    <>
+      <div className="mt-6 grid gap-4">
+        {items.map((r) => {
+          const t = targetOf(r)
+          return (
+            <Card key={r.id}>
+              <CardHeader>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge
+                    variant={
+                      URGENT.includes(r.reason) ? 'destructive' : 'secondary'
+                    }
+                  >
+                    {reportReasonLabel(r.reason)}
+                  </Badge>
+                  <Badge variant="outline">
+                    {r.targetKind === 'post'
+                      ? m.dash_target_post()
+                      : m.dash_target_resource()}
+                  </Badge>
+                  {r.targetKind === 'post' && r.postDeletedAt && (
+                    <Badge variant="outline">{m.dash_target_deleted()}</Badge>
+                  )}
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    {formatAbsolute(r.createdAt)}
+                  </span>
+                </div>
+                <CardTitle className="mt-2 text-base">
+                  {t.href ? (
+                    <Link
+                      to={t.href}
+                      viewTransition
+                      className="hover:underline"
+                    >
+                      {t.label}
+                    </Link>
+                  ) : (
+                    <span className="text-muted-foreground">{t.label}</span>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-3">
+                {r.detail && (
+                  <p className="text-sm whitespace-pre-wrap text-muted-foreground">
+                    {r.detail}
+                  </p>
                 )}
-                <span className="ml-auto text-xs text-muted-foreground">
-                  {formatAbsolute(r.createdAt)}
-                </span>
-              </div>
-              <CardTitle className="mt-2 text-base">
-                {t.href ? (
-                  <Link to={t.href} viewTransition className="hover:underline">
-                    {t.label}
-                  </Link>
-                ) : (
-                  <span className="text-muted-foreground">{t.label}</span>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-3">
-              {r.detail && (
-                <p className="text-sm whitespace-pre-wrap text-muted-foreground">
-                  {r.detail}
-                </p>
-              )}
-              <Actions r={r} />
-            </CardContent>
-          </Card>
-        )
-      })}
-    </div>
+                <Actions r={r} />
+              </CardContent>
+            </Card>
+          )
+        })}
+      </div>
+      {pages > 1 && (
+        <Pagination className="mt-6">
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious
+                to={pageHref(page - 1)}
+                disabled={page === 1}
+              />
+            </PaginationItem>
+            {pageWindow(page, pages).map((p) => (
+              <PaginationItem key={p}>
+                <PaginationLink to={pageHref(p)} isActive={p === page}>
+                  {p}
+                </PaginationLink>
+              </PaginationItem>
+            ))}
+            <PaginationItem>
+              <PaginationNext
+                to={pageHref(page + 1)}
+                disabled={page === pages}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      )}
+    </>
   )
 }

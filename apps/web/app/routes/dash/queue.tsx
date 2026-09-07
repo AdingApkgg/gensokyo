@@ -1,11 +1,19 @@
 import { REJECT_REASON, type RejectReason } from '@gensokyo/shared'
 import { AlertTriangle } from 'lucide-react'
 import { useState } from 'react'
-import { Link, useFetcher } from 'react-router'
+import { Link, useFetcher, useSearchParams } from 'react-router'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { Input } from '~/components/ui/input'
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '~/components/ui/pagination'
 import {
   Select,
   SelectContent,
@@ -21,6 +29,7 @@ import {
   licenseLabel,
   licenseVariant,
 } from '~/lib/display'
+import { pageWindow } from '~/lib/paging'
 import { m } from '~/paraglide/messages'
 import { localizeHref } from '~/paraglide/runtime'
 import type { Route } from './+types/queue'
@@ -30,11 +39,14 @@ export function meta() {
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
+  const page = Number(new URL(request.url).searchParams.get('page') ?? '1') || 1
   const res = await apiFor(request).api.moderation.queue.$get({
-    query: { pageSize: '50' },
+    query: { page: String(page), pageSize: '50' },
   })
   const body = await res.json()
-  if ('error' in body) return { items: [], total: 0 }
+  // 失败分支也要给全形状：少了 page/pageSize，loaderData 会是联合类型，
+  // 组件里读 loaderData.page 直接是 TS 错误
+  if ('error' in body) return { items: [], page: 1, pageSize: 50, total: 0 }
   return body
 }
 
@@ -159,7 +171,17 @@ function ReviewActions({ id }: { id: string }) {
 }
 
 export default function ReviewQueue({ loaderData }: Route.ComponentProps) {
-  const { items } = loaderData
+  const { items, total, page, pageSize } = loaderData
+  const pages = Math.max(1, Math.ceil(total / pageSize))
+  const [params] = useSearchParams()
+  /** 照抄 kourindou/list.tsx：第 1 页不写 ?page=1，翻页保住现有 query */
+  const pageHref = (p: number) => {
+    const next = new URLSearchParams(params)
+    if (p <= 1) next.delete('page')
+    else next.set('page', String(p))
+    const qs = next.toString()
+    return qs ? `?${qs}` : '.'
+  }
 
   if (items.length === 0) {
     return (
@@ -173,44 +195,71 @@ export default function ReviewQueue({ loaderData }: Route.ComponentProps) {
   }
 
   return (
-    <div className="mt-6 grid gap-4">
-      {items.map((r) => (
-        <Card key={r.id}>
-          <CardHeader>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="secondary">{kindLabel(r.kind)}</Badge>
-              <Badge variant={licenseVariant(r.license)}>
-                {licenseLabel(r.license)}
-              </Badge>
-              {/* 低信任的排在前面，这里把依据直接摆出来 */}
-              <span className="ml-auto text-xs text-muted-foreground">
-                {m.dash_uploader()}: {r.uploaderName ?? '—'} ·{' '}
-                {r.approvedResourceCount
-                  ? m.dash_trust_n({ n: r.approvedResourceCount })
-                  : m.dash_trust_new()}
-                {r.strikeCount
-                  ? ` · ${m.dash_strikes({ n: r.strikeCount })}`
-                  : ''}
-              </span>
-            </div>
-            <CardTitle className="mt-2 leading-snug">
-              <Link
-                to={localizeHref(`/kourindou/${r.slug}`)}
-                viewTransition
-                className="hover:underline"
-              >
-                {displayTitle(r)}
-              </Link>
-            </CardTitle>
-            {r.licenseNote && (
-              <p className="text-sm text-muted-foreground">{r.licenseNote}</p>
-            )}
-          </CardHeader>
-          <CardContent>
-            <ReviewActions id={r.id} />
-          </CardContent>
-        </Card>
-      ))}
-    </div>
+    <>
+      <div className="mt-6 grid gap-4">
+        {items.map((r) => (
+          <Card key={r.id}>
+            <CardHeader>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="secondary">{kindLabel(r.kind)}</Badge>
+                <Badge variant={licenseVariant(r.license)}>
+                  {licenseLabel(r.license)}
+                </Badge>
+                {/* 低信任的排在前面，这里把依据直接摆出来 */}
+                <span className="ml-auto text-xs text-muted-foreground">
+                  {m.dash_uploader()}: {r.uploaderName ?? '—'} ·{' '}
+                  {r.approvedResourceCount
+                    ? m.dash_trust_n({ n: r.approvedResourceCount })
+                    : m.dash_trust_new()}
+                  {r.strikeCount
+                    ? ` · ${m.dash_strikes({ n: r.strikeCount })}`
+                    : ''}
+                </span>
+              </div>
+              <CardTitle className="mt-2 leading-snug">
+                <Link
+                  to={localizeHref(`/kourindou/${r.slug}`)}
+                  viewTransition
+                  className="hover:underline"
+                >
+                  {displayTitle(r)}
+                </Link>
+              </CardTitle>
+              {r.licenseNote && (
+                <p className="text-sm text-muted-foreground">{r.licenseNote}</p>
+              )}
+            </CardHeader>
+            <CardContent>
+              <ReviewActions id={r.id} />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      {pages > 1 && (
+        <Pagination className="mt-6">
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious
+                to={pageHref(page - 1)}
+                disabled={page === 1}
+              />
+            </PaginationItem>
+            {pageWindow(page, pages).map((p) => (
+              <PaginationItem key={p}>
+                <PaginationLink to={pageHref(p)} isActive={p === page}>
+                  {p}
+                </PaginationLink>
+              </PaginationItem>
+            ))}
+            <PaginationItem>
+              <PaginationNext
+                to={pageHref(page + 1)}
+                disabled={page === pages}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      )}
+    </>
   )
 }
