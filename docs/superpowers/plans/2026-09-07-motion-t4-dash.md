@@ -1,5 +1,16 @@
 # 和风纸境 T4：装 motion，第一个界面是 /dash
 
+> **状态：Task 1–9 全部完成（2026-09-07，分支 `motion-t4-dash`，提交 `fe8c162`..收尾）。**
+> 收尾门禁：check / typecheck / check-messages / 全仓 test（web 34、shared 105、db 37、api 183）/
+> build / check-css-layers / check-motion-boundary / check-bundle-size / e2e 40 项，全绿。
+> **A2 边界的最终证据**：首屏共享集 150.62 → **151.49 KB**（23 文件），多出的唯一文件是
+> `motion-*.js` 0.40 KB（root.tsx 的 `MotionConfig`）；`/dash` 从 193.14 → **236.68 KB**（+43.5，
+> 在预估 39–46 带内），`login`/`register`/`home` 增量 0.00。
+> 执行中偏离计划、值得后来者知道的：Task 7 的盯梢组件按计划形状写会在拿到 data 的同一帧卸载，
+> 播报永远为空（改成并集，`lib/dash-pending.ts` 有单测钉住）；Task 8 的落点实测是 7 处而非正文的
+> 4 处或修订的 8 处，且只有 queue 的两处在按钮之前；Task 9 按修订取 420ms 而非标题的 360ms。
+> Browser pane 里 motion 的动画全部冻在起点（rAF 不触发），动画类断言改为机制测试 + 纯函数单测。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 装 `motion`，把它用在这个站真正需要的三件事上——**位置连续性**（我点的那个东西去哪了）、**远端回执**（它办完了吗）、**常驻状态**（我现在处在什么模式）——并从全站最高频的操作界面 `/dash` 开始。
