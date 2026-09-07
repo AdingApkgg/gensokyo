@@ -238,7 +238,7 @@ export default function Notifications({ loaderData }: Route.ComponentProps) {
               </>
             )
             return (
-              <li key={n.id} className="py-3">
+              <li key={n.id} className="ink-row py-3 pl-3">
                 {d.href ? (
                   <Link
                     to={d.href}
