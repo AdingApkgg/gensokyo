@@ -1,4 +1,5 @@
 import { createClient } from '@gensokyo/api-client'
+import { MotionConfig } from 'motion/react'
 import {
   isRouteErrorResponse,
   Links,
@@ -11,6 +12,7 @@ import {
 import type { Route } from './+types/root'
 import { SiteFooter } from './components/site-footer'
 import { SiteHeader } from './components/site-header'
+import { SPRING_WASHI } from './lib/motion'
 import { m } from './paraglide/messages'
 import { getLocale } from './paraglide/runtime'
 import { paraglideMiddleware } from './paraglide/server'
@@ -82,27 +84,40 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 export default function App({ loaderData }: Route.ComponentProps) {
   return (
-    <div className="flex min-h-screen flex-col">
-      {/*
-        跳至正文：键盘用户此前必须逐个 Tab 过整条导航才能到内容。
+    /**
+     * root 树里唯一允许的 motion 用法（见 A2）。两个 prop 都是承重的：
+     *   reducedMotion —— 默认是 "never"，不写它 app.css 末尾那个不分层的兜底块
+     *     管不到 motion 的任何一条
+     *   transition —— 布局动画的兜底是 { duration: 0.45, ease: [0.4,0,0.1,1] }，
+     *     不给就是 450ms 的外来缓动
+     *
+     * 将来加 CSP 时这里要同时给 nonce：AnimatePresence 的 popLayout 会往
+     * document.head 注 <style>（PopChild 用它定位退场元素）。没有 nonce
+     * 就是生产上弹层与退场动画静默失效——而症状离原因很远。
+     */
+    <MotionConfig reducedMotion="user" transition={SPRING_WASHI}>
+      <div className="flex min-h-screen flex-col">
+        {/*
+          跳至正文：键盘用户此前必须逐个 Tab 过整条导航才能到内容。
 
-        `focus:px-3 focus:py-2` 不是画蛇添足——Tailwind 的 `not-sr-only` 自带
-        `padding: 0; margin: 0`（它要撤掉 `sr-only` 的 `margin: -1px`），而带
-        `:focus` 的它特异性 0,2,0 压得过裸 `px-3` 的 0,1,0。不把内边距也提到
-        同一级，聚焦后拿到的是一个字贴着描边的 56×20 挤扁盒子（实测过）。
-      */}
-      <a
-        href="#main"
-        className="sr-only rounded-md bg-background text-sm ring-1 ring-ring focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-3 focus:py-2"
-      >
-        {m.skip_to_content()}
-      </a>
-      <SiteHeader user={loaderData.user} />
-      <div id="main" className="flex-1 scroll-mt-20">
-        <Outlet />
+          `focus:px-3 focus:py-2` 不是画蛇添足——Tailwind 的 `not-sr-only` 自带
+          `padding: 0; margin: 0`（它要撤掉 `sr-only` 的 `margin: -1px`），而带
+          `:focus` 的它特异性 0,2,0 压得过裸 `px-3` 的 0,1,0。不把内边距也提到
+          同一级，聚焦后拿到的是一个字贴着描边的 56×20 挤扁盒子（实测过）。
+        */}
+        <a
+          href="#main"
+          className="sr-only rounded-md bg-background text-sm ring-1 ring-ring focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-3 focus:py-2"
+        >
+          {m.skip_to_content()}
+        </a>
+        <SiteHeader user={loaderData.user} />
+        <div id="main" className="flex-1 scroll-mt-20">
+          <Outlet />
+        </div>
+        <SiteFooter />
       </div>
-      <SiteFooter />
-    </div>
+    </MotionConfig>
   )
 }
 

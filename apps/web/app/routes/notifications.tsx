@@ -1,11 +1,20 @@
 import type { NotificationView } from '@gensokyo/shared'
-import { Link, redirect, useFetcher } from 'react-router'
+import { Link, redirect, useFetcher, useSearchParams } from 'react-router'
 import { LiveRegion } from '~/components/live-region'
 import { RelativeTime } from '~/components/relative-time'
 import { Button } from '~/components/ui/button'
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '~/components/ui/pagination'
 import { apiFor } from '~/lib/api'
 import { apiErrorCode, errorMessage } from '~/lib/api-error'
 import { displayTitle, reportReasonLabel } from '~/lib/display'
+import { pageWindow } from '~/lib/paging'
 import { m } from '~/paraglide/messages'
 import { localizeHref } from '~/paraglide/runtime'
 import type { Route } from './+types/notifications'
@@ -133,7 +142,17 @@ function describe(n: NotificationView): {
 }
 
 export default function Notifications({ loaderData }: Route.ComponentProps) {
-  const { items, failed } = loaderData
+  const { items, failed, page, pageSize, total } = loaderData
+  const pages = Math.max(1, Math.ceil(total / pageSize))
+  const [params] = useSearchParams()
+  /** 照抄 kourindou/list.tsx：第 1 页不写 ?page=1，翻页保住现有 query */
+  const pageHref = (p: number) => {
+    const next = new URLSearchParams(params)
+    if (p <= 1) next.delete('page')
+    else next.set('page', String(p))
+    const qs = next.toString()
+    return qs ? `?${qs}` : '.'
+  }
   const fetcher = useFetcher<typeof action>()
   const settled = fetcher.state === 'idle' ? fetcher.data : undefined
   const marked = settled?.ok ? settled.marked : null
@@ -155,7 +174,16 @@ export default function Notifications({ loaderData }: Route.ComponentProps) {
       )}
       <header className="flex items-center gap-4">
         <h1 className="font-heading text-2xl font-bold">{m.notif_title()}</h1>
-        {unread.length > 0 && newest && (
+        {/*
+         * 按钮限死在第 1 页：API 对 upTo 的语义是「标记该游标**及更旧**的
+         * 全部未读」，而只有第 1 页的 items[0]（newest）才是全局最新一条——
+         * 第 2 页的 items[0] 只是「第 2 页里最新」，比第 1 页的任何一条都旧。
+         * 分页控件成为常规入口之前 ?page=2 只能手打 URL、没人走到；
+         * 一旦能点到，在第 2 页点「全部已读」会静默漏掉第 1 页的未读，
+         * 而 LiveRegion 还会照常播报一句看起来成功的「已标记 N 条」。
+         * 要让它在任意页可用，得先给 api 的 markReadSchema 加「全部」语义。
+         */}
+        {page === 1 && unread.length > 0 && newest && (
           <Button
             size="sm"
             variant="outline"
@@ -210,7 +238,7 @@ export default function Notifications({ loaderData }: Route.ComponentProps) {
               </>
             )
             return (
-              <li key={n.id} className="py-3">
+              <li key={n.id} className="ink-row py-3 pl-3">
                 {d.href ? (
                   <Link
                     to={d.href}
@@ -231,6 +259,32 @@ export default function Notifications({ loaderData }: Route.ComponentProps) {
             )
           })}
         </ol>
+      )}
+
+      {!failed && pages > 1 && (
+        <Pagination className="mt-8">
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious
+                to={pageHref(page - 1)}
+                disabled={page === 1}
+              />
+            </PaginationItem>
+            {pageWindow(page, pages).map((p) => (
+              <PaginationItem key={p}>
+                <PaginationLink to={pageHref(p)} isActive={p === page}>
+                  {p}
+                </PaginationLink>
+              </PaginationItem>
+            ))}
+            <PaginationItem>
+              <PaginationNext
+                to={pageHref(page + 1)}
+                disabled={page === pages}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
       )}
     </main>
   )

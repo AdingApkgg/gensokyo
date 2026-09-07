@@ -42,21 +42,35 @@
  *
  * ---
  *
- * 预算取值理由（2026-09-07 在本分支上实测，构建产物见
- * `apps/web/build/{server,client}`）：
+ * 预算取值理由（2026-09-07 T4 收尾时在 motion-t4-dash 分支重新称重，
+ * 构建产物见 `apps/web/build/{server,client}`；`bun run check-bundle-size -- --all`
+ * 逐路由打印，校准时用它，别手工拆产物）：
  *
- *   - 首屏集：22 个文件，gzip 合计 **150.62 KB**。`SHARED_BUDGET_KB = 155`
- *     留了约 4.4 KB 余量。
- *   - 单路由预算里最重的是 `:locale?/kourindou/:slug`
- *     （`routes/kourindou/detail`）：首屏集 + 自身 43 个文件，gzip 合计
- *     **250.99 KB**，其中 `Markdown` 单 chunk 就有 **47.33 KB**（该 chunk
- *     被 `kourindou/detail`、`shrine/new`、`shrine/topic` 三个路由共享，
- *     但因为不在首屏集里，只在实际引用它的路由预算里现身）。
- *     `ROUTE_BUDGET_KB = 270` 留了约 19 KB 余量。
+ *   - 首屏集：23 个文件，gzip 合计 **151.49 KB**。`SHARED_BUDGET_KB = 155`
+ *     留了约 3.5 KB 余量。T3 时是 22 个文件 150.62 KB；多出的那一个文件是
+ *     `motion-*.js` **0.40 KB**——root.tsx 里 `MotionConfig` 那一个名字的
+ *     全部代价，正是 A2 边界允许进 root 树的唯一东西。其余 +0.47 KB 是
+ *     rolldown 重新分块的漂移，不对应任何新进 root 树的模块。
+ *     **预算刻意不放宽**：它要抓的是 motion 主体（≈37 KB）漏进 root 可达图
+ *     那一类事故，3.5 KB 的余量对此绰绰有余；放宽只会让「谁又往 root 树塞了
+ *     东西」这个信号变钝。
+ *   - 单路由预算里最重的仍是 `:locale?/kourindou/:slug`
+ *     （`routes/kourindou/detail`）：首屏集 + 自身 gzip 合计 **252.85 KB**
+ *     （T3 时 250.99），其中 `Markdown` 单 chunk **47.37 KB**（该 chunk 被
+ *     `kourindou/detail`、`shrine/new`、`shrine/topic` 三个路由共享，但因为
+ *     不在首屏集里，只在实际引用它的路由预算里现身）。
+ *     `ROUTE_BUDGET_KB = 270` 留了约 17 KB 余量。
+ *   - motion 装进来之后的增量全部落在 `/dash` 一族：`/dash`（queue）从装前的
+ *     193.14 KB 到 **236.68 KB**（+43.5 KB，在预估的 39–46 KB 带内），
+ *     `/dash/reports` 227.95、`/dash/users` 200.04、`/dash/site` 198.95、
+ *     `/dash/trash` 196.86——后三个自己几乎不用 motion，但 dash 布局
+ *     （tab 下划线的 `layoutId`）是它们的祖先，motion 的 layout 引擎跟着
+ *     布局 chunk 一起来。`login` / `register` / `home` 增量 0.00。
  *
- * 这两个数字只在当前依赖与路由结构下成立。**T4 往里装 motion 之后必须
- * 重新构建、重新称重、重新校准这两个常量**——如果新读数比这里记的还低，
- * 说明有路由被精简了，也要如实更新注释，不能让注释继续写着过时的旧读数。
+ * 这两个数字只在当前依赖与路由结构下成立。下次再往里装会进 root 树的东西，
+ * 或给 `kourindou/detail` 加依赖，都要重新构建、重新称重、重新校准——
+ * 如果新读数比这里记的还低，说明有路由被精简了，也要如实更新注释，
+ * 不能让注释继续写着过时的旧读数。
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -149,11 +163,11 @@ function sumGzip(files: Iterable<string>): number {
 }
 
 /** 打印一个文件集合里最重的 6 个 chunk——报错不带这个等于没报。 */
-function printHeaviestChunks(files: Iterable<string>): void {
+function printHeaviestChunks(files: Iterable<string>, top = 6): void {
   const ranked = [...new Set(files)]
     .map((f) => ({ file: f, kb: gzipSizeOf(f) / 1024 }))
     .sort((a, b) => b.kb - a.kb)
-    .slice(0, 6)
+    .slice(0, top)
   for (const { file, kb } of ranked) {
     console.log(`    ${kb.toFixed(2).padStart(8)} KB  ${file}`)
   }
@@ -204,6 +218,13 @@ function isVisitableRoute(r: RouteManifestEntry): boolean {
   return r.path !== null || r.index === true
 }
 
+/** `--all`：逐路由打印首屏集+自身的读数，并列出首屏集的每个文件。校准头注释时用 */
+const PRINT_ALL = process.argv.includes('--all')
+if (PRINT_ALL) {
+  console.log('  首屏集文件：')
+  printHeaviestChunks(sharedFiles, sharedFiles.size)
+}
+
 let heaviestRoute: {
   id: string
   path: string | null
@@ -228,6 +249,11 @@ for (const route of Object.values(manifest.routes)) {
   }
 
   const kb = sumGzip(files) / 1024
+  if (PRINT_ALL) {
+    console.log(
+      `  ${kb.toFixed(2).padStart(8)} KB  ${String(route.path ?? '(index)').padEnd(34)} ${route.id}`,
+    )
+  }
   if (!heaviestRoute || kb > heaviestRoute.kb) {
     heaviestRoute = { id: route.id, path: route.path, kb, files }
   }

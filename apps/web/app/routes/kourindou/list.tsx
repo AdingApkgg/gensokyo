@@ -1,6 +1,6 @@
 import { LICENSE_STATUS, RESOURCE_KIND, RESOURCE_SORT } from '@gensokyo/shared'
 import { Download, Star } from 'lucide-react'
-import { Link, useSearchParams } from 'react-router'
+import { Link, useSearchParams, useViewTransitionState } from 'react-router'
 import { Badge } from '~/components/ui/badge'
 import {
   Pagination,
@@ -50,6 +50,8 @@ export async function loader({ request }: Route.LoaderArgs) {
   return { ...body, failed: false as const }
 }
 
+type ResourceItem = Awaited<ReturnType<typeof loader>>['items'][number]
+
 /** 筛选器走 URL query：可分享、可后退、SSR 直出 */
 function Filter({
   param,
@@ -86,6 +88,74 @@ function Filter({
         ))}
       </SelectContent>
     </Select>
+  )
+}
+
+function ResourceRow({ r }: { r: ResourceItem }) {
+  const avg = averageRating(r.ratingSum, r.ratingCount)
+  const to = localizeHref(`/kourindou/${r.slug}`)
+  /**
+   * 只给正在转场的那一行命名。同名元素在同一帧出现两个，整次 view transition
+   * 会被浏览器静默放弃——所以绝不能给所有行都挂上。
+   *
+   * useViewTransitionState 对 currentLocation 与 nextLocation 都匹配，
+   * 所以后退（详情 → 列表）会自动配对回同一行，不需要额外写。
+   */
+  const morphing = useViewTransitionState(to)
+  return (
+    <li>
+      <Link
+        to={to}
+        viewTransition
+        className="ink-row flex items-center gap-4 py-3 pl-3 transition-colors hover:bg-muted/50"
+      >
+        {r.coverUrl ? (
+          <img
+            src={r.coverUrl}
+            alt=""
+            loading="lazy"
+            className="size-14 shrink-0 rounded object-cover"
+            style={{
+              viewTransitionName: morphing ? 'kourindou-cover' : undefined,
+            }}
+          />
+        ) : (
+          <div
+            className="size-14 shrink-0 rounded bg-muted"
+            style={{
+              viewTransitionName: morphing ? 'kourindou-cover' : undefined,
+            }}
+          />
+        )}
+
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-medium">{displayTitle(r)}</p>
+          <p className="truncate text-muted-foreground">
+            {r.circleNameRaw || m.anonymous()}
+          </p>
+        </div>
+
+        <div className="hidden shrink-0 items-center gap-2 sm:flex">
+          <Badge variant="secondary">{kindLabel(r.kind)}</Badge>
+          <Badge variant={licenseVariant(r.license)}>
+            {licenseLabel(r.license)}
+          </Badge>
+        </div>
+
+        <div className="hidden w-32 shrink-0 text-right text-muted-foreground sm:block">
+          <span className="inline-flex items-center gap-1">
+            <Star
+              className={`size-3.5 ${avg ? 'fill-chart-2 text-chart-2' : ''}`}
+            />
+            {avg ?? m.no_rating()}
+          </span>
+          <span className="ml-3 inline-flex items-center gap-1">
+            <Download className="size-3.5" />
+            {r.downloadCount}
+          </span>
+        </div>
+      </Link>
+    </li>
   )
 }
 
@@ -163,56 +233,9 @@ export default function KourindouList({ loaderData }: Route.ComponentProps) {
         </div>
       ) : (
         <ul className="mt-4 ink-divide border-y" data-density="compact">
-          {items.map((r) => {
-            const avg = averageRating(r.ratingSum, r.ratingCount)
-            return (
-              <li key={r.id}>
-                <Link
-                  to={localizeHref(`/kourindou/${r.slug}`)}
-                  viewTransition
-                  className="ink-row flex items-center gap-4 py-3 pl-3 transition-colors hover:bg-muted/50"
-                >
-                  {r.coverUrl ? (
-                    <img
-                      src={r.coverUrl}
-                      alt=""
-                      loading="lazy"
-                      className="size-14 shrink-0 rounded object-cover"
-                    />
-                  ) : (
-                    <div className="size-14 shrink-0 rounded bg-muted" />
-                  )}
-
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{displayTitle(r)}</p>
-                    <p className="truncate text-muted-foreground">
-                      {r.circleNameRaw || m.anonymous()}
-                    </p>
-                  </div>
-
-                  <div className="hidden shrink-0 items-center gap-2 sm:flex">
-                    <Badge variant="secondary">{kindLabel(r.kind)}</Badge>
-                    <Badge variant={licenseVariant(r.license)}>
-                      {licenseLabel(r.license)}
-                    </Badge>
-                  </div>
-
-                  <div className="hidden w-32 shrink-0 text-right text-muted-foreground sm:block">
-                    <span className="inline-flex items-center gap-1">
-                      <Star
-                        className={`size-3.5 ${avg ? 'fill-chart-2 text-chart-2' : ''}`}
-                      />
-                      {avg ?? m.no_rating()}
-                    </span>
-                    <span className="ml-3 inline-flex items-center gap-1">
-                      <Download className="size-3.5" />
-                      {r.downloadCount}
-                    </span>
-                  </div>
-                </Link>
-              </li>
-            )
-          })}
+          {items.map((r) => (
+            <ResourceRow key={r.id} r={r} />
+          ))}
         </ul>
       )}
 

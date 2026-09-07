@@ -22,6 +22,7 @@ jobs:
       # 在裸 runner 上必红。要把它们接进来得先起 postgres/redis/Meili/MinIO，
       # 那是另一个决策，与下面不跑 e2e 是同一条理由。
       - run: bunx turbo run test --filter=@gensokyo/web --filter=@gensokyo/shared
+      - run: bun run check-motion-boundary
       - run: cd apps/web && bun run build
       - run: bun run check-css-layers
       - run: bun run check-bundle-size

@@ -65,6 +65,7 @@
   "detail_comments": "评论",
   "detail_no_comments": "还没有人评论",
   "detail_rate": "评分",
+  "detail_rated_n": "已评 {n} 星",
   "detail_report": "举报",
   "mirror_netdisk": "网盘",
   "mirror_direct": "直链",
@@ -191,6 +192,7 @@
   "err_validation_failed": "内容格式不对，请检查后重试。",
   "err_unauthorized": "请先登录。",
   "err_forbidden": "你没有权限做这件事。",
+  "err_self_action_forbidden": "不能给自己上传的资源评分。",
   "err_not_found": "对象不存在，或已被删除。",
   "admin_link_trust_threshold": "发外链门槛",
   "admin_link_trust_hint": "通过多少个投稿后可以在帖子里发站外链接（账号满 3 天也可以）。与即发即审门槛是两个旋钮：帖子可删，链接先放开出事再收紧；资源分发不可撤，投稿先审后发。设 0 等于不限。",
@@ -298,5 +300,7 @@
   "dash_target_resource": "资源",
   "dash_delete_and_resolve": "删楼并结案",
   "dash_target_deleted": "该楼层已删除",
-  "dash_target_gone": "目标已不存在"
+  "dash_target_gone": "目标已不存在",
+  "dash_announce_done": "已处理：{title}",
+  "dash_announce_failed": "处理失败：{reason}"
 }

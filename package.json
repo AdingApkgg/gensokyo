@@ -19,6 +19,7 @@
     "test": "turbo run test",
     "check-messages": "bun run scripts/check-messages.ts",
     "check-css-layers": "bun run scripts/check-css-layers.ts",
+    "check-motion-boundary": "bun run scripts/check-motion-boundary.ts",
     "check-bundle-size": "bun run scripts/check-bundle-size.ts"
   },
   "devDependencies": {

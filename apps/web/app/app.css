@@ -734,6 +734,17 @@ html.dark {
   animation-timing-function: var(--ease-sumi);
 }
 
+/* 香霖堂封面的跨页 morph：列表 56px → 详情 112px。
+   它是**位移/尺寸**类，所以走纸·落（--ease-washi）而不是 root 那条墨·洇。
+
+   两侧都是正方形（size-14 / size-28）且都 object-cover，所以 morph 是纯缩放，
+   old/new 的交叉淡入几乎看不见。**哪天有一侧不再是正方形，这条会立刻变成挤压**——
+   到时要么让两侧比例一致，要么给 old/new 单独写 object-fit 过渡。 */
+::view-transition-group(kourindou-cover) {
+  animation-duration: var(--transition-duration-washi-lg);
+  animation-timing-function: var(--ease-washi);
+}
+
 /* 减弱动效：只掐掉位移与缩放，保留淡入淡出与颜色过渡。
    **整块必须不带 @layer**：设 --tw-enter-* 与 --tw-exit-* 的工具类在 @layer utilities，
    Tailwind v4 层序 theme→base→components→utilities 晚层恒胜，放进 @layer base 会完全失效

@@ -111,11 +111,16 @@ export function SiteHeader({ user }: { user: SessionUser | null }) {
                 className="relative"
               >
                 <Bell />
-                {user.unread > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 min-w-4 rounded-full bg-primary px-1 text-center text-[10px] leading-4 text-primary-foreground">
-                    {user.unread >= 100 ? '99+' : user.unread}
-                  </span>
-                )}
+                <span
+                  className={`absolute -top-0.5 -right-0.5 min-w-4 rounded-full bg-primary px-1 text-center text-[10px] leading-4 text-primary-foreground transition-[opacity,scale] ${
+                    user.unread > 0
+                      ? 'opacity-100 scale-100'
+                      : 'scale-75 opacity-0'
+                  }`}
+                  aria-hidden={user.unread === 0}
+                >
+                  {user.unread >= 100 ? '99+' : user.unread}
+                </span>
               </Link>
             </Button>
           )}

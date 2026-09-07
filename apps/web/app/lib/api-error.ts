@@ -16,6 +16,7 @@ const MESSAGES: Record<string, () => string> = {
   validation_failed: () => m.err_validation_failed(),
   unauthorized: () => m.err_unauthorized(),
   forbidden: () => m.err_forbidden(),
+  self_action_forbidden: () => m.err_self_action_forbidden(),
   not_found: () => m.err_not_found(),
   duplicate_slug: () => m.err_duplicate_slug(),
   invalid_state_transition: () => m.err_invalid_state_transition(),
