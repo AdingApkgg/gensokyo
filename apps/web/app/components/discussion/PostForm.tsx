@@ -1,12 +1,17 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useId, useRef, useState } from 'react'
 import { useFetcher } from 'react-router'
+import { LazyBoundary } from '~/components/lazy-boundary'
 import { Button } from '~/components/ui/button'
 import { Textarea } from '~/components/ui/textarea'
 import { errorMessage } from '~/lib/api-error'
 import type { DiscussionResult } from '~/lib/discussion-action'
+import { uploadImage } from '~/lib/upload'
 import { m } from '~/paraglide/messages'
 import { getLocale } from '~/paraglide/runtime'
 import { Markdown } from './Markdown'
+
+/** 含 motion；PostForm 在匿名可读页面的静态图里，进度条只在上传中才拉（C1） */
+const UploadProgress = lazy(() => import('~/components/upload-progress'))
 
 type Props = {
   action: string
@@ -56,6 +61,7 @@ export function PostForm({
   const [preview, setPreview] = useState(false)
   const [restored, setRestored] = useState(false)
   const [uploading, setUploading] = useState<'idle' | 'busy' | 'failed'>('idle')
+  const [ratio, setRatio] = useState(0)
   const ref = useRef<HTMLTextAreaElement>(null)
   const fileId = useId()
   const busy = fetcher.state !== 'idle'
@@ -129,16 +135,9 @@ export function PostForm({
 
   async function upload(file: File) {
     setUploading('busy')
-    const fd = new FormData()
-    fd.append('file', file)
-    fd.append('purpose', 'post')
+    setRatio(0)
     try {
-      const res = await fetch('/api/uploads/image', {
-        method: 'POST',
-        body: fd,
-      })
-      if (!res.ok) throw new Error('upload failed')
-      const { url } = (await res.json()) as { url: string }
+      const url = await uploadImage(file, 'post', setRatio)
       // 预览态下 textarea 没挂载，wrap() 会提前 return 把 URL 丢掉——直接追加到正文
       if (ref.current)
         wrap(
@@ -162,7 +161,12 @@ export function PostForm({
   const error = fetcher.data && !fetcher.data.ok ? fetcher.data.code : undefined
 
   return (
-    <fetcher.Form method="post" action={action} className="grid gap-2">
+    <fetcher.Form
+      method="post"
+      action={action}
+      className="grid gap-2"
+      aria-busy={busy || undefined}
+    >
       <input type="hidden" name="intent" value={intent} />
       {/* 正文语言 = 当前站点语言：给 <div lang> 用，修日文帖被按中文字形渲染 */}
       <input type="hidden" name="locale" value={getLocale()} />
@@ -221,6 +225,15 @@ export function PostForm({
             }}
           />
         </label>
+        {uploading === 'busy' && (
+          <span className="basis-full">
+            <LazyBoundary fallback={null}>
+              <Suspense fallback={null}>
+                <UploadProgress ratio={ratio} />
+              </Suspense>
+            </LazyBoundary>
+          </span>
+        )}
         {uploading === 'failed' && (
           <span className="text-xs text-destructive">
             {m.shrine_upload_failed()}
@@ -245,15 +258,6 @@ export function PostForm({
           </Button>
         </div>
       </div>
-
-      {parentId && onClearParent && (
-        <p className="text-xs text-muted-foreground">
-          {m.shrine_replying_to()}{' '}
-          <button type="button" className="underline" onClick={onClearParent}>
-            {m.shrine_cancel()}
-          </button>
-        </p>
-      )}
 
       {preview ? (
         <div className="min-h-24 rounded-lg border px-3 py-2">
@@ -307,7 +311,13 @@ export function PostForm({
             </Button>
           )}
           <Button type="submit" size="sm" disabled={busy || !body.trim()}>
-            {intent === 'edit' ? m.shrine_save() : m.shrine_reply()}
+            {busy
+              ? intent === 'edit'
+                ? m.shrine_saving()
+                : m.shrine_sending()
+              : intent === 'edit'
+                ? m.shrine_save()
+                : m.shrine_reply()}
           </Button>
         </div>
       </div>

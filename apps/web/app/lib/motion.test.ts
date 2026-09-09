@@ -1,7 +1,14 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { confirmStagger, EASE_FUDE, EASE_SUMI, EASE_WASHI } from './motion'
+import {
+  confirmStagger,
+  EASE_FUDE,
+  EASE_SUMI,
+  EASE_WASHI,
+  SPRING_WASHI,
+  SPRING_WASHI_VALUE,
+} from './motion'
 
 const css = readFileSync(join(import.meta.dir, '../app.css'), 'utf8')
 
@@ -42,5 +49,13 @@ describe('confirmStagger —— /dash/trash 销毁确认的两拍', () => {
 
   test('hidden 里只有 opacity，没有任何位移键', () => {
     expect(Object.keys(confirmStagger(false).item.hidden)).toEqual(['opacity'])
+  })
+})
+
+describe('SPRING_WASHI 两份写法同一个数', () => {
+  test('MotionValue 用的那份与 transition 用的那份数字相同', () => {
+    expect(SPRING_WASHI.visualDuration).toBe(SPRING_WASHI_VALUE.visualDuration)
+    expect(SPRING_WASHI.bounce).toBe(SPRING_WASHI_VALUE.bounce)
+    expect(SPRING_WASHI.type).toBe('spring')
   })
 })

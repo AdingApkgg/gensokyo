@@ -1,9 +1,11 @@
 import type { MirrorKind } from '@gensokyo/shared'
 import { Download, Star } from 'lucide-react'
-import { useState } from 'react'
-import { data, Form, Link, redirect, useFetcher } from 'react-router'
+import { lazy, Suspense, useState } from 'react'
+import { data, Link, redirect, useFetcher, useNavigation } from 'react-router'
 import { Discussion } from '~/components/discussion/Discussion'
 import { ReportDialog } from '~/components/discussion/ReportDialog'
+import { StaticStars } from '~/components/kourindou/stars'
+import { LazyBoundary } from '~/components/lazy-boundary'
 import { LiveRegion } from '~/components/live-region'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
@@ -23,6 +25,9 @@ import {
 import { m } from '~/paraglide/messages'
 import { getLocale, localizeHref } from '~/paraglide/runtime'
 import type { Route } from './+types/detail'
+
+/** 含 motion，只给登录用户渲染，lazy 加载（C1）；兜底是 StaticStars */
+const StarStrip = lazy(() => import('~/components/kourindou/star-strip'))
 
 export function meta({ loaderData }: Route.MetaArgs) {
   return [
@@ -100,13 +105,16 @@ export async function action({ request, params }: Route.ActionArgs) {
    */
   if (intent === 'trash') {
     const reason = String(form.get('reason') ?? '').trim()
-    if (!reason) return { ok: false as const }
+    // 自造的码：与 API 的 validation_failed 撞名会让别的校验失败也显示成「理由必填」
+    if (!reason) return { ok: false as const, code: 'reason_required' as const }
     const res = await api.api.admin.resources[':id'].$delete({
       param: { id: String(form.get('id')) },
       json: { mode: 'soft', reason },
     })
     if (res.ok) throw redirect(localizeHref('/dash/trash'))
-    return { ok: false as const }
+    // hc 对 4xx 不抛异常；此前这里无条件 { ok: false }，403/404 全显示成「理由必填」
+    const code = await apiErrorCode(res)
+    return { ok: false as const, code: code ?? 'generic' }
   }
 
   return { ok: false as const }
@@ -126,10 +134,21 @@ export default function ResourceDetail({
   actionData,
   matches,
 }: Route.ComponentProps) {
-  const { resource, circle, tags, versions, discussion, topicId } = loaderData
+  const { resource, circle, tags, versions, discussion, topicId, myRating } =
+    loaderData
   const user = matches[0]?.loaderData?.user
   const avg = averageRating(resource.ratingSum, resource.ratingCount)
   const locale = getLocale()
+
+  /**
+   * 提交期乐观保持：从点下星到 revalidate 回来之前，星条显示刚点的那个分。
+   * 评分走 <Form method="post">（导航式提交），在途表单在 navigation.formData 里。
+   */
+  const navigation = useNavigation()
+  const submittingScore =
+    navigation.formData?.get('intent') === 'rate'
+      ? Number(navigation.formData.get('score'))
+      : null
 
   /**
    * actionData 是这个页面全部 intent（评论/编辑/删除/举报/评分/下架）共用的返回值。
@@ -282,21 +301,14 @@ export default function ResourceDetail({
               {m.detail_comments()}
             </h2>
             {user && (
-              <Form method="post" className="ml-auto flex items-center gap-1">
-                <input type="hidden" name="intent" value="rate" />
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <button
-                    key={n}
-                    type="submit"
-                    name="score"
-                    value={n}
-                    aria-label={`${m.detail_rate()} ${n}`}
-                    className="text-muted-foreground transition-colors hover:text-chart-2 focus-visible:text-chart-2 [&:has(~*:hover)]:text-chart-2 [&:has(~*:focus-visible)]:text-chart-2"
-                  >
-                    <Star className="size-4" />
-                  </button>
-                ))}
-              </Form>
+              <LazyBoundary fallback={<StaticStars myRating={myRating} />}>
+                <Suspense fallback={<StaticStars myRating={myRating} />}>
+                  <StarStrip
+                    myRating={myRating}
+                    submittingScore={submittingScore}
+                  />
+                </Suspense>
+              </LazyBoundary>
             )}
           </div>
           {rateError && (
@@ -362,6 +374,11 @@ function AdminZone({ id }: { id: string }) {
   const fetcher = useFetcher<typeof action>()
   const [reason, setReason] = useState('')
   const busy = fetcher.state !== 'idle'
+  // action 是全页 intent 共用的联合类型；trash 结果一定带 code，用 in 收窄
+  const failCode =
+    fetcher.data && fetcher.data.ok === false && 'code' in fetcher.data
+      ? fetcher.data.code
+      : undefined
 
   return (
     <section className="mx-auto mt-10 max-w-3xl px-4 pb-10">
@@ -392,9 +409,11 @@ function AdminZone({ id }: { id: string }) {
             {m.admin_soft_delete()}
           </Button>
         </div>
-        {fetcher.data?.ok === false && (
-          <p className="mt-2 text-xs text-destructive">
-            {m.admin_reason_required()}
+        {failCode && (
+          <p role="alert" className="mt-2 text-xs text-destructive">
+            {failCode === 'reason_required'
+              ? m.admin_reason_required()
+              : errorMessage(failCode)}
           </p>
         )}
       </div>

@@ -15,11 +15,14 @@ export const EASE_WASHI = [0.212, 0.091, 0.259, 0.953] as const
 export const EASE_FUDE = [0.244, 0, 0.756, 1] as const
 
 /** ζ=1 临界阻尼。`bounce: 0` 就是它的正确编码——纸不会弹，全域禁 overshoot */
-export const SPRING_WASHI = {
-  type: 'spring',
-  visualDuration: 0.28,
-  bounce: 0,
-} as const
+/**
+ * `useSpring(value, …)` 收的是 SpringOptions，不带 `type`——给 MotionValue 用这份。
+ * 组件的 `transition` prop 用下面带 `type` 的那份。两份的数字必须相同，
+ * motion.test.ts 断言它。
+ */
+export const SPRING_WASHI_VALUE = { visualDuration: 0.28, bounce: 0 } as const
+
+export const SPRING_WASHI = { type: 'spring', ...SPRING_WASHI_VALUE } as const
 
 /**
  * `/dash/trash` 销毁确认的两拍。全站唯一一处 `staggerChildren`。
@@ -52,4 +55,17 @@ export function confirmStagger(reduce: boolean) {
       },
     },
   }
+}
+
+/**
+ * MotionConfig 管不到原生滚动 API，reduced-motion 要自己判。
+ * 三处调用点：`bloom.ts` 命令式 `animate()` 的守卫（红线 6 三类之一）；
+ * `mobile-nav.tsx`（边缘划走关闭）与 `site-header.tsx`（下滚收起）两处
+ * 手写交互的减弱动效判断。
+ */
+export function prefersReduced() {
+  return (
+    typeof matchMedia === 'function' &&
+    matchMedia('(prefers-reduced-motion: reduce)').matches
+  )
 }

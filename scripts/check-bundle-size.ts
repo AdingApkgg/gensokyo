@@ -46,16 +46,21 @@
  * 构建产物见 `apps/web/build/{server,client}`；`bun run check-bundle-size -- --all`
  * 逐路由打印，校准时用它，别手工拆产物）：
  *
- *   - 首屏集：23 个文件，gzip 合计 **151.49 KB**。`SHARED_BUDGET_KB = 155`
- *     留了约 3.5 KB 余量。T3 时是 22 个文件 150.62 KB；多出的那一个文件是
+ *   - 首屏集：25 个文件，gzip 合计 **152.45 KB**。`SHARED_BUDGET_KB = 155`
+ *     留了约 2.5 KB 余量。T3 时是 22 个文件 150.62 KB；多出的那一个文件是
  *     `motion-*.js` **0.40 KB**——root.tsx 里 `MotionConfig` 那一个名字的
  *     全部代价，正是 A2 边界允许进 root 树的唯一东西。其余 +0.47 KB 是
  *     rolldown 重新分块的漂移，不对应任何新进 root 树的模块。
+ *     T5（计划五）之后 25 个文件 152.45 KB：+0.49 是 mobile-nav 的划走手势、+0.24 是
+ *     header 收起的监听，都是 root 树里的手写代码；其余 +0.2 是 rolldown 重新分块的漂移。
+ *     motion 仍不在 root 可达图里（check-motion-boundary 断言 1/2）。**T5 期间它真抓过一次事故**：
+ *     一句裸的 `await import('motion/react')` 让 rolldown 把整个 motion 并进 root 的共享 chunk，
+ *     首屏 151 → 192——源码可达性断言看不见，只有这里的读数会红。现由断言 4 在源码层堵住。
  *     **预算刻意不放宽**：它要抓的是 motion 主体（≈37 KB）漏进 root 可达图
  *     那一类事故，3.5 KB 的余量对此绰绰有余；放宽只会让「谁又往 root 树塞了
  *     东西」这个信号变钝。
  *   - 单路由预算里最重的仍是 `:locale?/kourindou/:slug`
- *     （`routes/kourindou/detail`）：首屏集 + 自身 gzip 合计 **252.85 KB**
+ *     （`routes/kourindou/detail`）：首屏集 + 自身 gzip 合计 **255.68 KB**
  *     （T3 时 250.99），其中 `Markdown` 单 chunk **47.37 KB**（该 chunk 被
  *     `kourindou/detail`、`shrine/new`、`shrine/topic` 三个路由共享，但因为
  *     不在首屏集里，只在实际引用它的路由预算里现身）。

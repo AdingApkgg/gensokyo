@@ -1,5 +1,6 @@
 import { Bell, UserRound } from 'lucide-react'
-import { Link, NavLink, useRevalidator } from 'react-router'
+import { useEffect, useRef } from 'react'
+import { Link, NavLink, useNavigation, useRevalidator } from 'react-router'
 import { LangSwitcher } from '~/components/lang-switcher'
 import { MobileNav } from '~/components/mobile-nav'
 import { PendingBar } from '~/components/pending-bar'
@@ -13,6 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu'
+import { prefersReduced } from '~/lib/motion'
 import { m } from '~/paraglide/messages'
 import { localizeHref } from '~/paraglide/runtime'
 
@@ -38,6 +40,53 @@ export const NAV_ITEMS = [
 
 export function SiteHeader({ user }: { user: SessionUser | null }) {
   const revalidator = useRevalidator()
+  const header = useRef<HTMLElement>(null)
+  const navigation = useNavigation()
+
+  /**
+   * 下滚收起、上滚露出。手写——本组件在 root 树里，不许引 motion（A2）。
+   *
+   * 强制露出的三种情况：接近页顶（< 56px）；导航在途（pending 墨线挂在下缘，
+   * 藏起来就看不见了；且 ScrollRestoration 在这之后才滚，深链落点按 header 可见算）；
+   * hashchange（同上，页内锚点跳转）。焦点在 header 内时不收（键盘用户正在用它）。
+   *
+   * passive + rAF 节流 + 只在值变化时写 dataset：它是每页每次滚动都跑的回调。
+   * 减弱动效：整个功能不启用——56px 的条瞬间出没是位移类刺激，换来的只是 56px 空间。
+   */
+  useEffect(() => {
+    const el = header.current
+    if (!el) return
+    if (prefersReduced()) return
+    let last = window.scrollY
+    let ticking = false
+    const set = (hidden: boolean) => {
+      const next = hidden ? 'true' : 'false'
+      if (el.dataset.hidden !== next) el.dataset.hidden = next
+    }
+    const onScroll = () => {
+      if (ticking) return
+      ticking = true
+      requestAnimationFrame(() => {
+        ticking = false
+        const y = window.scrollY
+        const dy = y - last
+        last = y
+        if (y < 56 || dy < -4) set(false)
+        else if (dy > 4 && !el.matches(':focus-within')) set(true)
+      })
+    }
+    const show = () => set(false)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('hashchange', show)
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      window.removeEventListener('hashchange', show)
+    }
+  }, [])
+  useEffect(() => {
+    if (navigation.state !== 'idle')
+      header.current?.setAttribute('data-hidden', 'false')
+  }, [navigation.state])
 
   async function logout() {
     /**
@@ -64,7 +113,10 @@ export function SiteHeader({ user }: { user: SessionUser | null }) {
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b bg-background/85 backdrop-blur">
+    <header
+      ref={header}
+      className="site-header sticky top-0 z-40 border-b bg-background/85 backdrop-blur"
+    >
       <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 md:gap-6">
         <MobileNav items={NAV_ITEMS} />
         <Link

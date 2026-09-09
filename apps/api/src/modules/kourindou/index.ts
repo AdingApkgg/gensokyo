@@ -131,6 +131,26 @@ export const kourindou = new Hono<AppEnv>()
         : Promise.resolve([]),
     ])
 
+    /**
+     * 当前用户对它的评分。星条要靠它显示「我评过了」这个常驻状态——
+     * 没有它，每次刷新星条都是空的，用户不知道自己评没评、评了几分。
+     * 匿名与未评 → null。只多一次主键查询，且 actor 为空时不查——匿名读者零成本。
+     */
+    const myRating = actor
+      ? ((
+          await db
+            .select({ score: schema.rating.score })
+            .from(schema.rating)
+            .where(
+              and(
+                eq(schema.rating.resourceId, row.id),
+                eq(schema.rating.userId, actor.id),
+              ),
+            )
+            .limit(1)
+        )[0]?.score ?? null)
+      : null
+
     const files = versions.length
       ? await db
           .select()
@@ -162,6 +182,7 @@ export const kourindou = new Hono<AppEnv>()
         files: files.filter((f) => f.versionId === v.id),
       })),
       topicId: discussion?.id ?? null,
+      myRating,
     })
   })
 

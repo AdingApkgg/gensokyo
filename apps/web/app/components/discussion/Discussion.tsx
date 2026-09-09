@@ -1,6 +1,7 @@
 import type { PostView } from '@gensokyo/shared'
-import { useCallback, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
+import { LazyBoundary } from '~/components/lazy-boundary'
 import {
   Pagination,
   PaginationContent,
@@ -10,11 +11,23 @@ import {
   PaginationPrevious,
 } from '~/components/ui/pagination'
 import { replyTarget } from '~/lib/discussion-nav'
+import { prefersReduced } from '~/lib/motion'
 import { pageWindow } from '~/lib/paging'
 import { m } from '~/paraglide/messages'
 import { localizeHref } from '~/paraglide/runtime'
 import { PostForm } from './PostForm'
 import { type DiscussionUser, PostList } from './PostList'
+
+/** 含 motion；匿名读者走不到「引用」这一步，不为它下载（C1） */
+const ReplyTargetBar = lazy(() => import('./ReplyTargetBar'))
+
+/**
+ * 含 motion 的落款在自己的模块里，由这里动态加载（C1；裸 import("motion/react")
+ * 会触发 rolldown 重分包）。`.catch` 兜部署窗口内的 chunk 404（老页面还开着、
+ * chunk 哈希已变）——落不了这一笔款不算错误，静默放弃，不落款也不报错。
+ */
+const bloom = (floor: number) =>
+  import('./bloom').then((mod) => mod.bloom(floor)).catch(() => {})
 
 export type DiscussionPage = {
   posts: PostView[]
@@ -59,7 +72,36 @@ export function Discussion({
   // 传给 PostForm 的回调必须稳定：它进了那边 effect 的依赖
   const clearParent = useCallback(() => setParent(null), [])
 
+  /**
+   * 浮标的挂载门控：parent 出现时挂上，退场动画播完再卸——直接按 parent 挂卸
+   * 就没有退场可播。首次挂载要拉一次 chunk，那一次的入场由 AnimatePresence
+   * 的默认 initial 播，不受影响。
+   *
+   * 渲染期 setState 是 React 允许的「派生状态」写法（只对本组件的 state），
+   * 比 effect 少一帧。
+   */
+  const [barMounted, setBarMounted] = useState(false)
+  if (parent && !barMounted) setBarMounted(true)
+  const onBarExited = useCallback(() => setBarMounted(false), [])
+
   const navigate = useNavigate()
+
+  /**
+   * 导航路径的落款兜底：正常情况下 `#p{floor}` 让 :target 的 CSS 墨洇亮起，
+   * 但 :target 是否随 pushState 更新是浏览器行为。目标页到达（page.from 变了）
+   * 之后检查一次：:target 没落在那一楼，就用 JS 补一笔。
+   */
+  const pendingBloom = useRef<number | null>(null)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: page.from 是刻意的重触发条件，不是遗漏
+  useEffect(() => {
+    const floor = pendingBloom.current
+    if (floor === null) return
+    const el = document.getElementById(`p${floor}`)
+    pendingBloom.current = null
+    if (!el) return
+    if (document.querySelector(':target') === el) return
+    void bloom(floor)
+  }, [page.from])
 
   /**
    * 发帖成功后把用户带到他刚发的那一楼。
@@ -71,15 +113,17 @@ export function Discussion({
     (floor: number) => {
       const target = replyTarget(floor, page.from, page.pageSize)
       if (target.kind === 'navigate') {
+        pendingBloom.current = floor
         navigate(`${pathname}?floor=${target.from}#p${floor}`)
         return
       }
-      // 已在本页：等 revalidate 把新楼渲染出来再滚过去
+      // 已在本页：等 revalidate 把新楼渲染出来再滚过去，然后落款
       requestAnimationFrame(() => {
         document.getElementById(`p${floor}`)?.scrollIntoView({
           block: 'center',
           behavior: prefersReduced() ? 'auto' : 'smooth',
         })
+        void bloom(floor)
       })
     },
     [navigate, pathname, page.from, page.pageSize],
@@ -154,6 +198,18 @@ export function Discussion({
         </Pagination>
       )}
 
+      {barMounted && (
+        <LazyBoundary fallback={null}>
+          <Suspense fallback={null}>
+            <ReplyTargetBar
+              floor={parent?.floor ?? null}
+              onClear={clearParent}
+              onExited={onBarExited}
+            />
+          </Suspense>
+        </LazyBoundary>
+      )}
+
       <div id="reply-form" className="scroll-mt-20">
         {user ? (
           <PostForm
@@ -179,13 +235,5 @@ export function Discussion({
         )}
       </div>
     </div>
-  )
-}
-
-/** MotionConfig 管不到原生滚动 API，reduced-motion 要自己判 */
-function prefersReduced() {
-  return (
-    typeof matchMedia === 'function' &&
-    matchMedia('(prefers-reduced-motion: reduce)').matches
   )
 }
