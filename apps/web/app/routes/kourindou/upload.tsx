@@ -10,7 +10,8 @@ import {
   type ResourceKind,
 } from '@gensokyo/shared'
 import { Plus, Trash2, Upload as UploadIcon } from 'lucide-react'
-import { useId, useState } from 'react'
+import { AnimatePresence, motion } from 'motion/react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Link, redirect, useFetcher } from 'react-router'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
@@ -29,6 +30,7 @@ import { Textarea } from '~/components/ui/textarea'
 import { apiFor } from '~/lib/api'
 import { apiErrorCode, errorMessage } from '~/lib/api-error'
 import { kindLabel, licenseLabel, licenseVariant } from '~/lib/display'
+import { EASE_SUMI, SPRING_WASHI } from '~/lib/motion'
 import { m } from '~/paraglide/messages'
 import { localizeHref } from '~/paraglide/runtime'
 import type { Route } from './+types/upload'
@@ -230,7 +232,7 @@ function LicensePicker({
             type="button"
             onClick={() => onChange(l)}
             aria-pressed={value === l}
-            className={`rounded-lg border p-3 text-left transition-colors hover:bg-muted/50 ${
+            className={`paper-lift rounded-lg border p-3 text-left transition-colors hover:bg-muted/50 ${
               value === l ? 'border-primary bg-muted/40' : ''
             }`}
           >
@@ -269,6 +271,22 @@ const mirrorLabel = (k: MirrorKind) =>
 export default function UploadWizard() {
   const fetcher = useFetcher<typeof action>()
   const [step, setStep] = useState(1)
+
+  /**
+   * 换步后焦点回表头（spec §8.2）：不这么做，焦点留在刚点过的「下一步」上——
+   * 它在新的一步里已经换了位置甚至换了字（最后一步变「提交投稿」）。
+   * 首次挂载不动焦点。
+   */
+  const heading = useRef<HTMLHeadingElement>(null)
+  const mounted = useRef(false)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: step 是刻意的重触发条件，不是遗漏
+  useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true
+      return
+    }
+    heading.current?.focus()
+  }, [step])
 
   const [titleOriginal, setTitleOriginal] = useState('')
   const [locale, setLocale] = useState<string>('ja')
@@ -371,270 +389,323 @@ export default function UploadWizard() {
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
       <header>
-        <h1 className="font-heading text-2xl font-bold">{m.upload_title()}</h1>
+        <h1
+          ref={heading}
+          tabIndex={-1}
+          className="font-heading text-2xl font-bold outline-none"
+        >
+          {m.upload_title()}
+        </h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {m.upload_step({ n: step })} ·{' '}
           {[m.upload_step1(), m.upload_step2(), m.upload_step3()][step - 1]}
         </p>
+        {/*
+          步骤墨线：三段，走到第几步第几段就「画」出来（scaleX，笔·运）。
+          方向感由这里承担，不由内容位移承担（spec §8.2）。
+          纯 CSS 过渡；motion-reduce 下直接给终态。
+        */}
+        <ol aria-hidden className="mt-3 flex gap-1">
+          {[1, 2, 3].map((i) => (
+            <li
+              key={i}
+              className="h-0.5 flex-1 overflow-hidden rounded-full bg-foreground/10"
+            >
+              <span
+                className="block h-full origin-left bg-primary transition-transform duration-washi-md ease-fude motion-reduce:transition-none"
+                style={{ transform: `scaleX(${i <= step ? 1 : 0})` }}
+              />
+            </li>
+          ))}
+        </ol>
       </header>
 
       <Separator className="my-6" />
 
-      {step === 1 && (
-        <div className="grid gap-5">
-          <div className="grid gap-2">
-            <Label htmlFor="titleOriginal">{m.upload_field_title()}</Label>
-            <Input
-              id="titleOriginal"
-              value={titleOriginal}
-              onChange={(e) => setTitleOriginal(e.target.value)}
-              aria-invalid={err('titleOriginal')}
-              required
-            />
-            <p className="text-xs text-muted-foreground">
-              {m.upload_field_title_hint()}
-            </p>
-          </div>
+      {/*
+        纸落定：新的一步从 --settle-y（6px）落到位、淡入；旧的一步只淡出，
+        不做方向性滑动（spec §8.2）。popLayout 让旧的一步脱离文档流，新的一步
+        直接占位——高度一步到位。
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="grid gap-2">
-              <Label>{m.upload_field_locale()}</Label>
-              <Select value={locale} onValueChange={setLocale}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {LOCALES.map((l) => (
-                    <SelectItem key={l} value={l}>
-                      {{ zh: '中文', ja: '日本語', en: 'English' }[l]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label>{m.upload_field_kind()}</Label>
-              <Select
-                value={kind}
-                onValueChange={(v) => setKind(v as ResourceKind)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {RESOURCE_KIND.map((k) => (
-                    <SelectItem key={k} value={k}>
-                      {kindLabel(k)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="circle">{m.upload_field_circle()}</Label>
-            <Input
-              id="circle"
-              value={circle}
-              onChange={(e) => setCircle(e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">
-              {m.upload_field_circle_hint()}
-            </p>
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="description">{m.upload_field_desc()}</Label>
-            <Textarea
-              id="description"
-              rows={4}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-          </div>
-
-          <CoverPicker value={coverUrl} onChange={setCoverUrl} />
-
-          <Separator />
-
-          <LicensePicker value={license} onChange={setLicense} />
-          {err('license') && (
-            <p className="text-sm text-destructive">
-              {m.upload_license_required()}
-            </p>
-          )}
-
-          <div className="grid gap-2">
-            <Label htmlFor="licenseNote">{m.upload_license_note()}</Label>
-            <Input
-              id="licenseNote"
-              value={licenseNote}
-              onChange={(e) => setLicenseNote(e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">
-              {m.upload_license_note_hint()}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {step === 2 && (
-        <div className="grid gap-4">
-          {mirrors.map((mi, i) => (
-            <Card key={mi.key}>
-              <CardContent className="grid gap-3 pt-5">
+        relative：popLayout 用 offsetParent 定位退场节点（红线 9）。
+        min-h-80：高度地板，第 2/3 步比第 1 步矮一半，没有地板的话底部按钮行
+        会在换步瞬间往上跳 400px。
+        initial={false}：第 1 步是 SSR 出来的，首帧即终态（红线 1）。
+      */}
+      <div className="relative min-h-80">
+        <AnimatePresence mode="popLayout" initial={false}>
+          <motion.div
+            key={step}
+            initial={{ opacity: 0, y: 'var(--settle-y)' }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{
+              ...SPRING_WASHI,
+              opacity: { duration: 0.18, ease: EASE_SUMI },
+            }}
+          >
+            {step === 1 && (
+              <div className="grid gap-5">
                 <div className="grid gap-2">
-                  <Label>{m.upload_mirror_label()}</Label>
+                  <Label htmlFor="titleOriginal">
+                    {m.upload_field_title()}
+                  </Label>
                   <Input
-                    value={mi.label}
-                    placeholder={m.upload_mirror_label_ph()}
-                    onChange={(e) => {
-                      const next = [...mirrors]
-                      const cur = next[i]
-                      if (cur) cur.label = e.target.value
-                      setMirrors(next)
-                    }}
+                    id="titleOriginal"
+                    value={titleOriginal}
+                    onChange={(e) => setTitleOriginal(e.target.value)}
+                    aria-invalid={err('titleOriginal')}
+                    required
                   />
+                  <p className="text-xs text-muted-foreground">
+                    {m.upload_field_title_hint()}
+                  </p>
                 </div>
-                <div className="grid gap-2">
-                  <Label>{m.upload_mirror_url()}</Label>
-                  <Input
-                    value={mi.url}
-                    placeholder="https://…"
-                    aria-invalid={err('url')}
-                    onChange={(e) => {
-                      const next = [...mirrors]
-                      const cur = next[i]
-                      if (cur) cur.url = e.target.value
-                      setMirrors(next)
-                    }}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
+
+                <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
-                    <Label>{m.upload_mirror_kind()}</Label>
-                    <Select
-                      value={mi.mirrorKind}
-                      onValueChange={(v) => {
-                        const next = [...mirrors]
-                        const cur = next[i]
-                        if (cur) cur.mirrorKind = v as MirrorKind
-                        setMirrors(next)
-                      }}
-                    >
+                    <Label>{m.upload_field_locale()}</Label>
+                    <Select value={locale} onValueChange={setLocale}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {MIRROR_KIND.map((k) => (
-                          <SelectItem key={k} value={k}>
-                            {mirrorLabel(k)}
+                        {LOCALES.map((l) => (
+                          <SelectItem key={l} value={l}>
+                            {{ zh: '中文', ja: '日本語', en: 'English' }[l]}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="grid gap-2">
-                    <Label>{m.upload_mirror_code()}</Label>
-                    <Input
-                      value={mi.extractCode}
-                      onChange={(e) => {
-                        const next = [...mirrors]
-                        const cur = next[i]
-                        if (cur) cur.extractCode = e.target.value
-                        setMirrors(next)
-                      }}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      {m.upload_mirror_code_hint()}
-                    </p>
+                    <Label>{m.upload_field_kind()}</Label>
+                    <Select
+                      value={kind}
+                      onValueChange={(v) => setKind(v as ResourceKind)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {RESOURCE_KIND.map((k) => (
+                          <SelectItem key={k} value={k}>
+                            {kindLabel(k)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
-                {mirrors.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="justify-self-end"
-                    onClick={() =>
-                      setMirrors(mirrors.filter((_, j) => j !== i))
-                    }
-                  >
-                    <Trash2 /> {m.upload_mirror_remove()}
-                  </Button>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="circle">{m.upload_field_circle()}</Label>
+                  <Input
+                    id="circle"
+                    value={circle}
+                    onChange={(e) => setCircle(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {m.upload_field_circle_hint()}
+                  </p>
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="description">{m.upload_field_desc()}</Label>
+                  <Textarea
+                    id="description"
+                    rows={4}
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                  />
+                </div>
+
+                <CoverPicker value={coverUrl} onChange={setCoverUrl} />
+
+                <Separator />
+
+                <LicensePicker value={license} onChange={setLicense} />
+                {err('license') && (
+                  <p className="text-sm text-destructive">
+                    {m.upload_license_required()}
+                  </p>
                 )}
-              </CardContent>
-            </Card>
-          ))}
 
-          {err('mirrors') && (
-            <p className="text-sm text-destructive">{m.upload_mirror_none()}</p>
-          )}
+                <div className="grid gap-2">
+                  <Label htmlFor="licenseNote">{m.upload_license_note()}</Label>
+                  <Input
+                    id="licenseNote"
+                    value={licenseNote}
+                    onChange={(e) => setLicenseNote(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {m.upload_license_note_hint()}
+                  </p>
+                </div>
+              </div>
+            )}
+            {step === 2 && (
+              <div className="grid gap-4">
+                {mirrors.map((mi, i) => (
+                  <Card key={mi.key}>
+                    <CardContent className="grid gap-3 pt-5">
+                      <div className="grid gap-2">
+                        <Label>{m.upload_mirror_label()}</Label>
+                        <Input
+                          value={mi.label}
+                          placeholder={m.upload_mirror_label_ph()}
+                          onChange={(e) => {
+                            const next = [...mirrors]
+                            const cur = next[i]
+                            if (cur) cur.label = e.target.value
+                            setMirrors(next)
+                          }}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label>{m.upload_mirror_url()}</Label>
+                        <Input
+                          value={mi.url}
+                          placeholder="https://…"
+                          aria-invalid={err('url')}
+                          onChange={(e) => {
+                            const next = [...mirrors]
+                            const cur = next[i]
+                            if (cur) cur.url = e.target.value
+                            setMirrors(next)
+                          }}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="grid gap-2">
+                          <Label>{m.upload_mirror_kind()}</Label>
+                          <Select
+                            value={mi.mirrorKind}
+                            onValueChange={(v) => {
+                              const next = [...mirrors]
+                              const cur = next[i]
+                              if (cur) cur.mirrorKind = v as MirrorKind
+                              setMirrors(next)
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {MIRROR_KIND.map((k) => (
+                                <SelectItem key={k} value={k}>
+                                  {mirrorLabel(k)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="grid gap-2">
+                          <Label>{m.upload_mirror_code()}</Label>
+                          <Input
+                            value={mi.extractCode}
+                            onChange={(e) => {
+                              const next = [...mirrors]
+                              const cur = next[i]
+                              if (cur) cur.extractCode = e.target.value
+                              setMirrors(next)
+                            }}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            {m.upload_mirror_code_hint()}
+                          </p>
+                        </div>
+                      </div>
+                      {mirrors.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="justify-self-end"
+                          onClick={() =>
+                            setMirrors(mirrors.filter((_, j) => j !== i))
+                          }
+                        >
+                          <Trash2 /> {m.upload_mirror_remove()}
+                        </Button>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
 
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setMirrors([...mirrors, emptyMirror()])}
-          >
-            <Plus /> {m.upload_mirror_add()}
-          </Button>
-        </div>
-      )}
+                {err('mirrors') && (
+                  <p className="text-sm text-destructive">
+                    {m.upload_mirror_none()}
+                  </p>
+                )}
 
-      {step === 3 && (
-        <div className="grid gap-4">
-          <Card>
-            <CardHeader>
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="secondary">{kindLabel(kind)}</Badge>
-                {license && (
-                  <Badge variant={licenseVariant(license)}>
-                    {licenseLabel(license)}
-                  </Badge>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setMirrors([...mirrors, emptyMirror()])}
+                >
+                  <Plus /> {m.upload_mirror_add()}
+                </Button>
+              </div>
+            )}
+            {step === 3 && (
+              <div className="grid gap-4">
+                <Card>
+                  <CardHeader>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="secondary">{kindLabel(kind)}</Badge>
+                      {license && (
+                        <Badge variant={licenseVariant(license)}>
+                          {licenseLabel(license)}
+                        </Badge>
+                      )}
+                    </div>
+                    <CardTitle className="mt-2">{titleOriginal}</CardTitle>
+                    {circle && (
+                      <p className="text-sm text-muted-foreground">{circle}</p>
+                    )}
+                  </CardHeader>
+                  <CardContent className="grid gap-2 text-sm">
+                    {description && (
+                      <p className="whitespace-pre-wrap text-muted-foreground">
+                        {description}
+                      </p>
+                    )}
+                    {mirrors
+                      .filter((mi) => mi.url.trim())
+                      .map((mi) => (
+                        <div
+                          key={mi.url}
+                          className="flex items-center gap-2 rounded border p-2"
+                        >
+                          <Badge variant="outline">
+                            {mirrorLabel(mi.mirrorKind)}
+                          </Badge>
+                          <span className="min-w-0 flex-1 truncate">
+                            {mi.label}
+                          </span>
+                          {mi.extractCode && (
+                            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
+                              {mi.extractCode}
+                            </code>
+                          )}
+                        </div>
+                      ))}
+                  </CardContent>
+                </Card>
+                <p className="text-sm text-muted-foreground">
+                  {m.upload_review_hint()}
+                </p>
+                {result?.ok === false && (
+                  <p className="text-sm text-destructive">
+                    {errorMessage(result.code)}
+                  </p>
                 )}
               </div>
-              <CardTitle className="mt-2">{titleOriginal}</CardTitle>
-              {circle && (
-                <p className="text-sm text-muted-foreground">{circle}</p>
-              )}
-            </CardHeader>
-            <CardContent className="grid gap-2 text-sm">
-              {description && (
-                <p className="whitespace-pre-wrap text-muted-foreground">
-                  {description}
-                </p>
-              )}
-              {mirrors
-                .filter((mi) => mi.url.trim())
-                .map((mi) => (
-                  <div
-                    key={mi.url}
-                    className="flex items-center gap-2 rounded border p-2"
-                  >
-                    <Badge variant="outline">
-                      {mirrorLabel(mi.mirrorKind)}
-                    </Badge>
-                    <span className="min-w-0 flex-1 truncate">{mi.label}</span>
-                    {mi.extractCode && (
-                      <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
-                        {mi.extractCode}
-                      </code>
-                    )}
-                  </div>
-                ))}
-            </CardContent>
-          </Card>
-          <p className="text-sm text-muted-foreground">
-            {m.upload_review_hint()}
-          </p>
-          {result?.ok === false && (
-            <p className="text-sm text-destructive">
-              {errorMessage(result.code)}
-            </p>
-          )}
-        </div>
-      )}
+            )}
+          </motion.div>
+        </AnimatePresence>
+      </div>
 
       <div className="mt-8 flex items-center gap-3">
         {step > 1 && (
