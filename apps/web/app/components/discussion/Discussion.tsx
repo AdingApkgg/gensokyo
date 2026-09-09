@@ -1,5 +1,5 @@
 import type { PostView } from '@gensokyo/shared'
-import { lazy, Suspense, useCallback, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import {
   Pagination,
@@ -10,6 +10,7 @@ import {
   PaginationPrevious,
 } from '~/components/ui/pagination'
 import { replyTarget } from '~/lib/discussion-nav'
+import { EASE_SUMI } from '~/lib/motion'
 import { pageWindow } from '~/lib/paging'
 import { m } from '~/paraglide/messages'
 import { localizeHref } from '~/paraglide/runtime'
@@ -77,6 +78,23 @@ export function Discussion({
   const navigate = useNavigate()
 
   /**
+   * 导航路径的落款兜底：正常情况下 `#p{floor}` 让 :target 的 CSS 墨洇亮起，
+   * 但 :target 是否随 pushState 更新是浏览器行为。目标页到达（page.from 变了）
+   * 之后检查一次：:target 没落在那一楼，就用 JS 补一笔。
+   */
+  const pendingBloom = useRef<number | null>(null)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: page.from 是刻意的重触发条件，不是遗漏
+  useEffect(() => {
+    const floor = pendingBloom.current
+    if (floor === null) return
+    const el = document.getElementById(`p${floor}`)
+    if (!el) return
+    pendingBloom.current = null
+    if (document.querySelector(':target') === el) return
+    void bloom(floor)
+  }, [page.from])
+
+  /**
    * 发帖成功后把用户带到他刚发的那一楼。
    *
    * 不做这件事的话，主题超过 50 层（POSTS_PAGE_SIZE）之后新楼根本不在当前
@@ -86,15 +104,17 @@ export function Discussion({
     (floor: number) => {
       const target = replyTarget(floor, page.from, page.pageSize)
       if (target.kind === 'navigate') {
+        pendingBloom.current = floor
         navigate(`${pathname}?floor=${target.from}#p${floor}`)
         return
       }
-      // 已在本页：等 revalidate 把新楼渲染出来再滚过去
+      // 已在本页：等 revalidate 把新楼渲染出来再滚过去，然后落款
       requestAnimationFrame(() => {
         document.getElementById(`p${floor}`)?.scrollIntoView({
           block: 'center',
           behavior: prefersReduced() ? 'auto' : 'smooth',
         })
+        void bloom(floor)
       })
     },
     [navigate, pathname, page.from, page.pageSize],
@@ -204,6 +224,42 @@ export function Discussion({
         )}
       </div>
     </div>
+  )
+}
+
+/**
+ * 落款：在刚发的那一楼上播一次墨洇，与 app.css 里 `li[id^="p"]:target` 那条
+ * 同一副面孔（12% 的 primary 洇开、淡去、1.2s、墨曲线）。
+ *
+ * 命令式 `animate()` 而不是把楼层做成 motion 组件（spec §8.3）；用动态 import
+ * 而不是 `useAnimate` hook——后者要静态 import motion/react，会把 39 KB 钉进
+ * 这个匿名可读页面的静态图（C2）。匿名读者永远发不了帖，走不到这里。
+ *
+ * 两个关键帧的字符串结构完全一致、只有百分数不同：motion 的复合值插值器会
+ * 只对那个数字做插值，`var(--primary)` 与 `color-mix()` 原样保留、交给浏览器解析。
+ *
+ * 红线 6：命令式 animate() 不受 MotionConfig 管，自己门控——减弱动效下不做
+ * 1.2s 的持续变化，改成「亮起、停住、消失」一次提示，与 :target 那条的降级同义。
+ */
+async function bloom(floor: number) {
+  const el = document.getElementById(`p${floor}`)
+  if (!el) return
+  const { animate } = await import('motion/react')
+  const at = (pct: number) =>
+    `color-mix(in oklab, var(--primary) ${pct}%, transparent)`
+  el.style.borderRadius = 'var(--radius-md)'
+  if (prefersReduced()) {
+    animate(
+      el,
+      { backgroundColor: [at(12), at(12), at(0)] },
+      { duration: 1.2, times: [0, 0.99, 1], ease: 'linear' },
+    )
+    return
+  }
+  animate(
+    el,
+    { backgroundColor: [at(12), at(0)] },
+    { duration: 1.2, ease: EASE_SUMI },
   )
 }
 
