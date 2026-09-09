@@ -100,13 +100,16 @@ export async function action({ request, params }: Route.ActionArgs) {
    */
   if (intent === 'trash') {
     const reason = String(form.get('reason') ?? '').trim()
-    if (!reason) return { ok: false as const }
+    // 自造的码：与 API 的 validation_failed 撞名会让别的校验失败也显示成「理由必填」
+    if (!reason) return { ok: false as const, code: 'reason_required' as const }
     const res = await api.api.admin.resources[':id'].$delete({
       param: { id: String(form.get('id')) },
       json: { mode: 'soft', reason },
     })
     if (res.ok) throw redirect(localizeHref('/dash/trash'))
-    return { ok: false as const }
+    // hc 对 4xx 不抛异常；此前这里无条件 { ok: false }，403/404 全显示成「理由必填」
+    const code = await apiErrorCode(res)
+    return { ok: false as const, code: code ?? 'generic' }
   }
 
   return { ok: false as const }
@@ -362,6 +365,11 @@ function AdminZone({ id }: { id: string }) {
   const fetcher = useFetcher<typeof action>()
   const [reason, setReason] = useState('')
   const busy = fetcher.state !== 'idle'
+  // action 是全页 intent 共用的联合类型；trash 结果一定带 code，用 in 收窄
+  const failCode =
+    fetcher.data && fetcher.data.ok === false && 'code' in fetcher.data
+      ? fetcher.data.code
+      : undefined
 
   return (
     <section className="mx-auto mt-10 max-w-3xl px-4 pb-10">
@@ -392,9 +400,11 @@ function AdminZone({ id }: { id: string }) {
             {m.admin_soft_delete()}
           </Button>
         </div>
-        {fetcher.data?.ok === false && (
-          <p className="mt-2 text-xs text-destructive">
-            {m.admin_reason_required()}
+        {failCode && (
+          <p role="alert" className="mt-2 text-xs text-destructive">
+            {failCode === 'reason_required'
+              ? m.admin_reason_required()
+              : errorMessage(failCode)}
           </p>
         )}
       </div>
