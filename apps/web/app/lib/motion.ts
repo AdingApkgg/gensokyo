@@ -56,3 +56,11 @@ export function confirmStagger(reduce: boolean) {
     },
   }
 }
+
+/** MotionConfig 管不到原生滚动 API，reduced-motion 要自己判 */
+export function prefersReduced() {
+  return (
+    typeof matchMedia === 'function' &&
+    matchMedia('(prefers-reduced-motion: reduce)').matches
+  )
+}

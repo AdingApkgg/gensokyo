@@ -10,7 +10,7 @@ import {
   PaginationPrevious,
 } from '~/components/ui/pagination'
 import { replyTarget } from '~/lib/discussion-nav'
-import { EASE_SUMI } from '~/lib/motion'
+import { prefersReduced } from '~/lib/motion'
 import { pageWindow } from '~/lib/paging'
 import { m } from '~/paraglide/messages'
 import { localizeHref } from '~/paraglide/runtime'
@@ -19,6 +19,13 @@ import { type DiscussionUser, PostList } from './PostList'
 
 /** 含 motion；匿名读者走不到「引用」这一步，不为它下载（C1） */
 const ReplyTargetBar = lazy(() => import('./ReplyTargetBar'))
+
+/**
+ * 含 motion 的落款在自己的模块里，由这里动态加载（C1；裸 import("motion/react")
+ * 会触发 rolldown 重分包）
+ */
+const bloom = (floor: number) =>
+  import('./bloom').then((mod) => mod.bloom(floor))
 
 export type DiscussionPage = {
   posts: PostView[]
@@ -224,49 +231,5 @@ export function Discussion({
         )}
       </div>
     </div>
-  )
-}
-
-/**
- * 落款：在刚发的那一楼上播一次墨洇，与 app.css 里 `li[id^="p"]:target` 那条
- * 同一副面孔（12% 的 primary 洇开、淡去、1.2s、墨曲线）。
- *
- * 命令式 `animate()` 而不是把楼层做成 motion 组件（spec §8.3）；用动态 import
- * 而不是 `useAnimate` hook——后者要静态 import motion/react，会把 39 KB 钉进
- * 这个匿名可读页面的静态图（C2）。匿名读者永远发不了帖，走不到这里。
- *
- * 两个关键帧的字符串结构完全一致、只有百分数不同：motion 的复合值插值器会
- * 只对那个数字做插值，`var(--primary)` 与 `color-mix()` 原样保留、交给浏览器解析。
- *
- * 红线 6：命令式 animate() 不受 MotionConfig 管，自己门控——减弱动效下不做
- * 1.2s 的持续变化，改成「亮起、停住、消失」一次提示，与 :target 那条的降级同义。
- */
-async function bloom(floor: number) {
-  const el = document.getElementById(`p${floor}`)
-  if (!el) return
-  const { animate } = await import('motion/react')
-  const at = (pct: number) =>
-    `color-mix(in oklab, var(--primary) ${pct}%, transparent)`
-  el.style.borderRadius = 'var(--radius-md)'
-  if (prefersReduced()) {
-    animate(
-      el,
-      { backgroundColor: [at(12), at(12), at(0)] },
-      { duration: 1.2, times: [0, 0.99, 1], ease: 'linear' },
-    )
-    return
-  }
-  animate(
-    el,
-    { backgroundColor: [at(12), at(0)] },
-    { duration: 1.2, ease: EASE_SUMI },
-  )
-}
-
-/** MotionConfig 管不到原生滚动 API，reduced-motion 要自己判 */
-function prefersReduced() {
-  return (
-    typeof matchMedia === 'function' &&
-    matchMedia('(prefers-reduced-motion: reduce)').matches
   )
 }
