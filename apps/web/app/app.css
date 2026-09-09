@@ -444,6 +444,16 @@ html.dark {
      用 scaleY + transform-origin 而不是改 width/height——只动 transform，
      不触发 layout。密度高的数据视图（data-density=compact）里行高只有 80px，
      整行位移会让扫读失焦，所以**不做**任何行位移。 */
+  /* header 下滚收起（手写，见 site-header.tsx）。sticky 元素做 translateY 不改布局，
+     正文不会跳。只有 data-hidden 出现之后才有过渡——SSR 没有这个属性，首帧零动画；
+     减弱动效下 JS 根本不设它。 */
+  .site-header[data-hidden] {
+    transition: transform var(--transition-duration-washi-md) var(--ease-washi);
+  }
+  .site-header[data-hidden="true"] {
+    transform: translateY(-100%);
+  }
+
   .ink-row {
     position: relative;
   }
