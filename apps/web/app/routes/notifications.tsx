@@ -1,4 +1,6 @@
 import type { NotificationView } from '@gensokyo/shared'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { useEffect, useState } from 'react'
 import { Link, redirect, useFetcher, useSearchParams } from 'react-router'
 import { LiveRegion } from '~/components/live-region'
 import { RelativeTime } from '~/components/relative-time'
@@ -14,6 +16,7 @@ import {
 import { apiFor } from '~/lib/api'
 import { apiErrorCode, errorMessage } from '~/lib/api-error'
 import { displayTitle, reportReasonLabel } from '~/lib/display'
+import { EASE_FUDE, EASE_SUMI } from '~/lib/motion'
 import { pageWindow } from '~/lib/paging'
 import { m } from '~/paraglide/messages'
 import { localizeHref } from '~/paraglide/runtime'
@@ -154,6 +157,24 @@ export default function Notifications({ loaderData }: Route.ComponentProps) {
     return qs ? `?${qs}` : '.'
   }
   const fetcher = useFetcher<typeof action>()
+  /**
+   * 墨扫：一笔从左扫到右，把「N 个未读点各自消失」连成一次动作。
+   *
+   * 起笔在**提交那一刻**（远端回执：笔到了活也办完了），不等结果——等结果的话
+   * 请求比笔快时笔画会被截断在半途。用 formData 区分：同一个 fetcher 也承担
+   * 「点进某条即标已读」，那不该起笔。
+   * 画完（onAnimationComplete）才收笔，与 fetcher 何时 idle 无关。
+   *
+   * 减弱动效：MotionConfig 会把 scaleX 直接跳到终态，那就是整片 10% 的色块
+   * 闪一下再淡去——注意力敏感用户的干扰。整笔不画。
+   */
+  const reduce = useReducedMotion()
+  const [sweeping, setSweeping] = useState(false)
+  const submittingAll =
+    fetcher.state === 'submitting' && fetcher.formData?.has('upTo') === true
+  useEffect(() => {
+    if (submittingAll && !reduce) setSweeping(true)
+  }, [submittingAll, reduce])
   const settled = fetcher.state === 'idle' ? fetcher.data : undefined
   const marked = settled?.ok ? settled.marked : null
   const failCode = settled?.ok === false ? settled.code : undefined
@@ -210,55 +231,78 @@ export default function Notifications({ loaderData }: Route.ComponentProps) {
           </p>
         </div>
       ) : (
-        <ol className="mt-6 ink-divide border-y">
-          {items.map((n) => {
-            const d = describe(n)
-            const inner = (
-              <>
-                <div className="flex flex-wrap items-baseline gap-x-2">
-                  {!n.read && (
+        <div className="relative mt-6">
+          <AnimatePresence>
+            {sweeping && (
+              <motion.div
+                key="sweep"
+                aria-hidden
+                className="pointer-events-none absolute inset-0 origin-left bg-primary/10"
+                initial={{ scaleX: 0 }}
+                animate={{ scaleX: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{
+                  scaleX: { duration: 0.4, ease: EASE_FUDE },
+                  opacity: { duration: 0.18, ease: EASE_SUMI },
+                }}
+                onAnimationComplete={() => setSweeping(false)}
+              />
+            )}
+          </AnimatePresence>
+          <ol className="ink-divide border-y">
+            {items.map((n) => {
+              const d = describe(n)
+              const inner = (
+                <>
+                  <div className="flex flex-wrap items-baseline gap-x-2">
+                    {!n.read && (
+                      <span
+                        aria-hidden
+                        className="size-2 rounded-full bg-primary"
+                      />
+                    )}
                     <span
-                      aria-hidden
-                      className="size-2 rounded-full bg-primary"
+                      className={
+                        n.read ? 'text-muted-foreground' : 'font-medium'
+                      }
+                    >
+                      {d.text}
+                    </span>
+                    <RelativeTime
+                      iso={n.createdAt}
+                      className="ml-auto text-xs text-muted-foreground"
                     />
+                  </div>
+                  {d.sub && (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {d.sub}
+                    </p>
                   )}
-                  <span
-                    className={n.read ? 'text-muted-foreground' : 'font-medium'}
-                  >
-                    {d.text}
-                  </span>
-                  <RelativeTime
-                    iso={n.createdAt}
-                    className="ml-auto text-xs text-muted-foreground"
-                  />
-                </div>
-                {d.sub && (
-                  <p className="mt-1 text-sm text-muted-foreground">{d.sub}</p>
-                )}
-              </>
-            )
-            return (
-              <li key={n.id} className="ink-row py-3 pl-3">
-                {d.href ? (
-                  <Link
-                    to={d.href}
-                    viewTransition
-                    className="block"
-                    // 点进去就算读过：不等用户回来手动点
-                    onClick={() => {
-                      if (!n.read)
-                        fetcher.submit({ id: n.id }, { method: 'post' })
-                    }}
-                  >
-                    {inner}
-                  </Link>
-                ) : (
-                  <div>{inner}</div>
-                )}
-              </li>
-            )
-          })}
-        </ol>
+                </>
+              )
+              return (
+                <li key={n.id} className="ink-row py-3 pl-3">
+                  {d.href ? (
+                    <Link
+                      to={d.href}
+                      viewTransition
+                      className="block"
+                      // 点进去就算读过：不等用户回来手动点
+                      onClick={() => {
+                        if (!n.read)
+                          fetcher.submit({ id: n.id }, { method: 'post' })
+                      }}
+                    >
+                      {inner}
+                    </Link>
+                  ) : (
+                    <div>{inner}</div>
+                  )}
+                </li>
+              )
+            })}
+          </ol>
+        </div>
       )}
 
       {!failed && pages > 1 && (
