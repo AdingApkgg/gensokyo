@@ -61,7 +61,12 @@ export function MobileNav({ items }: { items: readonly Item[] }) {
     if (g.axis === null) {
       if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return
       g.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y'
-      if (g.axis === 'x') el.setPointerCapture(e.pointerId)
+      if (g.axis === 'x') {
+        // 捕获只是让手指划出抽屉后事件仍归它；没有活动指针时会抛，不影响手势
+        try {
+          el.setPointerCapture(e.pointerId)
+        } catch {}
+      }
     }
     if (g.axis !== 'x') return
     el.style.transition = 'none'
