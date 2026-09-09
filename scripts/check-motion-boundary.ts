@@ -46,7 +46,7 @@
  * paraglide 产物），但**不是必需**——本脚本只读源码，找不到的生成文件按上面
  * 的规则跳过，不影响两条断言的正确性，所以可以放在 `bun run build` 之前跑。
  */
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 
 const root = join(import.meta.dir, '..')
@@ -138,28 +138,33 @@ function isMotionReact(specifier: string): boolean {
   return specifier === 'motion/react' || specifier.startsWith('motion/react/')
 }
 
-// ---- 从 root.tsx 出发做可达集的 BFS，不跟 node_modules、不跟动态 import ----
+// ---- 可达集的 BFS：不跟 node_modules、不跟动态 import ----
 
-const visited = new Set<string>()
-const queue: string[] = [rootFile]
-const motionHitsByFile = new Map<string, ImportRecord[]>()
+function reachable(startFile: string) {
+  const visited = new Set<string>()
+  const queue: string[] = [startFile]
+  const motionHitsByFile = new Map<string, ImportRecord[]>()
 
-while (queue.length > 0) {
-  const file = queue.shift() as string
-  if (visited.has(file)) continue
-  visited.add(file)
+  while (queue.length > 0) {
+    const file = queue.shift() as string
+    if (visited.has(file)) continue
+    visited.add(file)
 
-  const source = readFileSync(file, 'utf8')
-  const imports = extractImports(source)
+    const source = readFileSync(file, 'utf8')
+    const imports = extractImports(source)
 
-  const hits = imports.filter((imp) => isMotionReact(imp.specifier))
-  if (hits.length > 0) motionHitsByFile.set(file, hits)
+    const hits = imports.filter((imp) => isMotionReact(imp.specifier))
+    if (hits.length > 0) motionHitsByFile.set(file, hits)
 
-  for (const imp of imports) {
-    const resolved = resolveLocal(imp.specifier, file)
-    if (resolved && !visited.has(resolved)) queue.push(resolved)
+    for (const imp of imports) {
+      const resolved = resolveLocal(imp.specifier, file)
+      if (resolved && !visited.has(resolved)) queue.push(resolved)
+    }
   }
+  return { visited, motionHitsByFile }
 }
+
+const { visited, motionHitsByFile } = reachable(rootFile)
 
 console.log(
   `可达集：从 app/root.tsx 出发递归解析本地 import，共 ${visited.size} 个文件`,
@@ -202,6 +207,77 @@ if (offenders.length > 0) {
   console.log(
     `✓ 可达集里除 root.tsx 外的 ${visited.size - 1} 个文件零命中 motion/react`,
   )
+}
+
+// ---- 断言 3：匿名可读路由的可达集零命中 motion/react（C1） ----
+//
+// 这些路由是被外链进来的匿名读者会打开的页面，/kourindou/:slug 更是全站流量最大的。
+// 浮标、落款、翻纸、星条、上传进度全是登录后才用得上的东西——它们必须走
+// lazy() / 动态 import，不许钉进这些路由的静态图。这条断言与断言 2 同源：
+// A2 守首屏，这条守匿名页。
+
+const ANON_ROUTES = [
+  'routes/home.tsx',
+  'routes/kourindou/list.tsx',
+  'routes/kourindou/detail.tsx',
+  'routes/shrine/index.tsx',
+  'routes/shrine/board.tsx',
+  'routes/shrine/topic.tsx',
+  'routes/profile.tsx',
+]
+
+for (const rel of ANON_ROUTES) {
+  const start = join(appDir, rel)
+  if (!existsSync(start)) {
+    ok = false
+    console.log(`✗ 找不到 ${rel}——路由文件改名了？同步更新 ANON_ROUTES`)
+    continue
+  }
+  const r = reachable(start)
+  const hits = [...r.motionHitsByFile.keys()].sort()
+  if (hits.length > 0) {
+    ok = false
+    for (const f of hits) {
+      console.log(
+        `✗ ${rel} 的可达集里 ${relative(root, f)} 静态 import 了 motion/react——匿名可读路由的静态图必须零 motion（C1：登录后才有的东西走 lazy()，匿名读者一个字节不下载）`,
+      )
+    }
+  } else {
+    console.log(`✓ ${rel} 可达集 ${r.visited.size} 个文件零命中 motion/react`)
+  }
+}
+
+// ---- 断言 4：全站零裸的 import('motion/react') ----
+//
+// 实测（T5）：Discussion.tsx 里一句 `await import('motion/react')` 在源码可达性上没问题，
+// 却让 rolldown 改变了 motion 的 chunk 归属，把整个 motion（约 40 KB gz）并进 root
+// 静态 import 的共享 chunk——首屏 151 → 192 KB。断言 1–3 看的是可达性，抓不到它。
+// 含 motion 的东西要独立成本地模块（ReplyTargetBar / FloorFlip / bloom / star-strip 那样），
+// 由匿名可读文件 `import('./x')` 加载；rolldown 对本地模块的动态 import 不会这么做。
+// 只看代码行，跳过注释——注释里可以举例说明这条禁令。
+
+const BARE_DYNAMIC = /import\(\s*['"]motion\/react['"]\s*\)/
+const sourceFiles = readdirSync(appDir, { recursive: true })
+  .map(String)
+  .filter((f) => /\.(ts|tsx)$/.test(f) && !f.includes('/paraglide/'))
+const bareHits: string[] = []
+for (const rel of sourceFiles) {
+  const lines = readFileSync(join(appDir, rel), 'utf8').split('\n')
+  lines.forEach((line, i) => {
+    const t = line.trimStart()
+    if (t.startsWith('*') || t.startsWith('//') || t.startsWith('/*')) return
+    if (BARE_DYNAMIC.test(line)) bareHits.push(`${rel}:${i + 1}`)
+  })
+}
+if (bareHits.length > 0) {
+  ok = false
+  for (const h of bareHits) {
+    console.log(
+      `✗ ${h} 有裸的 import('motion/react')——它会让 rolldown 把整个 motion 并进首屏共享 chunk（T5 实测 +40 KB）。含 motion 的代码请独立成本地模块，再 import('./那个模块')`,
+    )
+  }
+} else {
+  console.log(`✓ ${sourceFiles.length} 个源码文件零裸 import('motion/react')`)
 }
 
 process.exit(ok ? 0 : 1)
