@@ -259,7 +259,14 @@ for (const rel of ANON_ROUTES) {
 const BARE_DYNAMIC = /import\(\s*['"]motion\/react['"]\s*\)/
 const sourceFiles = readdirSync(appDir, { recursive: true })
   .map(String)
-  .filter((f) => /\.(ts|tsx)$/.test(f) && !f.includes('/paraglide/'))
+  // readdirSync 给的是相对 appDir 的路径，顶层目录没有前导斜杠——`paraglide/…`
+  // 要按前缀排除，否则三百多个 Paraglide 类型声明会被白扫一遍
+  .filter(
+    (f) =>
+      /\.(ts|tsx)$/.test(f) &&
+      !f.startsWith('paraglide/') &&
+      !f.includes('/paraglide/'),
+  )
 const bareHits: string[] = []
 for (const rel of sourceFiles) {
   const lines = readFileSync(join(appDir, rel), 'utf8').split('\n')
