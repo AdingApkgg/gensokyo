@@ -9,8 +9,15 @@ import {
   RESOURCE_KIND,
   type ResourceKind,
 } from '@gensokyo/shared'
-import { Plus, Trash2, Upload as UploadIcon } from 'lucide-react'
-import { AnimatePresence, motion } from 'motion/react'
+import {
+  ArrowDown,
+  ArrowUp,
+  GripVertical,
+  Plus,
+  Trash2,
+  Upload as UploadIcon,
+} from 'lucide-react'
+import { AnimatePresence, motion, Reorder, useDragControls } from 'motion/react'
 import { useEffect, useId, useRef, useState } from 'react'
 import { Link, redirect, useFetcher } from 'react-router'
 import { Badge } from '~/components/ui/badge'
@@ -268,6 +275,141 @@ const mirrorLabel = (k: MirrorKind) =>
     other: m.mirror_other(),
   })[k]
 
+/**
+ * 一张镜像卡。拖动只从把手起（dragListener={false} + useDragControls）：
+ * 卡片里全是输入框，整卡可拖会与选字打架。
+ *
+ * layout="position"（红线 3）：Card 挂着 backdrop-filter，both 会做 scale 校正，
+ * 背板模糊逐帧重算、正文被拉伸。Reorder.Item 的 layout 是可覆盖的 prop。
+ * 「上移 / 下移」是键盘替代（红线 7），与拖动改同一份状态。
+ */
+function MirrorCard({
+  mi,
+  index,
+  total,
+  invalidUrl,
+  onPatch,
+  onRemove,
+  onMove,
+}: {
+  mi: MirrorDraft
+  index: number
+  total: number
+  invalidUrl: boolean
+  onPatch: (patch: Partial<Mirror>) => void
+  onRemove: () => void
+  onMove: (delta: -1 | 1) => void
+}) {
+  const controls = useDragControls()
+  return (
+    <Reorder.Item
+      as="div"
+      value={mi}
+      dragListener={false}
+      dragControls={controls}
+      layout="position"
+    >
+      <Card>
+        <CardContent className="grid gap-3 pt-5">
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              aria-label={m.upload_mirror_drag()}
+              className="cursor-grab touch-none rounded p-1 text-muted-foreground hover:bg-muted active:cursor-grabbing"
+              onPointerDown={(e) => controls.start(e)}
+            >
+              <GripVertical className="size-4" />
+            </button>
+            <span className="text-xs text-muted-foreground">
+              {index + 1} / {total}
+            </span>
+            <div className="ml-auto flex gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                aria-label={m.upload_mirror_up()}
+                disabled={index === 0}
+                onClick={() => onMove(-1)}
+              >
+                <ArrowUp />
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                aria-label={m.upload_mirror_down()}
+                disabled={index === total - 1}
+                onClick={() => onMove(1)}
+              >
+                <ArrowDown />
+              </Button>
+            </div>
+          </div>
+          <div className="grid gap-2">
+            <Label>{m.upload_mirror_label()}</Label>
+            <Input
+              value={mi.label}
+              placeholder={m.upload_mirror_label_ph()}
+              onChange={(e) => onPatch({ label: e.target.value })}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label>{m.upload_mirror_url()}</Label>
+            <Input
+              value={mi.url}
+              placeholder="https://…"
+              aria-invalid={invalidUrl}
+              onChange={(e) => onPatch({ url: e.target.value })}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-2">
+              <Label>{m.upload_mirror_kind()}</Label>
+              <Select
+                value={mi.mirrorKind}
+                onValueChange={(v) => onPatch({ mirrorKind: v as MirrorKind })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MIRROR_KIND.map((k) => (
+                    <SelectItem key={k} value={k}>
+                      {mirrorLabel(k)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label>{m.upload_mirror_code()}</Label>
+              <Input
+                value={mi.extractCode}
+                onChange={(e) => onPatch({ extractCode: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">
+                {m.upload_mirror_code_hint()}
+              </p>
+            </div>
+          </div>
+          {total > 1 && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="justify-self-end"
+              onClick={onRemove}
+            >
+              <Trash2 /> {m.upload_mirror_remove()}
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+    </Reorder.Item>
+  )
+}
+
 export default function UploadWizard() {
   const fetcher = useFetcher<typeof action>()
   const [step, setStep] = useState(1)
@@ -297,6 +439,29 @@ export default function UploadWizard() {
   const [license, setLicense] = useState<LicenseStatus | ''>('')
   const [licenseNote, setLicenseNote] = useState('')
   const [mirrors, setMirrors] = useState<MirrorDraft[]>([emptyMirror()])
+  /**
+   * 不可变更新。此前是 `const next = [...mirrors]; next[i].label = …` 原地改对象——
+   * Reorder 按对象身份认 value，原地改虽然不会坏，但让每一处 onChange 都得
+   * 记住那个 i。按 key 定位，与 Reorder 的 values 天然对齐。
+   */
+  const patchMirror = (key: string, patch: Partial<Mirror>) =>
+    setMirrors((ms) =>
+      ms.map((mi) => (mi.key === key ? { ...mi, ...patch } : mi)),
+    )
+  const removeMirror = (key: string) =>
+    setMirrors((ms) => ms.filter((mi) => mi.key !== key))
+  /** 键盘替代（红线 7）：与拖动改的是同一份状态 */
+  const moveMirror = (key: string, delta: -1 | 1) =>
+    setMirrors((ms) => {
+      const i = ms.findIndex((mi) => mi.key === key)
+      const j = i + delta
+      if (i < 0 || j < 0 || j >= ms.length) return ms
+      const next = [...ms]
+      const a = next[i] as MirrorDraft
+      next[i] = next[j] as MirrorDraft
+      next[j] = a
+      return next
+    })
   const [errors, setErrors] = useState<string[]>([])
 
   const result = fetcher.data
@@ -546,92 +711,26 @@ export default function UploadWizard() {
             )}
             {step === 2 && (
               <div className="grid gap-4">
-                {mirrors.map((mi, i) => (
-                  <Card key={mi.key}>
-                    <CardContent className="grid gap-3 pt-5">
-                      <div className="grid gap-2">
-                        <Label>{m.upload_mirror_label()}</Label>
-                        <Input
-                          value={mi.label}
-                          placeholder={m.upload_mirror_label_ph()}
-                          onChange={(e) => {
-                            const next = [...mirrors]
-                            const cur = next[i]
-                            if (cur) cur.label = e.target.value
-                            setMirrors(next)
-                          }}
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label>{m.upload_mirror_url()}</Label>
-                        <Input
-                          value={mi.url}
-                          placeholder="https://…"
-                          aria-invalid={err('url')}
-                          onChange={(e) => {
-                            const next = [...mirrors]
-                            const cur = next[i]
-                            if (cur) cur.url = e.target.value
-                            setMirrors(next)
-                          }}
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="grid gap-2">
-                          <Label>{m.upload_mirror_kind()}</Label>
-                          <Select
-                            value={mi.mirrorKind}
-                            onValueChange={(v) => {
-                              const next = [...mirrors]
-                              const cur = next[i]
-                              if (cur) cur.mirrorKind = v as MirrorKind
-                              setMirrors(next)
-                            }}
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {MIRROR_KIND.map((k) => (
-                                <SelectItem key={k} value={k}>
-                                  {mirrorLabel(k)}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="grid gap-2">
-                          <Label>{m.upload_mirror_code()}</Label>
-                          <Input
-                            value={mi.extractCode}
-                            onChange={(e) => {
-                              const next = [...mirrors]
-                              const cur = next[i]
-                              if (cur) cur.extractCode = e.target.value
-                              setMirrors(next)
-                            }}
-                          />
-                          <p className="text-xs text-muted-foreground">
-                            {m.upload_mirror_code_hint()}
-                          </p>
-                        </div>
-                      </div>
-                      {mirrors.length > 1 && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="justify-self-end"
-                          onClick={() =>
-                            setMirrors(mirrors.filter((_, j) => j !== i))
-                          }
-                        >
-                          <Trash2 /> {m.upload_mirror_remove()}
-                        </Button>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))}
+                <Reorder.Group
+                  as="div"
+                  axis="y"
+                  values={mirrors}
+                  onReorder={setMirrors}
+                  className="grid gap-4"
+                >
+                  {mirrors.map((mi, i) => (
+                    <MirrorCard
+                      key={mi.key}
+                      mi={mi}
+                      index={i}
+                      total={mirrors.length}
+                      invalidUrl={err('url')}
+                      onPatch={(patch) => patchMirror(mi.key, patch)}
+                      onRemove={() => removeMirror(mi.key)}
+                      onMove={(delta) => moveMirror(mi.key, delta)}
+                    />
+                  ))}
+                </Reorder.Group>
 
                 {err('mirrors') && (
                   <p className="text-sm text-destructive">
