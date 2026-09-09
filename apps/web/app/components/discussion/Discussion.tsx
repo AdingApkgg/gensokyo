@@ -1,5 +1,5 @@
 import type { PostView } from '@gensokyo/shared'
-import { useCallback, useState } from 'react'
+import { lazy, Suspense, useCallback, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import {
   Pagination,
@@ -15,6 +15,9 @@ import { m } from '~/paraglide/messages'
 import { localizeHref } from '~/paraglide/runtime'
 import { PostForm } from './PostForm'
 import { type DiscussionUser, PostList } from './PostList'
+
+/** 含 motion；匿名读者走不到「引用」这一步，不为它下载（C1） */
+const ReplyTargetBar = lazy(() => import('./ReplyTargetBar'))
 
 export type DiscussionPage = {
   posts: PostView[]
@@ -58,6 +61,18 @@ export function Discussion({
   const [parent, setParent] = useState<PostView | null>(null)
   // 传给 PostForm 的回调必须稳定：它进了那边 effect 的依赖
   const clearParent = useCallback(() => setParent(null), [])
+
+  /**
+   * 浮标的挂载门控：parent 出现时挂上，退场动画播完再卸——直接按 parent 挂卸
+   * 就没有退场可播。首次挂载要拉一次 chunk，那一次的入场由 AnimatePresence
+   * 的默认 initial 播，不受影响。
+   *
+   * 渲染期 setState 是 React 允许的「派生状态」写法（只对本组件的 state），
+   * 比 effect 少一帧。
+   */
+  const [barMounted, setBarMounted] = useState(false)
+  if (parent && !barMounted) setBarMounted(true)
+  const onBarExited = useCallback(() => setBarMounted(false), [])
 
   const navigate = useNavigate()
 
@@ -152,6 +167,16 @@ export function Discussion({
             </PaginationItem>
           </PaginationContent>
         </Pagination>
+      )}
+
+      {barMounted && (
+        <Suspense fallback={null}>
+          <ReplyTargetBar
+            floor={parent?.floor ?? null}
+            onClear={clearParent}
+            onExited={onBarExited}
+          />
+        </Suspense>
       )}
 
       <div id="reply-form" className="scroll-mt-20">

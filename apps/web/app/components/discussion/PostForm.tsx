@@ -162,7 +162,12 @@ export function PostForm({
   const error = fetcher.data && !fetcher.data.ok ? fetcher.data.code : undefined
 
   return (
-    <fetcher.Form method="post" action={action} className="grid gap-2">
+    <fetcher.Form
+      method="post"
+      action={action}
+      className="grid gap-2"
+      aria-busy={busy || undefined}
+    >
       <input type="hidden" name="intent" value={intent} />
       {/* 正文语言 = 当前站点语言：给 <div lang> 用，修日文帖被按中文字形渲染 */}
       <input type="hidden" name="locale" value={getLocale()} />
@@ -246,15 +251,6 @@ export function PostForm({
         </div>
       </div>
 
-      {parentId && onClearParent && (
-        <p className="text-xs text-muted-foreground">
-          {m.shrine_replying_to()}{' '}
-          <button type="button" className="underline" onClick={onClearParent}>
-            {m.shrine_cancel()}
-          </button>
-        </p>
-      )}
-
       {preview ? (
         <div className="min-h-24 rounded-lg border px-3 py-2">
           {body.trim() ? (
@@ -307,7 +303,11 @@ export function PostForm({
             </Button>
           )}
           <Button type="submit" size="sm" disabled={busy || !body.trim()}>
-            {intent === 'edit' ? m.shrine_save() : m.shrine_reply()}
+            {busy
+              ? m.shrine_sending()
+              : intent === 'edit'
+                ? m.shrine_save()
+                : m.shrine_reply()}
           </Button>
         </div>
       </div>
