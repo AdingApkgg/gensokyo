@@ -1,5 +1,6 @@
 import type { PostView } from '@gensokyo/shared'
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { Link } from 'react-router'
 import { RelativeTime } from '~/components/relative-time'
 import { Button } from '~/components/ui/button'
@@ -9,6 +10,10 @@ import { DeletePostDialog } from './DeletePostDialog'
 import { Markdown } from './Markdown'
 import { PostForm } from './PostForm'
 import { ReportDialog } from './ReportDialog'
+
+/** 含 motion，只在被编辑的那一楼挂载；hover「编辑」时预取，让第一次翻纸也有动画 */
+const FloorFlip = lazy(() => import('./FloorFlip'))
+const preloadFlip = () => void import('./FloorFlip')
 
 export type DiscussionUser = {
   id: string
@@ -65,6 +70,23 @@ function PostItem({
   onQuote: (p: PostView) => void
 }) {
   const [editing, setEditing] = useState(false)
+  /**
+   * 翻纸的挂载门控：AnimatePresence 必须**先**带着「正文」那一面挂上，
+   * 再切到「编辑」，正文才有退场可播。flushSync 把第一步单独提交——
+   * 两个 setState 批在同一次提交里的话，AnimatePresence 挂上时初始子节点
+   * 已经是编辑框，initial={false} 让它什么也不播。
+   * 编辑结束同理：先标记 flipping 再收起 editing，让编辑框有退场；退场播完
+   * （onSettled）才卸掉 FloorFlip，这一楼回到纯 <li>。
+   */
+  const [flipping, setFlipping] = useState(false)
+  const startEdit = () => {
+    flushSync(() => setFlipping(true))
+    setEditing(true)
+  }
+  const stopEdit = () => {
+    setFlipping(true)
+    setEditing(false)
+  }
   const own = user !== null && p.author?.id === user.id
   // 「已编辑」必须带 !deleted：软删走 UPDATE，会 bump updatedAt
   const edited = !p.deleted && p.updatedAt > p.createdAt
@@ -125,17 +147,30 @@ function PostItem({
         <p className="mt-2 text-sm text-muted-foreground italic">
           {m.shrine_deleted_post()}
         </p>
-      ) : editing ? (
-        <div className="mt-2">
-          <PostForm
-            action={action}
-            intent="edit"
-            postId={p.id}
-            initial={p.bodyMd}
-            onDone={() => setEditing(false)}
-            onCancel={() => setEditing(false)}
+      ) : editing || flipping ? (
+        <Suspense
+          fallback={
+            <div className="mt-2">
+              <Markdown lang={p.locale}>{p.bodyMd}</Markdown>
+            </div>
+          }
+        >
+          <FloorFlip
+            editing={editing}
+            onSettled={() => setFlipping(false)}
+            view={<Markdown lang={p.locale}>{p.bodyMd}</Markdown>}
+            edit={
+              <PostForm
+                action={action}
+                intent="edit"
+                postId={p.id}
+                initial={p.bodyMd}
+                onDone={stopEdit}
+                onCancel={stopEdit}
+              />
+            }
           />
-        </div>
+        </Suspense>
       ) : (
         <div className="mt-2">
           <Markdown lang={p.locale}>{p.bodyMd}</Markdown>
@@ -148,7 +183,13 @@ function PostItem({
             {m.shrine_quote()}
           </Button>
           {own && (
-            <Button variant="ghost" size="xs" onClick={() => setEditing(true)}>
+            <Button
+              variant="ghost"
+              size="xs"
+              onPointerEnter={preloadFlip}
+              onFocus={preloadFlip}
+              onClick={startEdit}
+            >
               {m.shrine_edit()}
             </Button>
           )}
