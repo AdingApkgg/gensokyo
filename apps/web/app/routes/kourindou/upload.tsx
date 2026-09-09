@@ -34,10 +34,12 @@ import {
 } from '~/components/ui/select'
 import { Separator } from '~/components/ui/separator'
 import { Textarea } from '~/components/ui/textarea'
+import UploadProgress from '~/components/upload-progress'
 import { apiFor } from '~/lib/api'
 import { apiErrorCode, errorMessage } from '~/lib/api-error'
 import { kindLabel, licenseLabel, licenseVariant } from '~/lib/display'
 import { EASE_SUMI, SPRING_WASHI } from '~/lib/motion'
+import { uploadImage } from '~/lib/upload'
 import { m } from '~/paraglide/messages'
 import { localizeHref } from '~/paraglide/runtime'
 import type { Route } from './+types/upload'
@@ -139,20 +141,13 @@ function CoverPicker({
 }) {
   const [state, setState] = useState<'idle' | 'busy' | 'failed'>('idle')
   const inputId = useId()
+  const [ratio, setRatio] = useState(0)
 
   async function upload(file: File) {
     setState('busy')
-    const fd = new FormData()
-    fd.append('file', file)
-    fd.append('purpose', 'cover')
+    setRatio(0)
     try {
-      const res = await fetch('/api/uploads/image', {
-        method: 'POST',
-        body: fd,
-      })
-      if (!res.ok) throw new Error('upload failed')
-      const body = (await res.json()) as { url: string }
-      onChange(body.url)
+      onChange(await uploadImage(file, 'cover', setRatio))
       setState('idle')
     } catch {
       // 失败只影响封面，表单其余内容原样保留
@@ -180,6 +175,7 @@ function CoverPicker({
               if (f) upload(f)
             }}
           />
+          {state === 'busy' && <UploadProgress ratio={ratio} />}
           <p className="text-xs text-muted-foreground">
             {state === 'busy'
               ? m.upload_cover_uploading()
