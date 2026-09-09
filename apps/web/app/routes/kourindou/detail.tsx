@@ -1,9 +1,10 @@
 import type { MirrorKind } from '@gensokyo/shared'
 import { Download, Star } from 'lucide-react'
-import { useState } from 'react'
-import { data, Form, Link, redirect, useFetcher } from 'react-router'
+import { lazy, Suspense, useState } from 'react'
+import { data, Link, redirect, useFetcher, useNavigation } from 'react-router'
 import { Discussion } from '~/components/discussion/Discussion'
 import { ReportDialog } from '~/components/discussion/ReportDialog'
+import { StaticStars } from '~/components/kourindou/stars'
 import { LiveRegion } from '~/components/live-region'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
@@ -23,6 +24,9 @@ import {
 import { m } from '~/paraglide/messages'
 import { getLocale, localizeHref } from '~/paraglide/runtime'
 import type { Route } from './+types/detail'
+
+/** 含 motion，只给登录用户渲染，lazy 加载（C1）；兜底是 StaticStars */
+const StarStrip = lazy(() => import('~/components/kourindou/star-strip'))
 
 export function meta({ loaderData }: Route.MetaArgs) {
   return [
@@ -129,10 +133,21 @@ export default function ResourceDetail({
   actionData,
   matches,
 }: Route.ComponentProps) {
-  const { resource, circle, tags, versions, discussion, topicId } = loaderData
+  const { resource, circle, tags, versions, discussion, topicId, myRating } =
+    loaderData
   const user = matches[0]?.loaderData?.user
   const avg = averageRating(resource.ratingSum, resource.ratingCount)
   const locale = getLocale()
+
+  /**
+   * 提交期乐观保持：从点下星到 revalidate 回来之前，星条显示刚点的那个分。
+   * 评分走 <Form method="post">（导航式提交），在途表单在 navigation.formData 里。
+   */
+  const navigation = useNavigation()
+  const submittingScore =
+    navigation.formData?.get('intent') === 'rate'
+      ? Number(navigation.formData.get('score'))
+      : null
 
   /**
    * actionData 是这个页面全部 intent（评论/编辑/删除/举报/评分/下架）共用的返回值。
@@ -285,21 +300,12 @@ export default function ResourceDetail({
               {m.detail_comments()}
             </h2>
             {user && (
-              <Form method="post" className="ml-auto flex items-center gap-1">
-                <input type="hidden" name="intent" value="rate" />
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <button
-                    key={n}
-                    type="submit"
-                    name="score"
-                    value={n}
-                    aria-label={`${m.detail_rate()} ${n}`}
-                    className="text-muted-foreground transition-colors hover:text-chart-2 focus-visible:text-chart-2 [&:has(~*:hover)]:text-chart-2 [&:has(~*:focus-visible)]:text-chart-2"
-                  >
-                    <Star className="size-4" />
-                  </button>
-                ))}
-              </Form>
+              <Suspense fallback={<StaticStars myRating={myRating} />}>
+                <StarStrip
+                  myRating={myRating}
+                  submittingScore={submittingScore}
+                />
+              </Suspense>
             )}
           </div>
           {rateError && (

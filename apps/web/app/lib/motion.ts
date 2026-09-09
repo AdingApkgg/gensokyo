@@ -15,11 +15,14 @@ export const EASE_WASHI = [0.212, 0.091, 0.259, 0.953] as const
 export const EASE_FUDE = [0.244, 0, 0.756, 1] as const
 
 /** ζ=1 临界阻尼。`bounce: 0` 就是它的正确编码——纸不会弹，全域禁 overshoot */
-export const SPRING_WASHI = {
-  type: 'spring',
-  visualDuration: 0.28,
-  bounce: 0,
-} as const
+/**
+ * `useSpring(value, …)` 收的是 SpringOptions，不带 `type`——给 MotionValue 用这份。
+ * 组件的 `transition` prop 用下面带 `type` 的那份。两份的数字必须相同，
+ * motion.test.ts 断言它。
+ */
+export const SPRING_WASHI_VALUE = { visualDuration: 0.28, bounce: 0 } as const
+
+export const SPRING_WASHI = { type: 'spring', ...SPRING_WASHI_VALUE } as const
 
 /**
  * `/dash/trash` 销毁确认的两拍。全站唯一一处 `staggerChildren`。
