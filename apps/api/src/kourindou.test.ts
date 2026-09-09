@@ -145,6 +145,54 @@ describe('可见性', () => {
   })
 })
 
+describe('myRating', () => {
+  test('匿名与未评分者是 null，评过分的人看到自己的分', async () => {
+    // 评分端点只对已发布资源开放：作者提到即发即审门槛 → 建资源 → 挂版本 → 投递
+    const owner = await signUp('myRating 作者')
+    await makeTrusted(owner)
+    const { resource } = await createResource(owner)
+    await app.request(
+      `/api/kourindou/resources/${resource?.id}/versions`,
+      json(owner, {
+        label: 'v1',
+        files: [
+          {
+            label: '本体',
+            url: 'https://pan.example.com/s/kmk',
+            mirrorKind: 'netdisk',
+          },
+        ],
+      }),
+    )
+    await app.request(`/api/kourindou/resources/${resource?.id}/submit`, {
+      method: 'POST',
+      headers: { cookie: owner.cookie },
+    })
+
+    const rater = await signUp('myRating 评分者')
+    const rated = await app.request(
+      `/api/kourindou/resources/${resource?.slug}/rating`,
+      {
+        method: 'PUT',
+        headers: { cookie: rater.cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ score: 4 }),
+      },
+    )
+    expect(rated.status).toBe(200)
+
+    const read = async (s?: Session) => {
+      const res = await app.request(
+        `/api/kourindou/resources/${resource?.slug}`,
+        s ? { headers: { cookie: s.cookie } } : {},
+      )
+      return (await res.json()) as { myRating: number | null }
+    }
+    expect((await read()).myRating).toBeNull()
+    expect((await read(owner)).myRating).toBeNull()
+    expect((await read(rater)).myRating).toBe(4)
+  })
+})
+
 describe('编辑权限', () => {
   test('陌生人改不了别人的资源', async () => {
     const { resource } = await createResource(author)
