@@ -62,7 +62,7 @@ export default function StarStrip({
           key={n}
           n={n}
           shown={shown}
-          pressed={myRating === n}
+          pressed={(submittingScore ?? myRating) === n}
           onFocus={() => pointer.set(n)}
           onBlur={() => pointer.set(base)}
         />

@@ -14,6 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '~/components/ui/dropdown-menu'
+import { prefersReduced } from '~/lib/motion'
 import { m } from '~/paraglide/messages'
 import { localizeHref } from '~/paraglide/runtime'
 
@@ -55,7 +56,7 @@ export function SiteHeader({ user }: { user: SessionUser | null }) {
   useEffect(() => {
     const el = header.current
     if (!el) return
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    if (prefersReduced()) return
     let last = window.scrollY
     let ticking = false
     const set = (hidden: boolean) => {

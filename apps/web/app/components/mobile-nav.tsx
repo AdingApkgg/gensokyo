@@ -3,6 +3,7 @@ import { Dialog as DialogPrimitive } from 'radix-ui'
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation } from 'react-router'
 import { Button } from '~/components/ui/button'
+import { prefersReduced } from '~/lib/motion'
 import { m } from '~/paraglide/messages'
 import { localizeHref } from '~/paraglide/runtime'
 
@@ -83,7 +84,7 @@ export function MobileNav({ items }: { items: readonly Item[] }) {
     const dx = e.clientX - g.x
     const velocity = dx / Math.max(1, e.timeStamp - g.t) // px/ms，负 = 向左
     const close = !cancelled && (dx < -el.offsetWidth * 0.35 || velocity < -0.5)
-    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
+    const reduce = prefersReduced()
     el.style.transition = reduce
       ? 'none'
       : 'transform var(--transition-duration-washi-sm) var(--ease-washi)'

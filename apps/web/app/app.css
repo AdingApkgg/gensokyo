@@ -440,10 +440,6 @@ html.dark {
       1;
   }
 
-  /* 列表行落笔：左缘一道朱线由上至下画出来。
-     用 scaleY + transform-origin 而不是改 width/height——只动 transform，
-     不触发 layout。密度高的数据视图（data-density=compact）里行高只有 80px，
-     整行位移会让扫读失焦，所以**不做**任何行位移。 */
   /* header 下滚收起（手写，见 site-header.tsx）。sticky 元素做 translateY 不改布局，
      正文不会跳。只有 data-hidden 出现之后才有过渡——SSR 没有这个属性，首帧零动画；
      减弱动效下 JS 根本不设它。 */
@@ -454,6 +450,10 @@ html.dark {
     transform: translateY(-100%);
   }
 
+  /* 列表行落笔：左缘一道朱线由上至下画出来。
+     用 scaleY + transform-origin 而不是改 width/height——只动 transform，
+     不触发 layout。密度高的数据视图（data-density=compact）里行高只有 80px，
+     整行位移会让扫读失焦，所以**不做**任何行位移。 */
   .ink-row {
     position: relative;
   }
@@ -627,10 +627,13 @@ html.dark {
    刻意**不做**微旋转：在半透明 + backdrop-filter 的卡片上做亚度数 rotate 会让
    CJK 衬线字形重新栅格化、整卡发虚，而 0.15deg 本身看不见（详见 spec 附录 B）。
 
-   折角三角是纯 transform + opacity 的厚度暗示，不动 box-shadow（paint 类，贵）。 */
+   折角三角是纯 transform + opacity 的厚度暗示，不动 box-shadow（paint 类，贵）。
+
+   调用点不要再挂 transition-*：同层同特异性、后来的会把 transition-property
+   整个覆盖掉，掀角就变成瞬移（T5 在许可卡上实测过）。 */
 @utility paper-lift {
   position: relative;
-  transition-property: transform, box-shadow;
+  transition-property: transform, box-shadow, background-color;
   transition-duration: var(--transition-duration-washi-md);
   transition-timing-function: var(--ease-washi);
 

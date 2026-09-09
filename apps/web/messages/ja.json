@@ -251,6 +251,7 @@
   "shrine_edit_no_notify": "編集で新たに @ した相手には通知されません。",
   "shrine_replying_to_floor": "返信中",
   "shrine_sending": "送信中…",
+  "shrine_saving": "保存中…",
   "shrine_tb_bold": "太字",
   "shrine_tb_quote": "引用",
   "shrine_tb_link": "リンク文字",

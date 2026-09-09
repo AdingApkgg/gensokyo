@@ -1,7 +1,8 @@
 import type { PostView } from '@gensokyo/shared'
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { Link } from 'react-router'
+import { LazyBoundary } from '~/components/lazy-boundary'
 import { RelativeTime } from '~/components/relative-time'
 import { Button } from '~/components/ui/button'
 import { m } from '~/paraglide/messages'
@@ -87,9 +88,35 @@ function PostItem({
     setFlipping(true)
     setEditing(false)
   }
+  /**
+   * 翻纸退场后的焦点回收（红线 8：popLayout 移除后焦点会掉回 <body>）。
+   * `editingRef` 镜像每次渲染的 `editing`——不能直接用闭包里的 `editing`：
+   * AnimatePresence 给退场中的那一面冻结的是**它开始退场那次渲染**的 props，
+   * view→edit 那次 onSettled 也会用这份冻结的 onSettled 触发，若闭包里的
+   * `editing` 还是退场发起时的旧值就会在那次误判成「不在编辑态」，把焦点从
+   * 刚出现的 textarea 抢走。ref 在每次渲染都刷新，settle 时读到的永远是当下的值。
+   */
+  const editButton = useRef<HTMLButtonElement>(null)
+  const editingRef = useRef(false)
+  editingRef.current = editing
   const own = user !== null && p.author?.id === user.id
   // 「已编辑」必须带 !deleted：软删走 UPDATE，会 bump updatedAt
   const edited = !p.deleted && p.updatedAt > p.createdAt
+  /**
+   * FloorFlip 的两面提成 const：LazyBoundary 的 fallback（chunk 404 时的
+   * 静态形态）与 FloorFlip 的 props 引用同一对节点，不重复写 <PostForm>。
+   */
+  const view = <Markdown lang={p.locale}>{p.bodyMd}</Markdown>
+  const edit = (
+    <PostForm
+      action={action}
+      intent="edit"
+      postId={p.id}
+      initial={p.bodyMd}
+      onDone={stopEdit}
+      onCancel={stopEdit}
+    />
+  )
 
   return (
     <li id={`p${p.floor}`} className="scroll-mt-20 py-4">
@@ -148,33 +175,23 @@ function PostItem({
           {m.shrine_deleted_post()}
         </p>
       ) : editing || flipping ? (
-        <Suspense
-          fallback={
-            <div className="mt-2">
-              <Markdown lang={p.locale}>{p.bodyMd}</Markdown>
-            </div>
-          }
+        <LazyBoundary
+          fallback={<div className="mt-2">{editing ? edit : view}</div>}
         >
-          <FloorFlip
-            editing={editing}
-            onSettled={() => setFlipping(false)}
-            view={<Markdown lang={p.locale}>{p.bodyMd}</Markdown>}
-            edit={
-              <PostForm
-                action={action}
-                intent="edit"
-                postId={p.id}
-                initial={p.bodyMd}
-                onDone={stopEdit}
-                onCancel={stopEdit}
-              />
-            }
-          />
-        </Suspense>
+          <Suspense fallback={<div className="mt-2">{view}</div>}>
+            <FloorFlip
+              editing={editing}
+              onSettled={() => {
+                setFlipping(false)
+                if (!editingRef.current) editButton.current?.focus()
+              }}
+              view={view}
+              edit={edit}
+            />
+          </Suspense>
+        </LazyBoundary>
       ) : (
-        <div className="mt-2">
-          <Markdown lang={p.locale}>{p.bodyMd}</Markdown>
-        </div>
+        <div className="mt-2">{view}</div>
       )}
 
       {!p.deleted && !editing && user && (
@@ -184,6 +201,7 @@ function PostItem({
           </Button>
           {own && (
             <Button
+              ref={editButton}
               variant="ghost"
               size="xs"
               onPointerEnter={preloadFlip}

@@ -25,16 +25,22 @@ export async function bloom(floor: number) {
     `color-mix(in oklab, var(--primary) ${pct}%, transparent)`
   el.style.borderRadius = 'var(--radius-md)'
   if (prefersReduced()) {
-    animate(
+    await animate(
       el,
       { backgroundColor: [at(12), at(12), at(0)] },
       { duration: 1.2, times: [0, 0.99, 1], ease: 'linear' },
     )
+    // 收尾清掉内联样式：留着的话它会压过 app.css 末尾减弱动效块里
+    // li[id^="p"]:target 的普通声明，落过款的那一楼此后点 #pN 再也不亮。
+    el.style.backgroundColor = ''
+    el.style.borderRadius = ''
     return
   }
-  animate(
+  await animate(
     el,
     { backgroundColor: [at(12), at(0)] },
     { duration: 1.2, ease: EASE_SUMI },
   )
+  el.style.backgroundColor = ''
+  el.style.borderRadius = ''
 }

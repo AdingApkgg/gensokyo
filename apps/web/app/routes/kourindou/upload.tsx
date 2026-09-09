@@ -235,7 +235,7 @@ function LicensePicker({
             type="button"
             onClick={() => onChange(l)}
             aria-pressed={value === l}
-            className={`paper-lift rounded-lg border p-3 text-left transition-colors hover:bg-muted/50 ${
+            className={`paper-lift rounded-lg border p-3 text-left hover:bg-muted/50 ${
               value === l ? 'border-primary bg-muted/40' : ''
             }`}
           >
@@ -566,7 +566,7 @@ export default function UploadWizard() {
           方向感由这里承担，不由内容位移承担（spec §8.2）。
           纯 CSS 过渡；motion-reduce 下直接给终态。
         */}
-        <ol aria-hidden className="mt-3 flex gap-1">
+        <ol aria-hidden className="mt-3 flex gap-1 pointer-events-none">
           {[1, 2, 3].map((i) => (
             <li
               key={i}

@@ -1,6 +1,7 @@
 import type { PostView } from '@gensokyo/shared'
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
+import { LazyBoundary } from '~/components/lazy-boundary'
 import {
   Pagination,
   PaginationContent,
@@ -22,10 +23,11 @@ const ReplyTargetBar = lazy(() => import('./ReplyTargetBar'))
 
 /**
  * 含 motion 的落款在自己的模块里，由这里动态加载（C1；裸 import("motion/react")
- * 会触发 rolldown 重分包）
+ * 会触发 rolldown 重分包）。`.catch` 兜部署窗口内的 chunk 404（老页面还开着、
+ * chunk 哈希已变）——落不了这一笔款不算错误，静默放弃，不落款也不报错。
  */
 const bloom = (floor: number) =>
-  import('./bloom').then((mod) => mod.bloom(floor))
+  import('./bloom').then((mod) => mod.bloom(floor)).catch(() => {})
 
 export type DiscussionPage = {
   posts: PostView[]
@@ -95,8 +97,8 @@ export function Discussion({
     const floor = pendingBloom.current
     if (floor === null) return
     const el = document.getElementById(`p${floor}`)
-    if (!el) return
     pendingBloom.current = null
+    if (!el) return
     if (document.querySelector(':target') === el) return
     void bloom(floor)
   }, [page.from])
@@ -197,13 +199,15 @@ export function Discussion({
       )}
 
       {barMounted && (
-        <Suspense fallback={null}>
-          <ReplyTargetBar
-            floor={parent?.floor ?? null}
-            onClear={clearParent}
-            onExited={onBarExited}
-          />
-        </Suspense>
+        <LazyBoundary fallback={null}>
+          <Suspense fallback={null}>
+            <ReplyTargetBar
+              floor={parent?.floor ?? null}
+              onClear={clearParent}
+              onExited={onBarExited}
+            />
+          </Suspense>
+        </LazyBoundary>
       )}
 
       <div id="reply-form" className="scroll-mt-20">

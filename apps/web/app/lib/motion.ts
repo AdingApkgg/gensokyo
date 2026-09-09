@@ -57,7 +57,12 @@ export function confirmStagger(reduce: boolean) {
   }
 }
 
-/** MotionConfig 管不到原生滚动 API，reduced-motion 要自己判 */
+/**
+ * MotionConfig 管不到原生滚动 API，reduced-motion 要自己判。
+ * 三处调用点：`bloom.ts` 命令式 `animate()` 的守卫（红线 6 三类之一）；
+ * `mobile-nav.tsx`（边缘划走关闭）与 `site-header.tsx`（下滚收起）两处
+ * 手写交互的减弱动效判断。
+ */
 export function prefersReduced() {
   return (
     typeof matchMedia === 'function' &&

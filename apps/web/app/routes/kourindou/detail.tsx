@@ -5,6 +5,7 @@ import { data, Link, redirect, useFetcher, useNavigation } from 'react-router'
 import { Discussion } from '~/components/discussion/Discussion'
 import { ReportDialog } from '~/components/discussion/ReportDialog'
 import { StaticStars } from '~/components/kourindou/stars'
+import { LazyBoundary } from '~/components/lazy-boundary'
 import { LiveRegion } from '~/components/live-region'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
@@ -300,12 +301,14 @@ export default function ResourceDetail({
               {m.detail_comments()}
             </h2>
             {user && (
-              <Suspense fallback={<StaticStars myRating={myRating} />}>
-                <StarStrip
-                  myRating={myRating}
-                  submittingScore={submittingScore}
-                />
-              </Suspense>
+              <LazyBoundary fallback={<StaticStars myRating={myRating} />}>
+                <Suspense fallback={<StaticStars myRating={myRating} />}>
+                  <StarStrip
+                    myRating={myRating}
+                    submittingScore={submittingScore}
+                  />
+                </Suspense>
+              </LazyBoundary>
             )}
           </div>
           {rateError && (

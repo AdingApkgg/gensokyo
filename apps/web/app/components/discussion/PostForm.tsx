@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useId, useRef, useState } from 'react'
 import { useFetcher } from 'react-router'
+import { LazyBoundary } from '~/components/lazy-boundary'
 import { Button } from '~/components/ui/button'
 import { Textarea } from '~/components/ui/textarea'
 import { errorMessage } from '~/lib/api-error'
@@ -226,9 +227,11 @@ export function PostForm({
         </label>
         {uploading === 'busy' && (
           <span className="basis-full">
-            <Suspense fallback={null}>
-              <UploadProgress ratio={ratio} />
-            </Suspense>
+            <LazyBoundary fallback={null}>
+              <Suspense fallback={null}>
+                <UploadProgress ratio={ratio} />
+              </Suspense>
+            </LazyBoundary>
           </span>
         )}
         {uploading === 'failed' && (
@@ -309,7 +312,9 @@ export function PostForm({
           )}
           <Button type="submit" size="sm" disabled={busy || !body.trim()}>
             {busy
-              ? m.shrine_sending()
+              ? intent === 'edit'
+                ? m.shrine_saving()
+                : m.shrine_sending()
               : intent === 'edit'
                 ? m.shrine_save()
                 : m.shrine_reply()}

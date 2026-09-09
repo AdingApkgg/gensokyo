@@ -32,6 +32,9 @@ export function uploadImage(
       }
     }
     xhr.onerror = () => reject(new Error('upload failed'))
+    // 无这两个的话 XHR 被中止/超时时 promise 永不 settle，调用方永远停在 uploading === 'busy'
+    xhr.onabort = () => reject(new Error('upload aborted'))
+    xhr.ontimeout = () => reject(new Error('upload timeout'))
     const fd = new FormData()
     fd.append('file', file)
     fd.append('purpose', purpose)
