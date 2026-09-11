@@ -117,7 +117,13 @@ export const MIRROR_KIND = [
 ] as const
 export type MirrorKind = (typeof MIRROR_KIND)[number]
 
-export const RESOURCE_SORT = ['newest', 'downloads', 'rating'] as const
+/** relevance 只在带 q 的搜索里有意义；无 q 时 api 把它当 newest */
+export const RESOURCE_SORT = [
+  'relevance',
+  'newest',
+  'downloads',
+  'rating',
+] as const
 export type ResourceSort = (typeof RESOURCE_SORT)[number]
 
 /** 跨实体审计动作 */

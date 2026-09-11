@@ -222,6 +222,7 @@ export default function KourindouList({ loaderData }: Route.ComponentProps) {
           options={RESOURCE_SORT.map((s) => ({
             value: s,
             label: {
+              relevance: m.sort_relevance(),
               newest: m.sort_newest(),
               downloads: m.sort_downloads(),
               rating: m.sort_rating(),

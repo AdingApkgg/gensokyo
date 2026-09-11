@@ -100,8 +100,13 @@ export const listResourcesQuerySchema = paginationQuerySchema.extend({
     .optional(),
   circleId: entityIdSchema.optional(),
   uploaderId: userIdSchema.optional(),
-  q: z.string().max(100).optional(),
-  sort: z.enum(RESOURCE_SORT).default('newest'),
+  q: z.string().trim().max(100).optional(),
+  /**
+   * 不给默认值。默认按有无 q 决定（有 → relevance，无 → newest），
+   * 这只能在 handler 里判——zod 一旦默认，handler 就分不清「用户选了最新」
+   * 与「没选」。
+   */
+  sort: z.enum(RESOURCE_SORT).optional(),
 })
 export type ListResourcesQuery = z.infer<typeof listResourcesQuerySchema>
 

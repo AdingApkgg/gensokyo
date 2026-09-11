@@ -20,7 +20,7 @@ describe('列表筛选（P0 回归点）', () => {
     })
     expect(parsed.uploaderId).toBe(REAL_BETTER_AUTH_ID)
     expect(parsed.page).toBe(1)
-    expect(parsed.sort).toBe('newest')
+    expect(parsed.sort).toBeUndefined()
   })
 })
 
@@ -189,5 +189,23 @@ describe('单值 query 升维（审计 A.7 回归）', () => {
 
   test('不传时是 undefined', () => {
     expect(listResourcesQuerySchema.parse({}).tag).toBeUndefined()
+  })
+})
+
+describe('listResourcesQuerySchema：搜索', () => {
+  test('sort 不传时是 undefined，不是 newest——默认值由 handler 按有无 q 决定', () => {
+    const r = listResourcesQuerySchema.parse({})
+    expect(r.sort).toBeUndefined()
+  })
+
+  test('relevance 是合法排序', () => {
+    expect(listResourcesQuerySchema.parse({ sort: 'relevance' }).sort).toBe(
+      'relevance',
+    )
+  })
+
+  test('q 两端空白被 trim，纯空白等于空串', () => {
+    expect(listResourcesQuerySchema.parse({ q: '  紅魔  ' }).q).toBe('紅魔')
+    expect(listResourcesQuerySchema.parse({ q: '   ' }).q).toBe('')
   })
 })

@@ -44,9 +44,11 @@ export const SEARCH_COLUMNS = {
   deletedAt: resource.deletedAt,
 }
 
-export type SearchRow = {
-  [K in keyof typeof SEARCH_COLUMNS]: (typeof SEARCH_COLUMNS)[K]['_']['data']
-}
+/** 与 SEARCH_COLUMNS 同名同型，从表模型上 Pick 才带得上可空性 */
+export type SearchRow = Pick<
+  typeof resource.$inferSelect,
+  keyof typeof SEARCH_COLUMNS
+>
 
 export type SearchDoc = ReturnType<typeof toDoc>
 
