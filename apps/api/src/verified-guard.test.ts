@@ -1,4 +1,6 @@
 import { afterAll, describe, expect, test } from 'bun:test'
+import { db, schema } from '@gensokyo/db'
+import { eq } from 'drizzle-orm'
 import { app } from './app'
 import { cleanupTracked, trackUser } from './testing'
 
@@ -106,6 +108,34 @@ describe('未验证账号仍能做账号内务', () => {
       body: JSON.stringify({ all: true }),
     })
     expect(res.status).not.toBe(403)
+  })
+})
+
+/**
+ * `requireRole` 自己也查 `emailVerified`（不是靠 `requireVerified` 串在前面），
+ * 而此前没有任何测试覆盖那一支——把那两行删掉，整套测试全绿。
+ *
+ * 它不是多余的：治理端点只挂 `requireRole('moderator' | 'admin')`，没有第二道
+ * `requireVerified`。所以「角色够但邮箱没验证」这一格的行为完全由那两行决定。
+ */
+describe('requireRole 也挡未验证 —— staff 不是豁免', () => {
+  test('moderator 但邮箱未验证 → 403 email_unverified（不是 403 forbidden）', async () => {
+    const cookie = await unverifiedSession()
+    // 先打一次 /api/me 让 sessionMiddleware 惰性建好档，再提权
+    const me = await app.request('/api/me', { headers: { cookie } })
+    const { user } = (await me.json()) as { user: { id: string } }
+    await db
+      .update(schema.userProfile)
+      .set({ role: 'moderator' })
+      .where(eq(schema.userProfile.userId, user.id))
+
+    const res = await app.request('/api/moderation/queue', {
+      headers: { cookie },
+    })
+    expect(res.status).toBe(403)
+    const json = (await res.json()) as { error?: { code?: string } }
+    // 角色是够的，所以拿到 forbidden 就说明 emailVerified 那一支没生效
+    expect(json.error?.code).toBe('email_unverified')
   })
 })
 

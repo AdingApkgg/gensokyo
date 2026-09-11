@@ -302,8 +302,8 @@ export const kourindou = new Hono<AppEnv>()
 
   .patch(
     '/resources/:id',
-    entityIdParam,
     requireVerified,
+    entityIdParam,
     validate('json', updateResourceSchema),
     async (c) => {
       const actor = c.get('actor')
@@ -387,8 +387,10 @@ export const kourindou = new Hono<AppEnv>()
    */
   .patch(
     '/resources/:id/translations',
-    // requireVerified 在 entityIdParam 之前：否则未登录用户能用 400/404 的差异
-    // 探测资源存在性
+    // 守卫永远在 entityIdParam 之前（CLAUDE.md 的 M4 约定）：否则未登录用户
+    // 能用 400/404 的差异探测资源存在性。本文件另外五条一度写反了，今天不
+    // 可利用（entityIdParam 只校验 UUID 形状、不碰库），但那条约定值钱的
+    // 地方正是「不必每次重新判断今天可不可利用」
     requireVerified,
     entityIdParam,
     validate('json', updateTranslationSchema),
@@ -487,7 +489,7 @@ export const kourindou = new Hono<AppEnv>()
   )
 
   /** 投稿：信任达标直接发布，否则进审核队列 */
-  .post('/resources/:id/submit', entityIdParam, requireVerified, async (c) => {
+  .post('/resources/:id/submit', requireVerified, entityIdParam, async (c) => {
     const actor = c.get('actor')
     if (!actor) return fail(c, 'unauthorized', 401)
     const id = c.req.param('id')
@@ -525,8 +527,8 @@ export const kourindou = new Hono<AppEnv>()
   /** staff 的状态流转（上下架、审核结论） */
   .post(
     '/resources/:id/status',
-    entityIdParam,
     requireVerified,
+    entityIdParam,
     validate('json', changeStatusSchema),
     async (c) => {
       const actor = c.get('actor')
@@ -601,8 +603,8 @@ export const kourindou = new Hono<AppEnv>()
   /** 许可状态变更：必须给理由，且一定留痕——版权争议时这是证据链 */
   .patch(
     '/resources/:id/license',
-    entityIdParam,
     requireVerified,
+    entityIdParam,
     validate('json', changeLicenseSchema),
     async (c) => {
       const actor = c.get('actor')
@@ -643,8 +645,8 @@ export const kourindou = new Hono<AppEnv>()
   /** 新建版本并挂上分发链接 */
   .post(
     '/resources/:id/versions',
-    entityIdParam,
     requireVerified,
+    entityIdParam,
     validate('json', createVersionSchema),
     async (c) => {
       const actor = c.get('actor')

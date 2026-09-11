@@ -605,9 +605,15 @@ async function main() {
     await db
       .delete(schema.notification)
       .where(inArray(schema.notification.userId, ids))
-    await db
-      .delete(schema.topic)
-      .where(inArray(schema.topic.id, [tb.id, otb.id]))
+    /**
+     * ⚠️ **两个 id 都可能是 undefined**：它们来自断言用的响应体，某条断言
+     * 失败时那次创建可能压根没成功。直接塞进 `inArray` 会让 PG 拿 undefined
+     * 去比 uuid 而报错——于是「一条断言失败」升级成「整轮跑崩且脏数据留在
+     * 共享开发库里」，而清理正是为了不留脏数据。过滤掉空值，空数组就跳过。
+     */
+    const topicIds = [tb.id, otb.id].filter((v): v is string => Boolean(v))
+    if (topicIds.length > 0)
+      await db.delete(schema.topic).where(inArray(schema.topic.id, topicIds))
     await db.delete(schema.resource).where(eq(schema.resource.id, resource.id))
     await db.delete(schema.user).where(inArray(schema.user.id, ids))
     console.log('已清理本次 e2e 数据（E2E_KEEP=1 可保留）')
