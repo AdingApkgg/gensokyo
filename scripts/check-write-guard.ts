@@ -54,16 +54,20 @@ const NOT_OURS = new Set(['/api/auth/*'])
 /**
  * 显式豁免：**登录即可、不要求邮箱验证**的「账号内务」端点。
  *
- * 判据是「是否产出对外可见的内容」。这两个产出的都不是内容：
- * 认领 handle 产出一个标识符，而未验证账号拿不出任何东西挂在它下面；
- * 标记通知已读只动自己的收件箱。
+ * 判据是「是否产出对外可见的内容」。标记通知已读只动自己的收件箱，
+ * 不产出任何对外可见的东西。
+ *
+ * `PUT /api/me/handle` **曾经**也在这张名单里，2026-09-11 复审推翻：原判据
+ * 「未验证账号没有内容可挂」只说明不挂闸不会立刻造成可见滥用，不等于
+ * 必须不挂闸。handle 是不可逆的公开标识符（进 `/u/:handle`、进已发布正文的
+ * 纯文本 @mention），挂 `requireVerified` 不挡任何真实用户——`/verify` 本来
+ * 就是验证在前、认领在后，Google 注册的用户邮箱天生已验证——却能堵住
+ * 绕开页面直接打接口抢注一个拿不回来的标识符那条路。现已按 `requireVerified`
+ * 处理，不再豁免。
  *
  * **往这里加一行就是一次安全决策**，写清楚理由再加。
  */
-const ALLOWED_UNVERIFIED = new Set([
-  'PUT /api/me/handle',
-  'POST /api/notifications/read',
-])
+const ALLOWED_UNVERIFIED = new Set(['POST /api/notifications/read'])
 
 const rows = (app as unknown as { routes: Row[] }).routes
 

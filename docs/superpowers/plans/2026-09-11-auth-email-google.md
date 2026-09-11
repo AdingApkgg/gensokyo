@@ -4,7 +4,7 @@
 
 **Goal:** 给站点装上邮箱验证（6 位 OTP）、「验证后才能写」的强制闸、Google 登录与撞车仲裁、找回密码，并配一条能在 CI 跑的门禁防止新写端点漏挂。
 
-**Architecture:** 发信收敛到 `apps/api/src/mail/` 一个出口，后面挂三个 transport（console / resend / smtp），由 env 分支选择且**惰性解析**。验证用 better-auth 的 `emailOTP` 插件，三个默认值必须显式改掉。「验证后才能写」落成 `requireVerified` 中间件，17 个写端点各挂一道，由 `scripts/check-write-guard.ts` 通过**枚举 `app.routes` 做函数身份比对**钉住。Google 的撞车仲裁挂在 `databaseHooks.account.create.after`，利用「better-auth 把 `emailVerified=true` 写在 `linkAccount` 之后、`createSession` 之前」这个顺序，一个条件分出三种情形。
+**Architecture:** 发信收敛到 `apps/api/src/mail/` 一个出口，后面挂三个 transport（console / resend / smtp），由 env 分支选择且**惰性解析**。验证用 better-auth 的 `emailOTP` 插件，三个默认值必须显式改掉。「验证后才能写」落成 `requireVerified` 中间件，18 个写端点各挂一道（含 `PUT /me/handle`——handle 不可逆，2026-09-11 复审从「登录即可」改判为「登录且已验证」），由 `scripts/check-write-guard.ts` 通过**枚举 `app.routes` 做函数身份比对**钉住。Google 的撞车仲裁挂在 `databaseHooks.account.create.after`，利用「better-auth 把 `emailVerified=true` 写在 `linkAccount` 之后、`createSession` 之前」这个顺序，一个条件分出三种情形。
 
 **Tech Stack:** Bun、Hono、better-auth 1.7.2（`email-otp` 插件）、drizzle + Postgres、zod 4、React Router 8、Paraglide JS、nodemailer（仅 smtp transport）。
 
@@ -1243,6 +1243,22 @@ describe('未验证账号不能写', () => {
       expect(json.error?.code).toBe('email_unverified')
     })
   }
+
+  // handle 是不可逆的公开标识符，单独列一条而不是并进上面的表：
+  // 它曾经是「登录即可」的豁免端点，这条测试就是防它悄悄再豁免回去的回归锁。
+  test('PUT /api/me/handle → 403 email_unverified（handle 不可逆，认领前必须先验证）', async () => {
+    const res = await app.request('/api/me/handle', {
+      method: 'PUT',
+      headers: {
+        cookie: await unverifiedSession(),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ handle: `g${Date.now()}`.slice(0, 20) }),
+    })
+    expect(res.status).toBe(403)
+    const json = (await res.json()) as { error?: { code?: string } }
+    expect(json.error?.code).toBe('email_unverified')
+  })
 })
 
 describe('未验证账号仍能做账号内务', () => {
@@ -1271,18 +1287,6 @@ describe('未验证账号仍能做账号内务', () => {
     })
     expect(res.status).not.toBe(403)
   })
-
-  test('PUT /api/me/handle → 不是 403（认领 handle 不要求验证）', async () => {
-    const res = await app.request('/api/me/handle', {
-      method: 'PUT',
-      headers: {
-        cookie: await unverifiedSession(),
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({ handle: `g${Date.now()}`.slice(0, 20) }),
-    })
-    expect(res.status).not.toBe(403)
-  })
 })
 
 describe('未登录仍然是 401 而不是 403', () => {
@@ -1299,14 +1303,20 @@ describe('未登录仍然是 401 而不是 403', () => {
 })
 ```
 
-> `POST /api/notifications/read` 与 `PUT /api/me/handle` 的断言用
-> `not.toBe(403)` 而不是 `toBe(200)`：它们的成功状态码与请求体形状由既有
-> 实现决定，这几条测试要钉的只是「没有被验证闸拦住」。
+> `POST /api/notifications/read` 的断言用 `not.toBe(403)` 而不是 `toBe(200)`：
+> 它的成功状态码与请求体形状由既有实现决定，这条测试要钉的只是「没有被
+> 验证闸拦住」。
+>
+> ⚠️ **2026-09-11 复审改判**：`PUT /api/me/handle` 原本也在「账号内务」那一组、
+> 断言 `not.toBe(403)`。Task 8 走查推翻了这个判断——handle 是不可逆的公开
+> 标识符，「未验证账号没有内容可挂」只说明不挂闸不会立刻造成可见滥用，
+> 不等于必须不挂闸。上面代码块已按改判后的样子写：它现在挂在「不能写」
+> 一组，断言翻成 `toBe(403)` + `email_unverified`。
 
 - [ ] **Step 2: 跑测试确认失败**
 
 Run: `cd apps/api && bun test src/verified-guard.test.ts`
-Expected: FAIL——7 条写端点测试拿到的是 400/404/200 之类，不是 403
+Expected: FAIL——8 条写端点测试拿到的是 400/404/200 之类，不是 403
 
 - [ ] **Step 3: 加错误码**
 
@@ -1483,6 +1493,14 @@ requireVerified 里 401 先于 403：未登录用户看到「邮箱未验证」�
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ```
 
+> ⚠️ **这条提交信息里「`PUT /me/handle` 留在不要求验证的一侧」那段理由，
+> 2026-09-11 Task 8 走查推翻了**：它论证的是「不挂闸不危险」，不是「必须
+> 不挂闸」——handle 不可逆，挂 `requireVerified` 不挡任何真实用户，却能堵住
+> 绕开 `/verify` 直接打接口抢注。改判已并入 Task 5 之后的一次修订（见本
+> Task 5 一节 Step 1 附近的说明与 `apps/api/src/modules/me.ts` 现状），这里
+> 保留原提交信息文本不改——它是 `4e851b1` 这条已经存在的真实提交，改了
+> 反而会让这份计划对不上 `git log`。
+
 ---
 
 ### Task 6: `check-write-guard` 门禁
@@ -1565,16 +1583,20 @@ const NOT_OURS = new Set(['/api/auth/*'])
 /**
  * 显式豁免：**登录即可、不要求邮箱验证**的「账号内务」端点。
  *
- * 判据是「是否产出对外可见的内容」。这两个产出的都不是内容：
- * 认领 handle 产出一个标识符，而未验证账号拿不出任何东西挂在它下面；
- * 标记通知已读只动自己的收件箱。
+ * 判据是「是否产出对外可见的内容」。标记通知已读只动自己的收件箱，
+ * 不产出任何对外可见的东西。
+ *
+ * `PUT /api/me/handle` **曾经**也在这张名单里，2026-09-11 复审推翻：原判据
+ * 「未验证账号没有内容可挂」只说明不挂闸不会立刻造成可见滥用，不等于
+ * 必须不挂闸。handle 是不可逆的公开标识符（进 `/u/:handle`、进已发布正文的
+ * 纯文本 @mention），挂 `requireVerified` 不挡任何真实用户——`/verify` 本来
+ * 就是验证在前、认领在后，Google 注册的用户邮箱天生已验证——却能堵住
+ * 绕开页面直接打接口抢注一个拿不回来的标识符那条路。现已按 `requireVerified`
+ * 处理，不再豁免（见 Task 8 走查之后的修订）。
  *
  * **往这里加一行就是一次安全决策**，写清楚理由再加。
  */
-const ALLOWED_UNVERIFIED = new Set([
-  'PUT /api/me/handle',
-  'POST /api/notifications/read',
-])
+const ALLOWED_UNVERIFIED = new Set(['POST /api/notifications/read'])
 
 const rows = (app as unknown as { routes: Row[] }).routes
 
@@ -1666,6 +1688,12 @@ Run: `bun run scripts/check-write-guard.ts`
 Expected: 打印「非 GET 路由 25 条」上下、两条豁免，最后一行「通过」，退出码 0
 
 > 数字对不上不一定是错——Task 5 之后的路由数以实际为准。要看的是**没有 unguarded**。
+>
+> ⚠️ **2026-09-11 复审之后，这两个数字都变了**：`PUT /api/me/handle` 从豁免
+> 改判为 `requireVerified`，所以现在应该是「非 GET 路由 26 条，已挂守卫 25 条，
+> 显式豁免 **1** 条」——豁免只剩 `POST /api/notifications/read`。同一条
+> 「数字对不上不一定是错，看没有 unguarded」仍然成立，只是「两条豁免」这个
+> 具体数字已经过时。
 
 - [ ] **Step 3: 故意破坏两次，确认门禁真的会红——存在性和位置都要测**
 

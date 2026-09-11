@@ -63,6 +63,22 @@ describe('未验证账号不能写', () => {
       expect(json.error?.code).toBe('email_unverified')
     })
   }
+
+  // handle 是不可逆的公开标识符，单独列一条而不是并进上面的表：
+  // 它曾经是「登录即可」的豁免端点，这条测试就是防它悄悄再豁免回去的回归锁。
+  test('PUT /api/me/handle → 403 email_unverified（handle 不可逆，认领前必须先验证）', async () => {
+    const res = await app.request('/api/me/handle', {
+      method: 'PUT',
+      headers: {
+        cookie: await unverifiedSession(),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ handle: `g${Date.now()}`.slice(0, 20) }),
+    })
+    expect(res.status).toBe(403)
+    const json = (await res.json()) as { error?: { code?: string } }
+    expect(json.error?.code).toBe('email_unverified')
+  })
 })
 
 describe('未验证账号仍能做账号内务', () => {
@@ -88,18 +104,6 @@ describe('未验证账号仍能做账号内务', () => {
         'content-type': 'application/json',
       },
       body: JSON.stringify({ all: true }),
-    })
-    expect(res.status).not.toBe(403)
-  })
-
-  test('PUT /api/me/handle → 不是 403（认领 handle 不要求验证）', async () => {
-    const res = await app.request('/api/me/handle', {
-      method: 'PUT',
-      headers: {
-        cookie: await unverifiedSession(),
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({ handle: `g${Date.now()}`.slice(0, 20) }),
     })
     expect(res.status).not.toBe(403)
   })

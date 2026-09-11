@@ -286,6 +286,7 @@
   "auth_verify_code": "验证码",
   "auth_verify_done": "邮箱已验证。",
   "auth_verify_resend": "没收到？重新发送",
+  "auth_verify_resend_failed": "发送失败，请稍后再试。",
   "auth_verify_sent": "验证码已发到你的邮箱，10 分钟内有效。",
   "auth_verify_submit": "验证",
   "auth_verify_title": "验证邮箱",

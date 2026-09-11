@@ -286,6 +286,7 @@
   "auth_verify_code": "確認コード",
   "auth_verify_done": "メールアドレスを確認しました。",
   "auth_verify_resend": "届きませんか？再送する",
+  "auth_verify_resend_failed": "送信に失敗しました。しばらくしてからお試しください。",
   "auth_verify_sent": "確認コードをメールで送信しました。10 分間有効です。",
   "auth_verify_submit": "確認する",
   "auth_verify_title": "メールアドレスの確認",

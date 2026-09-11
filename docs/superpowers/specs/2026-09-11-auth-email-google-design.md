@@ -170,11 +170,11 @@ emailOTP({
 **`requireRole` 一并隐含「已验证」。** 一行的事，而且让门禁规则变干净：非 GET 路由
 必须出现 `requireVerified` 或 `requireRole`，两者都保证已验证。
 
-### 4.2 端点清单（17 个写 + 4 个内务）
+### 4.2 端点清单（18 个写 + 3 个内务）
 
 判据是「是否产出对外可见的内容」。
 
-**要 `requireVerified`（17）**
+**要 `requireVerified`（18）**
 
 | 模块 | 端点 |
 |---|---|
@@ -183,13 +183,19 @@ emailOTP({
 | interactions | `PUT /resources/:slug/rating`、`PUT /resources/:slug/favorite`、`DELETE /resources/:slug/favorite` |
 | reports | `POST /` |
 | uploads | `POST /image` |
+| me | `PUT /handle` |
 
-**保留 `requireAuth`（4，登录即可）**
+**保留 `requireAuth`（3，登录即可）**
 
-`GET /me`、`PUT /me/handle`、`GET /notifications`、`POST /notifications/read`。
+`GET /me`、`GET /notifications`、`POST /notifications/read`。
 
-`PUT /me/handle` 留在这一侧是刻意的：它产出的是一个标识符，而未验证账号拿不出
-任何内容去挂在它下面（见 §1 不变式 1）。
+`PUT /me/handle` **2026-09-11 复审改判**、从这一侧挪进了上面的 18：原判据「未验证
+账号拿不出任何内容挂在标识符下面」（见 §1 不变式 1）说的是**安全**——不挂闸不会
+立刻造成可见的滥用，但不等于**必须不挂闸**。handle 在这套系统里不可逆（进
+`/u/:handle`、进已发布正文的纯文本 @mention），而挂上 `requireVerified` 不挡住任何
+真实用户：`/verify` 页面本来就是「验证 → 认领」顺序两步，Google 注册的用户邮箱
+天生已验证。没有一条合法流程需要在未验证状态下认领 handle，挂闸唯一挡住的是
+绕开 `/verify` 页面、直接打接口抢注一个拿不回来的公开标识符。
 
 `moderation` / `admin` 由 `requireRole` 覆盖。
 
@@ -390,7 +396,7 @@ emailAndPassword: { revokeSessionsOnPasswordReset: true }   // ⚠️ 默认 fal
 
 | 层 | 内容 | 进 CI |
 |---|---|---|
-| api | transport 选择；三语模板齐全；未验证账号打 17 个写端点全 403、4 个内务端点 200；Google 撞车三种情形各一条；按邮箱限流 | 否 |
+| api | transport 选择；三语模板齐全；未验证账号打 18 个写端点全 403、3 个内务端点 200；Google 撞车三种情形各一条；按邮箱限流 | 否 |
 | web | `/verify` 与 `/forgot` 的分步推进纯函数 | **是** |
 | 门禁 | `check-write-guard`、`check-messages`、`check-bundle-size` | **是** |
 | e2e | 现有 40 项后接「注册 → 取码 → 验证 → 发帖」与「找回密码」 | 否 |

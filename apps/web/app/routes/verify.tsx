@@ -43,8 +43,11 @@ export default function Verify({ loaderData }: Route.ComponentProps) {
   const [params] = useSearchParams()
   const next = safeNext(params.get('next')) ?? localizeHref('/')
   const [step, setStep] = useState(loaderData.step)
+  // 这一段是不是刚在本次会话里验证通过的——已验证老用户直接落到 handle 段时
+  // 不该看到「邮箱已验证」的回执，只有真的从 otp 段走过来的人才看
+  const [justVerified, setJustVerified] = useState(false)
   const [error, setError] = useState<
-    'code' | 'handle-taken' | 'handle-bad' | null
+    'code' | 'resend' | 'handle-taken' | 'handle-bad' | null
   >(null)
   const [pending, setPending] = useState(false)
 
@@ -65,17 +68,21 @@ export default function Verify({ loaderData }: Route.ComponentProps) {
     setPending(false)
     if (err) return setError('code')
     // 验证完接着认领 handle；已认领过的会被下一次 loader 判成 done
+    setJustVerified(true)
     setStep('handle')
   }
 
   async function onResend() {
     setPending(true)
     setError(null)
-    await authClient.emailOtp.sendVerificationOtp({
+    const { error: err } = await authClient.emailOtp.sendVerificationOtp({
       email: loaderData.email,
       type: 'email-verification',
     })
     setPending(false)
+    // 不能吞掉这个错误：后面会给发验证码接口加 60 秒同邮箱冷却，按钮重新
+    // 可点但用户毫无反应地拿不到新码，会变成常态而不是偶发
+    if (err) return setError('resend')
   }
 
   async function onClaim(e: React.FormEvent<HTMLFormElement>) {
@@ -148,11 +155,21 @@ export default function Verify({ loaderData }: Route.ComponentProps) {
               >
                 {m.auth_verify_resend()}
               </Button>
+              {error === 'resend' && (
+                <p role="alert" className="text-sm text-destructive">
+                  {m.auth_verify_resend_failed()}
+                </p>
+              )}
             </form>
           )}
 
           {step === 'handle' && (
             <form onSubmit={onClaim} className="grid gap-4">
+              {justVerified && (
+                <p className="text-sm text-muted-foreground">
+                  {m.auth_verify_done()}
+                </p>
+              )}
               <div className="grid gap-2">
                 <Label htmlFor="handle">{m.auth_handle()}</Label>
                 <Input

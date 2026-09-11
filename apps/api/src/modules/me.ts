@@ -3,7 +3,7 @@ import { setHandleSchema } from '@gensokyo/shared'
 import { and, eq, isNull, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { fail, isUniqueViolation, validate } from '../errors'
-import { requireAuth } from '../middleware/require'
+import { requireVerified } from '../middleware/require'
 import type { AppEnv } from '../middleware/session'
 
 const { userProfile, notification } = schema
@@ -59,6 +59,13 @@ export const me = new Hono<AppEnv>()
    * 认领 handle。**只能改一次**——它同时进 /u/:handle 与已发布正文里的 @，
    * 改动等于死链 + 重写历史正文，所以 handle_set_at 一旦写入就永久锁定。
    *
+   * 正因为不可逆，这里挂 `requireVerified` 而不是 `requireAuth`：先证明邮箱是
+   * 你的，再让你占一个公开的、拿不回来的标识符。`/verify` 页面本来就是
+   * 「验证 → 认领」顺序两步，这里只是让服务端也认这个顺序——挡的是绕开页面
+   * 直接打接口抢注，不挡任何真实用户：`/verify` 已经把验证排在认领之前，
+   * Google 注册的用户邮箱天生已验证，没有一条合法路径需要在验证邮箱之前
+   * 抢先拿到 handle。
+   *
    * 注册走客户端 authClient.signUp.email，API 看不到注册；派生值由
    * sessionMiddleware 惰性建档时写入，这里是用户把它换成自选值的唯一机会。
    *
@@ -71,37 +78,42 @@ export const me = new Hono<AppEnv>()
    * 那正是「handle 不可逆」这条红线要挡的。认领是给「注册后立刻自选」这一种
    * 场景的，不是改名功能。
    */
-  .put('/handle', requireAuth, validate('json', setHandleSchema), async (c) => {
-    const actor = c.get('actor')
-    if (!actor) return fail(c, 'unauthorized', 401)
-    const { handle } = c.req.valid('json')
-    if (actor.handleSetAt !== null)
-      return fail(c, 'invalid_state_transition', 409)
+  .put(
+    '/handle',
+    requireVerified,
+    validate('json', setHandleSchema),
+    async (c) => {
+      const actor = c.get('actor')
+      if (!actor) return fail(c, 'unauthorized', 401)
+      const { handle } = c.req.valid('json')
+      if (actor.handleSetAt !== null)
+        return fail(c, 'invalid_state_transition', 409)
 
-    const [exposed] = await db.execute<{ exposed: boolean }>(sql`
+      const [exposed] = await db.execute<{ exposed: boolean }>(sql`
       select exists(select 1 from ${schema.post} where ${schema.post.authorId} = ${actor.id})
           or exists(select 1 from ${notification}
                     where ${notification.userId} = ${actor.id}
                       and ${notification.kind} = 'mention') as exposed`)
-    if (exposed?.exposed) return fail(c, 'forbidden', 403, ['handle'])
+      if (exposed?.exposed) return fail(c, 'forbidden', 403, ['handle'])
 
-    try {
-      const [updated] = await db
-        .update(userProfile)
-        .set({ handle, handleSetAt: new Date() })
-        .where(
-          and(
-            eq(userProfile.userId, actor.id),
-            isNull(userProfile.handleSetAt),
-          ),
-        )
-        .returning({ handle: userProfile.handle })
-      if (!updated) return fail(c, 'invalid_state_transition', 409)
-      return c.json({ handle: updated.handle })
-    } catch (err) {
-      // 23505：被别人占了。与 reports.ts 同一个约定，不新造错误码
-      if (isUniqueViolation(err))
-        return fail(c, 'duplicate_slug', 409, ['handle'])
-      throw err
-    }
-  })
+      try {
+        const [updated] = await db
+          .update(userProfile)
+          .set({ handle, handleSetAt: new Date() })
+          .where(
+            and(
+              eq(userProfile.userId, actor.id),
+              isNull(userProfile.handleSetAt),
+            ),
+          )
+          .returning({ handle: userProfile.handle })
+        if (!updated) return fail(c, 'invalid_state_transition', 409)
+        return c.json({ handle: updated.handle })
+      } catch (err) {
+        // 23505：被别人占了。与 reports.ts 同一个约定，不新造错误码
+        if (isUniqueViolation(err))
+          return fail(c, 'duplicate_slug', 409, ['handle'])
+        throw err
+      }
+    },
+  )
