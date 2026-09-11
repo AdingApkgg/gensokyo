@@ -51,49 +51,19 @@
   - **测试必须接 `@gensokyo/db/testing`（`packages/db/src/testing.ts`）的 track/cleanup**——测试打的是共享开发库，不是一次性容器。删账号前要先删它发的 `report`：`reporter_id` 是 ON DELETE SET NULL，留下的孤儿 open 举报会永远堆在 `/dash/reports`（真攒过 59 条）
   - 开场内容（六篇引导帖 + 站规）的编辑源是 `docs/product/2026-08-30-shrine-seed-content.md`，生成到 `seed-shrine-content.ts` 后由 `bun run seed:shrine` 入库；幂等键是「版块 + 标题 + 种子账号」，**改正文重跑即可，改标题会当成新帖**
 - 认证（邮箱验证 / Google / 找回密码，M6，已完成）约定：
-  - **「验证后才能写」只有一个强制点**：`requireVerified`（`requireRole` 隐含它）。
-    判据是「是否产出对外可见的内容」。**新增任何非 GET 路由必须回答「它挂的是
-    哪一个」**——`bun run check-write-guard` 把这条钉成断言，它枚举 `app.routes`
-    做**函数身份**比对（守卫登记在 `middleware/require.ts` 的 WeakSet 里），
-    所以改路径改文件名都不会让它失灵。豁免写在脚本顶部，**往那里加一行就是
-    一次安全决策**（现在只有 1 条：`POST /api/notifications/read`）。子应用的
-    `.use('*', requireRole(...))` 在 `app.routes` 里是独立的 `ALL /api/admin/*`
-    条目、不并进各路由分组，所以前缀守卫要单独匹配。**守卫还必须排在终结
-    handler 之前**——Hono 按注册顺序执行中间件链，`.post(p, handler,
-    requireVerified)` 这种笔误在 `app.routes` 里守卫依然「出现过」，但运行时
-    永远执行不到；门禁按「分组内最后一位是终结 handler」这条实测事实，把
-    「没挂」与「挂了但排序错」分开报
-  - **注册开关只有一个强制点**：`user.validateUserInfo` 的 `create-user` 分支。
-    它横跨每一种认证方式，所以「加了新登录方式要记得再判一次」这件事不存在。
-    **不要退回按路径拦 `/sign-up/email`**
-  - **emailOTP 插件有三个默认值是为「快速跑通」调的，不是为生产调的**：
-    `storeOTP` 默认 `'plain'`（验证码明文躺在 `verification` 表）、`disableSignUp`
-    默认 `false`（等于多一条绕过注册开关的注册路径）、
-    `emailAndPassword.revokeSessionsOnPasswordReset` 默认 `false`（找回密码不吊销
-    会话）。配置块里每一项都要能说出为什么
-  - **Google 撞车仲裁挂在 `databaseHooks.account.create.after`**，位置由 better-auth
-    的实现顺序决定：`linkAccount → 本钩子 → emailVerified=true → createSession`。
-    所以钩子里 `emailVerified` 还是 false（能当判据）、session 还没建（吊销全部会话
-    不会误伤刚登录的人）、链接已成功（不存在密码删了但没接上的锁死）。
-    它依赖 `requireLocalEmailVerified: false`，而那个选项**已 deprecated**，
-    升级 better-auth 后仲裁失效、退回「拒绝链接」——朝安全方向的退化，
-    `arbitrate.test.ts` 会在那时变红
-  - **mail 模块不在模块顶层读 env**：它被 `auth.ts` → `app.ts` 传递引用，而测试
-    导入的正是 app。顶层读会让整个 api 测试套件因缺 `RESEND_API_KEY` 而起不来，
-    症状表现成「测试挂了」。启动即炸由 `env.ts`（只被 index.ts import）负责
-  - 发信只有一个出口 `sendMail()`（`mail/index.ts`），三个 transport 由
-    `MAIL_TRANSPORT` 选。**console 通道不是玩具**：e2e 靠它取验证码
-  - 邮件语言从 `LOCALE_HEADER` 头（`x-gensokyo-locale`）取，回落 Paraglide cookie
-    再回落 `zh`。**不读 `Accept-Language`**——那是浏览器语言，不是站内选的界面语言
-  - OTP 的按邮箱限流在 `otp-rate.ts`，数 `verification` 表的行（索引本来就有）。
-    插件自带的是按 IP 的，挡不住换 IP 轰炸同一个受害者邮箱。**找回密码命中限流
-    不能抛错**——`resolveOTP` 给已注册邮箱留一行持久的行，给未注册邮箱的行会被
-    better-auth 自己删掉防枚举，抛 429 会让两者产生外部可分辨的状态码序列，
-    等于限流层自己变成注册预言机。挂载点因此分两处：`email-verification` 留在
-    `hooks.before` 照样 429（sign-up 早已用 `USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL`
-    泄露过同一个事实，429 不多泄露什么，且 `/verify` 重发按钮需要它）；
-    `forget-password` 挪进 `sendVerificationOTP` 回调，命中限流静默 `return`、
-    endpoint 统一回 200
+  - **「验证后才能写」只有一个强制点**：`requireVerified`（`requireRole` 隐含它，且那是它自己查 `emailVerified`、不是靠别的中间件串在前面——`verified-guard.test.ts` 有一条专钉那一支）。判据是「是否产出对外可见的内容」。**新增任何非 GET 路由必须回答「它挂的是哪一个」**——`bun run check-write-guard` 把这条钉成断言，它枚举 `app.routes` 做**函数身份**比对（守卫登记在 `middleware/require.ts` 的 WeakSet 里），所以改路径改文件名都不会让它失灵。豁免写在脚本顶部，**往那里加一行就是一次安全决策**（现在只有 1 条：`POST /api/notifications/read`）。子应用的 `.use('*', requireRole(...))` 在 `app.routes` 里是独立的 `ALL /api/admin/*` 条目、不并进各路由分组，所以前缀守卫要单独匹配。**守卫还必须排在终结 handler 之前**——Hono 按注册顺序执行中间件链，`.post(p, handler, requireVerified)` 这种笔误在 `app.routes` 里守卫依然「出现过」，但运行时永远执行不到；门禁按「分组内最后一位是终结 handler」这条实测事实，把「没挂」与「挂了但排序错」分开报。守卫与 `entityIdParam` 的先后沿用 M4 那条（守卫在前）
+  - **注册开关只有一个强制点**：`user.validateUserInfo` 的 `create-user` 分支。它横跨每一种认证方式，所以「加了新登录方式要记得再判一次」这件事不存在。**不要退回按路径拦 `/sign-up/email`**。⚠️ 唯一的例外在 better-auth 内部：`internalAdapter.createOAuthUser` 直接调 `createWithHooks(..., 'user')`，**绕过 `createUser`、也就绕过 `validateUserInfo`**（`internal-adapter.mjs:121`）。1.7.2 里它零调用点，所以今天这道闸是闭合的；将来接任何新插件时要重新数一次这个调用点
+  - **emailOTP 插件有三个默认值是为「快速跑通」调的，不是为生产调的**：`storeOTP` 默认 `'plain'`（验证码明文躺在 `verification` 表）、`disableSignUp` 默认 `false`（等于多一条绕过注册开关的注册路径）、`emailAndPassword.revokeSessionsOnPasswordReset` 默认 `false`（找回密码不吊销会话）。配置块里每一项都要能说出为什么
+  - **Google 撞车仲裁挂在 `databaseHooks.account.create.after`**，位置由 better-auth 的实现顺序决定：`linkAccount → 本钩子 → emailVerified=true → createSession`。所以钩子里 `emailVerified` 还是 false（能当判据）、session 还没建（吊销全部会话不会误伤刚登录的人）、链接已成功（不存在密码删了但没接上的锁死）。它依赖 `requireLocalEmailVerified: false`，而那个选项**已 deprecated**，升级 better-auth 后仲裁失效、退回「拒绝链接」——朝安全方向的退化，`arbitrate.test.ts` 会在那时变红
+  - **仲裁是一次性的、不可重试的、事后认不出来的**——`takeoverIfUnverified` 的一切设计（两次 delete 同事务、整体 try/catch 只记日志不上抛）都从这一条推出来：钩子只在 `account.create.after` 触发一次，重试 Google 登录走的是已链接分支（`link-account.mjs` 135–181），那条分支不触发钩子、却会把 `emailVerified` 置 true，于是「仲裁没跑成」与「本来就是已验证账号接上 Google」从此无法区分，抢注者的密码原封不动。所以失败时**唯一**的痕迹是那条 `[auth] 抢注仲裁失败 userId=…` 日志，运维据它手工核对 `account` 表
+  - **mail 模块不在模块顶层读 env**：它被 `auth.ts` → `app.ts` 传递引用，而测试导入的正是 app。顶层读会让整个 api 测试套件因缺 `RESEND_API_KEY` 而起不来，症状表现成「测试挂了」。启动即炸由 `env.ts`（只被 index.ts import）负责
+  - 发信只有一个出口 `sendMail()`（`mail/index.ts`），三个 transport 由 `MAIL_TRANSPORT` 选，switch 带 `never` 穷尽性守卫（`parseMailEnv` 加第四个分支会编译报错，`sendMail` 不加守卫的话只会静默发不出信）。**console 通道不是玩具**：e2e 靠它取验证码
+  - **邮件那组环境变量必须存在且非空，漏配是启动崩溃**，不是「静默回落成 console」：Compose 把宿主未设置的变量替换成**空串**，而 `?? 'console'` 与 `.default()` 只认 `undefined`。`MAIL_TRANSPORT=smtp` 时 `SMTP_SECURE` 同理（它的 `.default('false')` 只在整个键都不给时兜底）。刻意不给空串开豁免——开了就真的会退回那个「一封信都发不出去但日志一切正常」的形态；`mail/config.test.ts` 把这条钉成断言
+  - 邮件语言从 `LOCALE_HEADER` 头（`x-gensokyo-locale`）取，回落 Paraglide cookie 再回落 `zh`。**不读 `Accept-Language`**——那是浏览器语言，不是站内选的界面语言
+  - OTP 的按邮箱限流在 `otp-rate.ts`，数 `verification` 表的行（索引本来就有）；插件自带的是按 IP 的，挡不住换 IP 轰炸同一个受害者邮箱。**判断必须挡在 `resolveOTP` 写行之前**（唯一挂载点是 `auth.ts` 的 `hooks.before`，分派走纯函数 `otpRateTarget()`，发 forget-password 码的路径有三条）：`resolveOTP` 在端点里无条件先插一行，而 `consumeVerificationValue` 只认「该 identifier 最新的一行」并在消费时删光全部行——任何晚于插入的拒绝都会留下一行没人收到过的更新的码，把用户手里那封信作废，症状是「验证码错误」，把账算在用户头上。挡在插入之前还顺带让小时配额数的是「真发出去的信」而不是「被拒的尝试」
+  - **找回密码命中限流不能抛错**：better-auth 对未注册邮箱永远回 200 防枚举，抛 429 会让「已注册且被限流」与「未注册」产生外部可分辨的响应，限流层自己变成注册预言机。所以 forget-password 命中时**短路返回端点自己那个 200 `{success:true}`**（`hooks.before` 返回不含 `context` 键的对象即短路，见 `dispatch.mjs`），`otp-rate.test.ts` 逐字节比状态码 + body + content-type
+  - **`email-verification` 保持 429，而这条决策以一个既存缺陷为前提**：`/sign-up/email` 对已注册邮箱直接抛 `USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL`（我们既没开 `requireEmailVerification` 也没关 `autoSignIn`），单次请求就泄露了同一个事实，所以这条 429 不多泄露什么，而 `/verify` 的重发按钮需要它。⚠️ **谁哪天把 sign-up 那个泄露堵上，必须同时把这条 429 也改成上面那种静默短路**，否则 `/email-otp/send-verification-otp` 仍是 `(200,429)` vs `(200,200)`，堵洞只堵了一半
+  - **拒绝必须有出路**：`email_unverified` 在前端渲染成「文案 + 指向 `/verify` 的链接」（`components/error-text.tsx`），不是一句无路可走的死话；`/verify` **不在加载时自动发码**（每次刷新都会烧掉一次按邮箱的小时配额），所以那一页的文案不能写「验证码已发到你的邮箱」——对「注册后关掉标签页、第二天回来」的人那是假话，而那正是最需要这一页的人
   - **better-auth 路由的错误信封与 `fail()` 的 `ERROR_CODES` 是两套，不要统一**
 - 动效与样式约定（T0 已落地，详见 `docs/superpowers/specs/2026-09-05-motion-atmosphere-design.md`）：
   - **卡片不能用 `border-*` 表达状态**：`card.tsx` 只有 `ring-1 ring-foreground/10`，Tailwind preflight 是 `border: 0 solid`，改 border 颜色是**空操作**。首页与六版块网格曾因此三处 hover 与「当前版块」高亮全部无效。一律用 `ring-*`
@@ -125,6 +95,6 @@
   - **`mode="wait"` 全站禁用**（工作界面上净损失，内容界面上与原生 VT 抢同一次替换）；**跨路由 `layoutId` 全站零处**（跨页到达 100% 归原生 VT）；`staggerChildren` 与 `useReducedMotion` 全站唯一落点是 `dash/trash.tsx` 的销毁确认——那是唯一刻意让操作变慢的地方，正当性来自不可逆，不来自曝光量
   - **dash 列表的乐观移除**（`lib/dash-pending.ts`，有单测）：在途行当帧从 `visible` 里摘掉，退场动画与网络往返重叠。**盯梢集合是并集不是在途集**——`fetcher.data` 恰好在它变回 idle 的那一帧才有，而那一帧它已不在在途集里；只渲染在途集的话盯梢组件会在拿到结果的同一次提交里卸载，effect 永远不触发，播报永远是空的（实测踩过）。两个 dash 页面各用各的 fetcher key 前缀（`review:` / `report:`），action 返回形状不同，串了会读到对方的 data
   - **Browser pane 里测不了动画**：标签页常是 `visibilityState: hidden`，rAF 不触发，motion 走自己的帧循环所以 opacity/layout 动画全部冻在起点（`AnimatePresence` 会把退场元素永远扣在 DOM 里，看起来像组件坏了）。验证要改成**机制测试**：读 FLIP 起点的 transform（非单位矩阵即投影已接上）、对照 loaderData 与 DOM 的条数、读 `[role=alert]`/`[data-slot=live-region]` 的文本；`transition-colors` 会卡在过渡起点，读真值前先注入 `transition:none`。凡是浏览器里读不到的推导（如 `reduce ?` 守卫）抽成纯函数写单测
-  - CI 在 `.github/workflows/ci.yml`，跑 check / typecheck / check-messages / build / check-css-layers / check-bundle-size，以及 **web 与 shared 两个包的 test**。`api` / `db` / `api-client` 的测试与 `e2e` 都要真实的 postgres/redis/Meili/MinIO，**刻意不进 CI**——接它们是另一个决策
+  - CI 在 `.github/workflows/ci.yml`，跑 check / typecheck / check-messages / **check-motion-boundary** / **check-write-guard** / build / check-css-layers / check-bundle-size，以及 **web 与 shared 两个包的 test**（这份清单是别人查「CI 到底跑什么」的地方，加门禁时连它一起改）。`api` / `db` / `api-client` 的测试与 `e2e` 都要真实的 postgres/redis/Meili/MinIO，**刻意不进 CI**——接它们是另一个决策。正因如此，`check-write-guard` 是「新写端点忘了挂验证闸」在 CI 里唯一会响的东西
 - 常用脚本：`bun run e2e`（端到端验收 42 项，跑完自清理，`E2E_KEEP=1` 保留）、`check-messages`（三语 key 审计）、`check-write-guard`（写端点验证闸门禁，枚举 `app.routes` 做函数身份比对）、`reindex`（Meili 全量重建）、`gc:images`（未引用图片巡检，带白名单熔断）、`seed:shrine`（开场内容）、`seed:demo*`（演示数据）
 - 设计文档：docs/superpowers/specs/；产品文档：docs/product/；实施计划：docs/superpowers/plans/；调研与审计：docs/superpowers/research/；legacy/ 是只读参考

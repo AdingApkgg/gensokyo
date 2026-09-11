@@ -397,9 +397,16 @@ emailAndPassword: { revokeSessionsOnPasswordReset: true }   // ⚠️ 默认 fal
 | 层 | 内容 | 进 CI |
 |---|---|---|
 | api | transport 选择；三语模板齐全；未验证账号打 18 个写端点全 403、3 个内务端点 200；Google 撞车三种情形各一条；按邮箱限流 | 否 |
-| web | `/verify` 与 `/forgot` 的分步推进纯函数 | **是** |
+| web | `/verify` 与 `/forgot` 的分步推进纯函数；`ErrorText` 的「拒绝必须有出路」渲染断言 | **是** |
 | 门禁 | `check-write-guard`、`check-messages`、`check-bundle-size` | **是** |
-| e2e | 现有 40 项后接「注册 → 取码 → 验证 → 发帖」与「找回密码」 | 否 |
+| e2e | 现有 40 项后接「注册 → 取码 → 验证 → 发帖」与「未验证不能写」 | 否 |
+
+⚠️ e2e 那一格**与设计时写的不一样，且新的这对更好**：原计划第二条是「找回
+密码」，实际接的是「未验证账号发帖 → 403 `email_unverified`」。理由是这两条
+恰好夹住本里程碑的承诺——一条验正门开着（验证完能发），一条验闸真的落着
+（没验证发不出去）。而「找回密码」的关键性质（限流命中与邮箱未注册外部
+不可区分、被限流时手里那个码仍然有效）是**状态码与响应体逐字节比对**，
+e2e 这种「跑通就算过」的形状验不了它，那些断言在 `otp-rate.test.ts` 里。
 
 api 测试一律接 `apps/api/src/testing.ts` 的 `cleanupTracked`——测试打的是共享开发库，
 不是一次性容器。新建账号的清理要注意 `report.reporter_id` 是 ON DELETE SET NULL
