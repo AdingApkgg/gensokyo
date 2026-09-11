@@ -11,6 +11,22 @@
 - 存储分流：**大型资源走外链镜像**（网盘/直链/磁链，存 `resource_file.url`），**小图走自建 MinIO**（封面、头像 ≤5MB，经 `/api/uploads/image` 代理上传，URL 存 `coverUrl`/`avatarUrl`；文件头校验，不信 Content-Type）。未引用图片由 `apps/api/scripts/gc-images.ts` 白名单巡检清理
 - 生产才用容器：`deploy/compose.yml`。有状态服务**绝不用 `:latest`**；postgres/redis 固定大版本，Meilisearch 固定次版本（跨次版本需迁移 DB）
 - i18n：Paraglide JS，消息在 `apps/web/messages/{zh,ja,en}.json`，代码里一律 `m.key()`，不写裸字符串；zh 无 URL 前缀，ja/en 走 `/ja` `/en`；路由用 `localizeHref()`。**改完消息跑 `bun run check-messages`**——Paraglide 缺 key 只报警告不挡构建，中文站会冒出一句日文
+- **界面语言与内容语言是两件事，别混**（2026-09-11 落地）：
+  - 界面语言 = Paraglide（上一条）。内容语言 = 数据的属性：**原文必填并标注语言 + 可选译名叠加**（`titleOriginal` / `titleOriginalLocale` / `title jsonb`），读取时回落原文。不按语言分库、分版块或分站
+  - 取显示值只有两个入口，**都返回 `{ text, lang }` 而不是裸串**：`resolveLocalized()` 给「有原文列」的字段（标题），未命中回落**原文**而不是另一种译名；`pickLocalized()` 给「没有原文列」的字段（`description`、`tag.name`），顺序是 请求语言 → 原文语言 → 任何非空，全空返回 `null` 让调用方整段不渲染。web 侧包装在 `lib/display.ts` 的 `displayTitle` / `displayDescription`
+  - **拿到 text 就必须把 lang 挂上去**（`<h1 lang={t.lang}>`）。类型上强制返回对象就是为了让「忘记 lang」变成一次显式的 `.text`——当初改这个签名，编译器当场点出另外六处漏掉的渲染点。复合串（`#3 · 标题`、播报文案）取 `.text` 即可，那种串挂 lang 反而把数字标错语言
+  - **`lang=` 要真的换字形，字体 token 必须待在不带 `inline` 的 `@theme` 里**。`@theme inline` 会把值直接烤进 `.font-sans { font-family: … }`，变量根本不落 `:root`，`:lang(ja)` 覆盖是彻头彻尾的空操作——`--font-sans` / `--font-heading` 原本就在 inline 块里，所以 `<Markdown lang="ja">` 写了快一个里程碑、日文站整站也在用简体字形，屏幕上一个字都没变过。覆盖写在 `app.css` 的 `@layer base`（`:lang(ja)` / `:lang(en)` 改变量，不逐个选择器改 font-family）
+  - **UGC 的语言按「写它的人当时的界面语言」归档，不是按资源的原题语言**：投稿页的简介走隐藏字段 `descriptionLocale = getLocale()`（与 PostForm 的 `name="locale"` 同一做法）。此前硬写 `{ zh: … }`，日文站与英文站写的简介全被归档成中文
+  - 简繁**做成显示层转换，不开第四个内容语种**：库里永远只有一个 `zh`
+  - 补译名端点 `PATCH /kourindou/resources/:id/translations` 是**全站唯一一个非作者也能写内容的写端点**。它不需要审核队列，全部理由只有一条——**陌生人只能填空位**（判据 `isTranslationOverwrite()`，在 shared，有单测），覆写永远要 `isOwnerOrStaff`。**不要复用 `updateResourceSchema`**：那个 schema 带着 license 与 status，对陌生人开放等于把治理字段一起交出去。每次写入留一条 `translation_edit` 审计行，它同时是 `rate.ts` 的 `translation` 桶的计数依据（那个桶数的是 `moderation_log`，靠 `moderation_log_actor_idx`）
+- SEO 是多语站的**第三层**，与上面两层同等重要（`apps/web/app/lib/seo.ts`，四个纯函数都有单测）：
+  - canonical / hreflang **挂在 `root.tsx` 的 Layout，不是各路由的 `meta`**：RR 的叶子 `meta` 会整体替换 root 的，而几乎每个路由都导出了自己的 `meta`，写在 root 的 meta 里等于不生效
+  - canonical 指向**当前语言自己**，不是基准语；参数是**白名单**（只留 `page` / `floor`），筛选参数会把一百来条资源膨胀成上千个近重复页
+  - 首页照抄 Paraglide 的 `/ja/` 尾斜杠，**不做归一化**——站内首页链接用的就是 `localizeHref('/')`
+  - `sitemap.xml` / `robots.txt` 是 `routes.ts` 里**在 `:locale?` 之外**的两条路由（全站一份清单，三语放进每条的 `<xhtml:link>`）。数据源 `GET /api/sitemap`：主题走 `visibleTopicWhere()` 的表达式形式，且**只要版块主题**（资源主题的网址是 `/kourindou/:slug#discussion`）
+  - robots **必须挡 `/api`**：下载走 `/api/.../download` 且每次都记一次下载数。后台三语各挡一遍——robots 是前缀匹配，`Disallow: /dash` 盖不住 `/ja/dash`
+  - 绝对基址读 `SITE_URL`，回落请求 origin。反向代理后面配错不会报错，只会整站没有收录
+- **Meilisearch 的 `localizedAttributes` 评估过，结论是不用**（2026-09-11 实测，别再提）：把三语拆成 `title_zh` / `title_ja` 分字段、再用 `*_ja → jpn` 钉死语言，在同一组东方标题上**丢掉了三个查询**（`縁起` / `科学` / `蓬莱` 从有结果变成零结果）——lindera 的 IPA 词典把标题切成更粗的词，词中子串就搜不到了。对照实验同时表明「只拆字段、不钉语言」与现在的摊平 `titles` 数组**逐条等价**，所以拆字段本身也没有收益。查询侧同理不传 `locales`：那个参数说的是查询串的语言，而我们只知道界面语言，中文界面搜日文原名是常态
 - UI：shadcn `radix-nova`（Radix 底座，组合用 `asChild` 而非 `render`）；主题 token 在 `apps/web/app/app.css`（白玉楼 / 深夜幻想乡）
 - auth：better-auth 挂 `/api/auth/*`；SSR 取会话要手动转发 cookie（见 root loader 的 `createClient(url, { headers: { cookie } })`）；浏览器端 authClient 的 baseURL 必须在 window 存在时才拼 origin
 - 香霖堂（M3，已完成）约定：
