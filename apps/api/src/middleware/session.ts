@@ -10,6 +10,11 @@ export type Actor = {
   id: string
   name: string
   email: string
+  /**
+   * 来自 better-auth 的 session.user，**不查库也不加列**。
+   * 「验证后才能写」的判据（见 middleware/require.ts 的 requireVerified）。
+   */
+  emailVerified: boolean
   /** 稳定标识：进 /u/:handle 与正文里的 @ */
   handle: string
   /** null = 还没自选过。sessionMiddleware 已经读了整行，别在 /me 里再查一次 */
@@ -43,6 +48,7 @@ export const sessionMiddleware = createMiddleware<AppEnv>(async (c, next) => {
     id: session.user.id,
     name: session.user.name,
     email: session.user.email,
+    emailVerified: session.user.emailVerified,
     handle: row.handle,
     handleSetAt: row.handleSetAt,
     role: row.role,

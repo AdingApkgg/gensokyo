@@ -32,6 +32,7 @@ export const me = new Hono<AppEnv>()
       id,
       name,
       email,
+      emailVerified,
       handle,
       role,
       approvedResourceCount,
@@ -42,6 +43,7 @@ export const me = new Hono<AppEnv>()
         id,
         name,
         email,
+        emailVerified,
         handle,
         /** null = 还没自选过，前端据此决定要不要弹认领 */
         handleSetAt: actor.handleSetAt?.toISOString() ?? null,
