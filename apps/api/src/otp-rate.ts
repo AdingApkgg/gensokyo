@@ -43,20 +43,26 @@ import type { OtpPurpose } from './mail/templates/otp'
  * 进 CI）是刻意的：它与 `verification` 表的行形状耦合，搬过去等于把一个概念
  * 劈成两个包，读的人要跳两处才看得全。这里接受「测试不进 CI」。
  *
- * 挂载点**分两处**，不是同一个（round 2 之后）：`email-verification` 挂
- * `auth.ts` 的 `hooks.before`，命中限流直接 throw 429——Step 1 探针证实
- * `hooks.before` 里 `ctx.body` 对 `/email-otp/send-verification-otp` 是
- * **已解析好的请求体**，不需要 `ctx.request?.clone().json()` 兜底。
- * `forget-password` **不能**走同一条路：`hooks.before` 里 throw 429 会让
- * 「限流命中」与「邮箱未注册」变成两种外部可分辨的响应，等于把限流层
- * 变成一个注册预言机（round 1 review 发现，详见 `auth.ts` 里两处注释与
- * `task-12-report.md`）。所以它挂在 `emailOTP` 配置的 `sendVerificationOTP`
- * 回调里，命中限流时静默 `return`（不发信、不抛错），统一回 200。
+ * 挂载点**只有一处**：`auth.ts` 的 `hooks.before`（round 3 之后）。两种用途的
+ * 判断都在那里，区别只在命中限流时怎么回应——`email-verification` 抛 429，
+ * `forget-password` 短路成与「邮箱未注册」一模一样的 200。**判断必须早于
+ * `resolveOTP`**，这一条是 round 3 的 Critical 换来的，不是风格偏好：
+ * `resolveOTP`（`email-otp/routes.mjs:31`）在端点里**无条件**先插一行验证码，
+ * 而 `consumeVerificationValue`（`internal-adapter.mjs:818-860`）永远只认
+ * 「该 identifier 最新的一行」并在消费后 `deleteMany` 掉全部行。任何晚于
+ * `resolveOTP` 的限流判断，被拒时都会留下一行**从未发出去却更新的**码，把
+ * 用户手里那封信直接作废（详见 `otp-rate.test.ts` 的「限流不能毁掉用户手里
+ * 的验证码」）。挡在插入之前，这一整类问题不存在：没有多余的行，小时配额
+ * 数的也重新是「真发出去的信」而不是「被拒的尝试」。
  *
- * 回调本身是被插件用 `runInBackgroundOrAwait` 调用的——那里即使抛错也
- * 未必能传回客户端，这是 `email-verification` 不走回调、而是走
- * `hooks.before` 抛真 429 的原因（它需要给 `/verify` 页的重发按钮传回
- * 真实的失败反馈）。
+ * Step 1 探针证实 `hooks.before` 里 `ctx.body` 对这几条路径都是**已解析好的
+ * 请求体**，不需要 `ctx.request?.clone().json()` 兜底。
+ *
+ * 「命中限流不能抛错」这条对 `forget-password` 依然成立（round 1 的注册
+ * 预言机）：better-auth 对**未注册**邮箱永远回 200 防枚举，我们要是回 429，
+ * 连打两次的状态码序列 `(200,429)` 与 `(200,200)` 就直接告诉攻击者这个邮箱
+ * 有没有账号。所以短路返回的是端点自己那个 `{ success: true }`，外部完全
+ * 不可区分。`email-verification` 保持 429 的理由见 `auth.ts` 的注释。
  */
 
 /** 冷却窗：防连点与重复提交 */
@@ -129,30 +135,42 @@ export async function assertOtpRate(
   )
 }
 
+export type OtpRateTarget = { purpose: OtpPurpose; email: string }
+
 /**
- * 与 `assertOtpRate` 判断逻辑相同，但专给**调用时这次的 verification 行
- * 已经被 `resolveOTP` 插入**的场景用——better-auth 的 `sendVerificationOTP`
- * 回调正是这样：`resolveOTP` 在端点内无条件跑在回调之前（我们没配
- * `resendStrategy: 'reuse'`，所以每次调用都插一行新的，不管最终发不发
- * 信），等回调拿到 `{ email, otp, type }` 时，这次请求自己的那一行早就
- * 落库了。
+ * 「这个请求属于哪个限流桶」——纯函数，`auth.ts` 的 `hooks.before` 唯一的
+ * 分派依据。不该限流的返回 `null`。
  *
- * 如果这里直接调用 `assertOtpRate`，第一次请求也会把自己刚插入的那一行
- * 数进去，`cooldownHits` 恒 ≥ 1，`decideOtpRate` 永远判「限流」——这个
- * 坑是真摔过的：round 2 修注册预言机时，新写的「状态码序列一致」测试
- * 通过了，但「两次请求只发一封信」断言却拿到 0 封（第一封也被吞了），
- * 改用这个函数、把两个计数各减 1（减掉这次请求自己刚插的那一行）之后
- * 才符合预期。
+ * 抽成纯函数是因为**漏掉一条路径不会报错，只会静默放行**：发**同一种**
+ * forget-password 码的端点有三条（新端点、deprecated 别名、以及
+ * `send-verification-otp` 带 `type: 'forget-password'`），它们写同一种
+ * identifier、共享同一个发信回调。此前限流挂在回调里时，这三条天然都被
+ * 覆盖；改挂 `hooks.before` 之后覆盖面变成一份手写的路径清单，于是需要
+ * `otp-rate.test.ts` 里那组表驱动断言把它钉住。
  *
- * 只在**明确知道本次请求已经插过一行**的调用点用这个；别的地方（包括
- * `hooks.before` 那种插入还没发生的场景）继续用 `assertOtpRate`。
+ * ⚠️ 这里**不减 1**。限流判断跑在 `resolveOTP` 插行之前，本次请求自己那行
+ * 还不存在——曾经有过一个 `assertOtpRateExcludingCurrent`（把两个计数各减
+ * 一）专门伺候「回调里判断」那个挂载点，判断挪到插入之前以后，那个补偿就
+ * 连同它要补偿的问题一起没有了。要是哪天又把判断挪到插入之后，第一次请求
+ * 会被自己那行误判成限流，一封信都发不出去。
  */
-export async function assertOtpRateExcludingCurrent(
-  purpose: OtpPurpose,
-  email: string,
-): Promise<OtpRateResult> {
-  return decideOtpRate(
-    (await countOtpRows(purpose, email, OTP_COOLDOWN_SECONDS)) - 1,
-    (await countOtpRows(purpose, email, 3600)) - 1,
+export function otpRateTarget(
+  path: string | undefined,
+  body: unknown,
+): OtpRateTarget | null {
+  const b = body as { email?: unknown; type?: unknown } | undefined
+  const email = typeof b?.email === 'string' ? b.email : null
+  if (!email) return null
+  if (
+    path === '/email-otp/request-password-reset' ||
+    path === '/forget-password/email-otp'
   )
+    return { purpose: 'forget-password', email }
+  if (path === '/email-otp/send-verification-otp') {
+    // sign-in / change-email 两种类型我们不用（disableSignUp + 独立端点），
+    // 不限流也就不会给它们发信
+    if (b?.type === 'email-verification' || b?.type === 'forget-password')
+      return { purpose: b.type, email }
+  }
+  return null
 }

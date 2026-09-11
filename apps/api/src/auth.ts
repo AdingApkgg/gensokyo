@@ -12,7 +12,7 @@ import { emailOTP } from 'better-auth/plugins/email-otp'
 import { takeoverIfUnverified } from './auth/arbitrate'
 import { sendMail } from './mail'
 import { renderOtpMail } from './mail/templates/otp'
-import { assertOtpRate, assertOtpRateExcludingCurrent } from './otp-rate'
+import { assertOtpRate, otpRateTarget } from './otp-rate'
 import { registrationOpen } from './site-config'
 
 /** 10 分钟。默认的 5 分钟对「切到手机收信再切回来」偏紧 */
@@ -62,48 +62,12 @@ export const auth = betterAuth({
        */
       disableSignUp: true,
       sendVerificationOTP: async ({ email, otp, type }, ctx) => {
-        // 只有这两种类型会被我们触发；别的类型不该发信
+        // 只有这两种类型会被我们触发；别的类型不该发信。
+        // ⚠️ **限流判断不在这里**——它在下面的 hooks.before，必须早于
+        // `resolveOTP` 写行。回调被调用时这次请求的验证码行早就落库了，
+        // 在这里拒发只会留下一行没人收到过的「更新的」码，把用户手里那封
+        // 信作废。见 otp-rate.ts 顶部与 hooks.before 的注释
         if (type !== 'email-verification' && type !== 'forget-password') return
-        /**
-         * ⚠️ forget-password 的限流判断**必须**放在这里、而不是
-         * `hooks.before` 里 throw 429——原因不是「回调抛错传不回客户端」
-         * 那条老理由（虽然那条也成立），是一个更根本的问题：
-         *
-         * `resolveOTP` 给**已注册**邮箱留下一行持久的 verification 行，
-         * 但 better-auth 自己的端点代码对**未注册**邮箱会把刚插入的行
-         * 立刻删掉（防枚举，`routes.mjs` 的 `request-password-reset` /
-         * `forget-password/email-otp` 都是）。如果限流命中时在
-         * hooks.before 里 throw 429，「被限流」（说明这个邮箱之前真的
-         * 收到过一次信，即已注册）和「邮箱不存在」（永远 200）就变成两种
-         * 外部可分辨的响应——连打两次同一个地址，状态码序列
-         * `(200,429)` 还是 `(200,200)` 直接告诉攻击者这个邮箱有没有
-         * 账号。这是限流层自己引入的新洞：identifier 格式修对之前，
-         * 计数器是哑的，不保护也不泄露；修对之后计数器第一次真的开始
-         * 数到已注册邮箱的行，副作用是让这条差异变得可观测。
-         *
-         * 挂在这里、命中限流时直接 `return`（不发信、不抛错），endpoint
-         * 该返回什么还返回什么——统一 200 `{ success: true }`，「被限流」
-         * 与「邮箱不存在」从外部彻底不可区分，轰炸防护也没削弱（信确实
-         * 没发出去）。详见 otp-rate.test.ts 的
-         * 「找回密码限流不能变成注册预言机」与 task-12-report.md。
-         *
-         * `email-verification` **不**搬到这里、继续留在 hooks.before 里
-         * throw 429——见下面 hooks.before 的注释。
-         *
-         * ⚠️ 这里必须用 `assertOtpRateExcludingCurrent`，不能用
-         * `assertOtpRate`：`resolveOTP` 在这个回调被调用之前就已经把
-         * 这次请求自己的验证码行插进去了，直接数会把「自己这一行」也算
-         * 进冷却窗，导致连第一次请求都被误判成限流（连一封信都发不出
-         * 去）。见 otp-rate.ts 里 `assertOtpRateExcludingCurrent` 的
-         * 注释。
-         */
-        if (type === 'forget-password') {
-          const verdict = await assertOtpRateExcludingCurrent(
-            'forget-password',
-            email,
-          )
-          if (!verdict.ok) return
-        }
         const headers = ctx?.request?.headers
         const locale = pickRequestLocale(
           headers?.get(LOCALE_HEADER),
@@ -118,45 +82,62 @@ export const auth = betterAuth({
 
   hooks: {
     /**
-     * `email-verification` 类型的**按邮箱**限流，只挡这一种类型。
-     * `forget-password` 的限流判断在上面 `emailOTP` 配置的
-     * `sendVerificationOTP` 回调里，**不**在这里——原因是 review round 1
-     * 发现的「注册预言机」：`hooks.before` 里 throw 429 会让「限流命中」
-     * （邮箱已注册但短时间内又要了一次）与「邮箱未注册」（better-auth
-     * 自己永远回 200 防枚举）产生两种外部可分辨的状态码，连打两次就能
-     * 反推邮箱是否注册。挂回调里、命中限流时静默不发信但仍返回统一的
-     * 200，才能让两种情况从外部彻底不可区分。完整推导见
-     * `sendVerificationOTP` 回调那段注释与 task-12-report.md。
+     * 发码的**按邮箱**限流，两种用途都挂在这里，**唯一**的挂载点。
      *
-     * `email-verification` 保留在这里、继续 429，是因为它**没有同一个
-     * 洞**：`/api/auth/sign-up/email` 对已注册邮箱本来就直接抛
-     * `USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL`（`sign-up.mjs:212`）——单次
-     * 请求、不需要计时或连打两次，就已经把「这个邮箱有没有账号」泄露给
-     * 任何人了。email-verification 端点关不关这条限流的 429，都不会让
-     * 攻击者多拿到或少拿到这个事实。而 429 对 `/verify` 页的重发按钮是
-     * 有用的真实反馈，所以这条路径保持不变。
+     * ⚠️ **必须挡在 `resolveOTP` 之前**，这是 round 3 的 Critical：
+     * `resolveOTP` 在端点里无条件先插一行验证码，而
+     * `consumeVerificationValue` 只认「该 identifier 最新的一行」并在消费
+     * 时删光全部行。晚于插入的限流判断被拒时会留下一行没人收到过的、更新
+     * 的码，用户输信箱里那个旧码 → 匹配的是新行 → `INVALID_OTP` + 两行
+     * 一起删光，人被卡死在「验证码错误」上。`hooks.before` 跑在 endpoint
+     * handler 之前，所以短路时那一行根本不会被写。附带好处：小时配额数的
+     * 重新是「真发出去的信」，而不是「被拒的尝试」。
      *
-     * 挂在 `hooks.before` 而不是 `ctx.request?.clone().json()` 或退回
-     * 插件回调：Step 1 探针已证实 `ctx.body` 在这里对
-     * `/email-otp/send-verification-otp` 是已解析好的请求体（见
-     * otp-rate.ts 顶部注释）。
+     * 命中限流后的回应按用途分两种，**这个差异是刻意的**：
+     *
+     * - `forget-password` → **短路成与端点自己一模一样的 200
+     *   `{ success: true }`**，绝不能抛错。better-auth 对未注册邮箱永远回
+     *   200 防枚举（`routes.mjs` 里 `findUserByEmail` 落空就把行删掉再回
+     *   200），我们要是回 429，连打两次的状态码序列 `(200,429)` 与
+     *   `(200,200)` 就成了一个注册预言机（round 1 review 发现）。
+     *   dispatch 支持这种短路：`hooks.before` 返回一个**不含 `context` 键**
+     *   的对象时，`runBeforeHooks` 直接把它当响应返回、endpoint handler
+     *   完全不跑（`better-auth/dist/api/dispatch.mjs` 的 `runBeforeHooks`
+     *   末尾与 `dispatchAuthEndpoint` 的 `else if (before)` 分支），再经
+     *   `toResponse` 变成 200 + `application/json`——与端点自己
+     *   `ctx.json({ success: true })` 的产物逐字节一致。
+     *
+     * - `email-verification` → 继续 429。它**没有同一个洞**：
+     *   `/api/auth/sign-up/email` 对已注册邮箱本来就直接抛
+     *   `USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL`（`sign-up.mjs:212`，因为我们
+     *   既没开 `requireEmailVerification` 也没关 `autoSignIn`）——单次请求
+     *   就泄露了同一个事实，这条 429 不多泄露什么；而 429 是 `/verify` 页
+     *   重发按钮唯一的真实反馈。⚠️ **这条决策以那个泄露为前提**：将来谁把
+     *   sign-up 的枚举洞堵上（改用统一 200 或强制 `requireEmailVerification`），
+     *   **必须同时把这里的 429 也改成上面那种静默短路**，否则
+     *   `/email-otp/send-verification-otp` 带 `type: 'email-verification'`
+     *   仍然是 `(200,429)` vs `(200,200)`，堵洞只堵了一半。
+     *
+     * 分派用 `otpRateTarget()` 这个纯函数：发 forget-password 码的路径有
+     * **三条**（新端点 / deprecated 别名 / `send-verification-otp` 带
+     * `type`），漏一条不会报错，只会静默放行。
      *
      * ⚠️ 这是 better-auth 的错误信封，**不是 `fail()` 那套**——
      * `ERROR_CODES` 里的 `rate_limited` 在这里用不上。前端在 authClient
      * 侧按 `err.code` 查文案。两套错误码体系刻意不统一。
      */
     before: createAuthMiddleware(async (ctx) => {
-      if (ctx.path !== '/email-otp/send-verification-otp') return
-      const type = (ctx.body as { type?: string })?.type
-      if (type !== 'email-verification') return
-      const email = (ctx.body as { email?: string })?.email
-      if (!email) return
-      const verdict = await assertOtpRate('email-verification', email)
+      const target = otpRateTarget(ctx.path, ctx.body)
+      if (!target) return
+      const verdict = await assertOtpRate(target.purpose, target.email)
       if (verdict.ok) return
-      throw new APIError('TOO_MANY_REQUESTS', {
-        code: 'RATE_LIMITED',
-        message: `请等待 ${verdict.retryAfterSeconds} 秒后再试`,
-      })
+      if (target.purpose === 'email-verification')
+        throw new APIError('TOO_MANY_REQUESTS', {
+          code: 'RATE_LIMITED',
+          message: `请等待 ${verdict.retryAfterSeconds} 秒后再试`,
+        })
+      // 端点自己那个防枚举响应，逐字段照抄
+      return { success: true }
     }),
   },
 
