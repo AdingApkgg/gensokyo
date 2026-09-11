@@ -1,8 +1,8 @@
 import { afterAll, describe, expect, test } from 'bun:test'
 import { db, schema } from '@gensokyo/db'
-import { cleanupTracked, trackResource, trackUser } from '@gensokyo/db/testing'
 import { eq } from 'drizzle-orm'
 import { app } from './app'
+import { cleanupTracked, trackResource, trackUser } from './testing'
 
 /**
  * sitemap 的数据源。它是**匿名可读**的，所以这组用例钉住的只有一条：

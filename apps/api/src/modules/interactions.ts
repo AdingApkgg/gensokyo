@@ -5,6 +5,7 @@ import { Hono } from 'hono'
 import { fail, validate } from '../errors'
 import { requireAuth } from '../middleware/require'
 import type { AppEnv } from '../middleware/session'
+import { syncResource } from '../search'
 
 const { resource, rating, favorite } = schema
 
@@ -68,6 +69,8 @@ export const interactions = new Hono<AppEnv>()
           .where(eq(resource.id, row.id))
       })
 
+      // rating 排序读的是索引里的均分
+      void syncResource(row.id)
       return c.json({ score })
     },
   )

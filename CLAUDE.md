@@ -36,6 +36,7 @@
   - zod 的 `.partial()` **不移除 `.default()`**——更新用的 schema 必须逐字段重建，否则没传的字段会被写成空值
   - 校验用 `validate()` 而非裸 `zValidator`，`:id` 路由要挂 `entityIdParam`，否则非 UUID 会 500 逃出错误信封
   - 前端错误按 `error.code` 查 Paraglide 文案，api 不返回人类可读消息
+  - **搜索（2026-09-11）**：Meili 的一切只在 `apps/api/src/search.ts`；**可见性只在 Postgres**——Meili 只给 id 与顺序，回库取行必带 `publicOnly`。资源的每个写点在事务 resolve 之后 `void syncResource(id)`，现有九处：PATCH / submit / status / license / download（`kourindou/index.ts`）、评分（`interactions.ts`）、审核（`moderation.ts`）、回收站删除与恢复（`admin.ts`）；`POST /resources` 不调（新行恒为 draft）。**新增任何 resource 写点必须回答「同步了吗」**——没有门禁能抓，漏掉的表现是「最多陈旧到夜间 `reindex`」。Meili 挂了列表端点降级 ILIKE，响应头 `x-search-engine: meili|pg` 是运维可观测点。api 测试一律从 `apps/api/src/testing.ts` 拿 `cleanupTracked`（它清完库顺手删 Meili 文档），直接引 `/db/testing` 的会给开发索引留僵尸文档
 - 博丽神社（M4，已完成）约定：
   - **可见性只有一个来源**：`apps/api/src/modules/content/visibility.ts` 的 `visibleTopicWhere()`（表达式，给列表路径）与 `loadVisibleTopic()`（函数，给取单行路径）。只有函数不够——列表路径（最新流 / `/u/:handle` / 通知收件箱）必然各写一遍 WHERE，那就是漂移的源头。**新增任何能返回 `post` 行或 `topic.title` 的端点，必须回答「它用的是哪一份 `visibleTopicWhere()`」**
   - `content/post.ts` 的函数一律收 `TopicView` 而非裸 `topicId`，让「没过闸就拿不到参数」成为编译期事实

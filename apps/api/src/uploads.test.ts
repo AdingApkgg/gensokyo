@@ -1,6 +1,5 @@
 import { afterAll, describe, expect, test } from 'bun:test'
 import { db, schema } from '@gensokyo/db'
-import { cleanupTracked, trackUser } from '@gensokyo/db/testing'
 import { eq } from 'drizzle-orm'
 import { app } from './app'
 import {
@@ -9,6 +8,7 @@ import {
   UPLOAD_LIMIT_IP,
 } from './modules/uploads'
 import { deleteObject } from './storage'
+import { cleanupTracked, trackUser } from './testing'
 
 /** 最小的合法 PNG（1x1 透明像素） */
 const PNG = Uint8Array.from([

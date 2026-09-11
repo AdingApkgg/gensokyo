@@ -13,6 +13,7 @@ import { entityIdParam, fail, userIdParam, validate } from '../errors'
 import { requireRole } from '../middleware/require'
 import type { AppEnv } from '../middleware/session'
 import { notify } from '../notify'
+import { syncResource } from '../search'
 import { invalidateConfig } from '../site-config'
 
 const { resource, user, userProfile, moderationLog, siteConfig } = schema
@@ -243,6 +244,8 @@ export const admin = new Hono<AppEnv>()
         }
       })
 
+      // soft 与 purge 都落到「删文档」：重读时行已软删或已不存在
+      void syncResource(id)
       return c.json({ mode, id })
     },
   )
@@ -275,6 +278,7 @@ export const admin = new Hono<AppEnv>()
         reason: '从回收站恢复',
       })
     })
+    void syncResource(id)
     return c.json({ restored: true })
   })
 

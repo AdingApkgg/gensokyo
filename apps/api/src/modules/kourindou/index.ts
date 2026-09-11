@@ -17,6 +17,12 @@ import { isOwnerOrStaff, requireAuth } from '../../middleware/require'
 import { type AppEnv, canAutoPublish } from '../../middleware/session'
 import { notify } from '../../notify'
 import { assertRate } from '../../rate'
+import {
+  buildFilter,
+  buildSort,
+  searchResources,
+  syncResource,
+} from '../../search'
 import { autoPublishThreshold } from '../../site-config'
 import { loadVisibleTopicByResourceSlug } from '../content/visibility'
 import { makeSlug } from './slug'
@@ -35,14 +41,74 @@ export const kourindou = new Hono<AppEnv>()
   // ---------------------------------------------------------------- 读
   .get('/resources', validate('query', listResourcesQuerySchema), async (c) => {
     const q = c.req.valid('query')
+    const term = q.q || undefined
+    // 有 q 默认相关度，无 q 默认最新；无 q 时 relevance 等同 newest
+    const sort = q.sort ?? (term ? 'relevance' : 'newest')
+
+    // 列表不 select description：长文走 TOAST，列表页用不上
+    const listColumns = {
+      id: resource.id,
+      slug: resource.slug,
+      titleOriginal: resource.titleOriginal,
+      titleOriginalLocale: resource.titleOriginalLocale,
+      title: resource.title,
+      kind: resource.kind,
+      license: resource.license,
+      coverUrl: resource.coverUrl,
+      circleId: resource.circleId,
+      circleNameRaw: resource.circleNameRaw,
+      downloadCount: resource.downloadCount,
+      ratingSum: resource.ratingSum,
+      ratingCount: resource.ratingCount,
+      createdAt: resource.createdAt,
+    }
+
+    if (term) {
+      /**
+       * Meili 只给 id 与顺序。回库取行必带 publicOnly：索引哪怕残留已下架
+       * 资源的文档（同步失败、还没到夜间重建），也漏不出去。
+       * Meili 挂了就降级到下面的 ILIKE——搜索变差，不变没。
+       */
+      const hit = await searchResources({
+        q: term,
+        filter: buildFilter(q),
+        sort: buildSort(sort),
+        page: q.page,
+        pageSize: q.pageSize,
+      }).catch((err) => {
+        console.error('[search] 查询失败，降级 ILIKE', err)
+        return null
+      })
+      if (hit) {
+        c.header('x-search-engine', 'meili')
+        // drizzle 对空数组的 inArray 会生成非法 SQL
+        const rows = hit.ids.length
+          ? await db
+              .select(listColumns)
+              .from(resource)
+              .where(and(publicOnly, inArray(resource.id, hit.ids)))
+          : []
+        const byId = new Map(rows.map((r) => [r.id, r]))
+        // 按 Meili 的顺序重排；回库缺的行（索引陈旧）直接丢
+        const items = hit.ids.flatMap((id) => byId.get(id) ?? [])
+        return c.json({
+          items,
+          page: q.page,
+          pageSize: q.pageSize,
+          total: hit.total,
+        })
+      }
+      c.header('x-search-engine', 'pg')
+    }
+
     const filters = [publicOnly]
     if (q.kind) filters.push(eq(resource.kind, q.kind))
     if (q.license) filters.push(eq(resource.license, q.license))
     if (q.circleId) filters.push(eq(resource.circleId, q.circleId))
     if (q.uploaderId) filters.push(eq(resource.uploaderId, q.uploaderId))
-    if (q.q) {
+    if (term) {
       filters.push(
-        sql`(${resource.titleOriginal} ilike ${`%${q.q}%`} or ${resource.title}::text ilike ${`%${q.q}%`})`,
+        sql`(${resource.titleOriginal} ilike ${`%${term}%`} or ${resource.title}::text ilike ${`%${term}%`})`,
       )
     }
     if (q.tag?.length) {
@@ -52,33 +118,17 @@ export const kourindou = new Hono<AppEnv>()
     }
 
     const order =
-      q.sort === 'downloads'
+      sort === 'downloads'
         ? desc(resource.downloadCount)
-        : q.sort === 'rating'
+        : sort === 'rating'
           ? desc(sql`case when ${resource.ratingCount} = 0 then 0
               else ${resource.ratingSum}::float / ${resource.ratingCount} end`)
           : desc(resource.createdAt)
 
     const where = and(...filters)
     const [items, [count]] = await Promise.all([
-      // 列表不 select description：长文走 TOAST，列表页用不上
       db
-        .select({
-          id: resource.id,
-          slug: resource.slug,
-          titleOriginal: resource.titleOriginal,
-          titleOriginalLocale: resource.titleOriginalLocale,
-          title: resource.title,
-          kind: resource.kind,
-          license: resource.license,
-          coverUrl: resource.coverUrl,
-          circleId: resource.circleId,
-          circleNameRaw: resource.circleNameRaw,
-          downloadCount: resource.downloadCount,
-          ratingSum: resource.ratingSum,
-          ratingCount: resource.ratingCount,
-          createdAt: resource.createdAt,
-        })
+        .select(listColumns)
         .from(resource)
         .where(where)
         .orderBy(order)
@@ -319,6 +369,7 @@ export const kourindou = new Hono<AppEnv>()
         return r
       })
 
+      void syncResource(id)
       return c.json({ resource: updated })
     },
   )
@@ -424,6 +475,13 @@ export const kourindou = new Hono<AppEnv>()
         return r
       })
 
+      /**
+       * **第十处同步点。** 译名直接进 Meili 的 `titles` / `descriptions`，
+       * 补完不同步的话，用户刚补的中文名在搜索里要到夜间 `reindex` 才生效
+       * ——而他补译名的动机十有八九正是「刚才搜不到」。
+       * 在事务 resolve 之后调，读的是已提交状态。
+       */
+      void syncResource(id)
       return c.json({ resource: updated })
     },
   )
@@ -460,6 +518,7 @@ export const kourindou = new Hono<AppEnv>()
       .where(eq(resource.id, id))
       .returning({ status: resource.status })
 
+    void syncResource(id)
     return c.json({ status: updated?.status ?? to, autoPublished: auto })
   })
 
@@ -534,6 +593,7 @@ export const kourindou = new Hono<AppEnv>()
         }
       })
 
+      void syncResource(id)
       return c.json({ status: to })
     },
   )
@@ -575,6 +635,7 @@ export const kourindou = new Hono<AppEnv>()
         })
       })
 
+      void syncResource(id)
       return c.json({ license: input.license })
     },
   )
@@ -694,5 +755,7 @@ export const kourindou = new Hono<AppEnv>()
       })
     })
 
+    // downloads 排序读的是索引里的计数
+    void syncResource(row.id)
     return c.redirect(file.url, 302)
   })

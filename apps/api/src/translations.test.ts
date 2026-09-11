@@ -1,8 +1,8 @@
 import { afterAll, describe, expect, test } from 'bun:test'
 import { db, schema } from '@gensokyo/db'
-import { cleanupTracked, trackResource, trackUser } from '@gensokyo/db/testing'
 import { and, eq } from 'drizzle-orm'
 import { app } from './app'
+import { cleanupTracked, trackResource, trackUser } from './testing'
 
 /**
  * 补译名端点。它是全站唯一一个**非作者也能写内容**的写端点，所以这组测试
