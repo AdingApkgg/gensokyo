@@ -89,12 +89,20 @@ export const auth = betterAuth({
      * ⚠️ 这是 better-auth 的错误信封，**不是 `fail()` 那套**——
      * `ERROR_CODES` 里的 `rate_limited` 在这里用不上。前端在 authClient
      * 侧按 `err.code` 查文案。两套错误码体系刻意不统一。
+     *
+     * ⚠️ `/forget-password/email-otp` 是 better-auth **默认仍会注册**的
+     * deprecated 别名（`email-otp/index.mjs` 里 `forgetPasswordEmailOTP`
+     * 和 `requestPasswordResetEmailOTP` 一起无条件挂载），内部调用同一个
+     * `resolveOTP(..., "forget-password")`、写同一种 identifier——漏掉它
+     * 的话限流形同虚设：自查时用一次性脚本连打两次都拿到 200，
+     * `otp-rate.test.ts` 里有一条测试钉住这一点。
      */
     before: createAuthMiddleware(async (ctx) => {
       const purpose =
         ctx.path === '/email-otp/send-verification-otp'
           ? ((ctx.body as { type?: string })?.type as OtpPurpose | undefined)
-          : ctx.path === '/email-otp/request-password-reset'
+          : ctx.path === '/email-otp/request-password-reset' ||
+              ctx.path === '/forget-password/email-otp'
             ? ('forget-password' as const)
             : undefined
       if (!purpose) return
