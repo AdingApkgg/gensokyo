@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Button } from '~/components/ui/button'
 import { authClient } from '~/lib/auth-client'
 import { m } from '~/paraglide/messages'
@@ -18,9 +19,28 @@ import { localizeHref } from '~/paraglide/runtime'
  * 待确认的 API 面。
  */
 export function GoogleButton({ next }: { next: string | null }) {
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState(false)
   const callbackURL = next
     ? `${localizeHref('/verify')}?next=${encodeURIComponent(next)}`
     : localizeHref('/verify')
+
+  async function onClick() {
+    setPending(true)
+    setError(false)
+    const { error: err } = await authClient.signIn.social({
+      provider: 'google',
+      callbackURL,
+    })
+    // 成功时 better-auth 会把整页导航到 Google 的授权页，这条分支不需要
+    // 收尾 pending；失败时必须收尾，否则按钮从此死掉——同一份失败也不能
+    // 吞掉：provider 没配好、网络抖动都会走到这里，不报出来用户只会看到
+    // 点了没反应
+    if (err) {
+      setPending(false)
+      setError(true)
+    }
+  }
 
   return (
     <>
@@ -33,9 +53,8 @@ export function GoogleButton({ next }: { next: string | null }) {
         type="button"
         variant="outline"
         className="w-full"
-        onClick={() =>
-          authClient.signIn.social({ provider: 'google', callbackURL })
-        }
+        onClick={onClick}
+        disabled={pending}
       >
         <svg
           viewBox="0 0 18 18"
@@ -62,6 +81,11 @@ export function GoogleButton({ next }: { next: string | null }) {
         </svg>
         {m.auth_continue_google()}
       </Button>
+      {error && (
+        <p role="alert" className="mt-2 text-sm text-destructive">
+          {m.auth_error_generic()}
+        </p>
+      )}
     </>
   )
 }
