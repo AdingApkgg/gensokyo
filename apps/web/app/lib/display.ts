@@ -2,28 +2,46 @@ import type {
   BoardSlug,
   LicenseStatus,
   LocalizedText,
+  LocalizedValue,
   ReportReason,
   ResourceKind,
 } from '@gensokyo/shared'
-import { resolveLocalized } from '@gensokyo/shared'
+import { pickLocalized, resolveLocalized } from '@gensokyo/shared'
 import { m } from '~/paraglide/messages'
 import { getLocale } from '~/paraglide/runtime'
 
 /**
  * 多语显示值。api 原样返回 jsonb，回落在这里做——
  * 服务端不知道请求者要哪种语言（同一份数据三种视图）。
+ *
+ * 两个函数都返回 `{ text, lang }` 而不是裸字符串：拿到值的地方必须同时
+ * 拿到「它是哪种语言」，否则日文原名会被按简体字形渲染。渲染处写
+ * `<p lang={v.lang}>{v.text}</p>`，`:lang()` 的字体栈在 app.css。
  */
 export function displayTitle(r: {
   titleOriginal: string
   titleOriginalLocale: string
   title: LocalizedText | null
-}) {
+}): LocalizedValue {
   return resolveLocalized(
     r.titleOriginal,
     r.titleOriginalLocale,
     r.title,
     getLocale(),
   )
+}
+
+/**
+ * 简介没有「原文」列——它本身就只存在于 `description` 这张多语表里，
+ * 所以缺当前语言时要往下找，而不是像标题那样回落到某个必填的原文。
+ *
+ * 返回 null 表示这条资源压根没有简介，调用方整段不渲染。
+ */
+export function displayDescription(r: {
+  titleOriginalLocale: string
+  description: LocalizedText | null
+}): LocalizedValue | null {
+  return pickLocalized(r.description, r.titleOriginalLocale, getLocale())
 }
 
 export const kindLabel = (k: ResourceKind) =>

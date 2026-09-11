@@ -13,9 +13,6 @@ html.dark {
 }
 
 @theme inline {
-  --font-sans: "Geist Variable", "Noto Sans SC", "PingFang SC",
-    "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
-  --font-heading: "Noto Serif SC", "Songti SC", "SimSun", serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -67,6 +64,15 @@ html.dark {
    ease-in-out，循环接缝处会出现肉眼可见的「抽泵」。不要为它立一个条目，
    否则一定有人拿去当通用缓动使。 */
 @theme {
+  /* 字体栈 —— **必须在这个不带 inline 的 @theme 里**，与三材同理：
+     `@theme inline` 会把值直接烤进 `.font-sans { font-family: … }`，变量
+     根本不落到 :root，于是下面 `:lang()` 里的覆盖是彻头彻尾的空操作。
+     它们原本就在 inline 块里，所以在此之前 `<Markdown lang="ja">` 写了
+     快一个里程碑，屏幕上一个字形都没变过。 */
+  --font-sans: "Geist Variable", "Noto Sans SC", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Noto Serif SC", "Songti SC", "SimSun", serif;
+
   /* 墨·洇：Lucas–Washburn 毛细渗透 L ∝ √t 的拟合（RMSE 0.0001）。
      前 10% 时间走完 32%、前 25% 走完 50%，之后是极长的尾——落笔猛、越洇越慢。
      用于一切**出现类**的颜色/不透明度：hover 底色、ring 变色、focus ring、badge、tooltip。 */
@@ -280,6 +286,27 @@ html.dark {
   h2,
   h3 {
     font-family: var(--font-heading);
+  }
+
+  /* 汉字按语言换字形。
+     zh 与 ja 共用大量码位而字形不同（直・海・骨・今・強），简体字体渲染
+     日文原名是**错字**，不是风格差异。这里覆盖的是变量而不是 font-family：
+     `.font-sans` / `.font-heading` / h1–h3 / .markdown 全都读 var()，覆盖一处
+     整棵子树跟着换，不必逐个选择器追。
+
+     两种触发路径都靠它：`<html lang="ja">`（日文站全站）与中文页上某一个
+     `lang="ja"` 的标题（`displayTitle()` 回落到原文时会带上）。
+     root.tsx 早就在下载 Noto Sans/Serif JP 了——在此之前那是纯浪费。
+
+     不给 en 覆盖 --font-sans：Geist 已在栈首，拉丁字母本就轮不到 CJK 字体。 */
+  :lang(ja) {
+    --font-sans: "Geist Variable", "Noto Sans JP", "Hiragino Sans",
+      "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, ui-sans-serif,
+      system-ui, sans-serif;
+    --font-heading: "Noto Serif JP", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  }
+  :lang(en) {
+    --font-heading: ui-serif, Georgia, "Noto Serif SC", serif;
   }
 
   /* 背景层：同人站传统是「背景图 + 半透明内容卡」（TouhouDB、旧 thdl 都如此）。

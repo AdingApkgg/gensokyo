@@ -257,7 +257,7 @@ export default function ReviewQueue({ loaderData }: Route.ComponentProps) {
    * 播报文案要的标题那时从 items 里取不到，只能提前存下来。
    */
   const titles = useRef(new Map<string, string>())
-  for (const r of items) titles.current.set(r.id, displayTitle(r))
+  for (const r of items) titles.current.set(r.id, displayTitle(r).text)
 
   const [announce, setAnnounce] = useState('')
   const onSettled = useCallback((id: string, code?: string) => {
@@ -334,8 +334,9 @@ export default function ReviewQueue({ loaderData }: Route.ComponentProps) {
                       to={localizeHref(`/kourindou/${r.slug}`)}
                       viewTransition
                       className="hover:underline"
+                      lang={displayTitle(r).lang}
                     >
-                      {displayTitle(r)}
+                      {displayTitle(r).text}
                     </Link>
                   </CardTitle>
                   {r.licenseNote && (

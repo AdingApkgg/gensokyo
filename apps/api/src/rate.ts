@@ -40,10 +40,25 @@ const COOLDOWN_SECONDS: Record<Bucket, number> = {
    * 但**不能没有**——见下。
    */
   edit: 2,
+  /**
+   * 补译名是全站唯一一个**非作者也能写内容**的端点，所以它的冷却窗比编辑
+   * 长：补译名是查完资料才做的事，不存在「发完立刻改错别字」那种节奏。
+   */
+  translation: 10,
 }
 
 /** 小时配额：正常人一小时发不了这么多，机器人一分钟就超 */
-const HOURLY_QUOTA: Record<Bucket, number> = { post: 30, report: 10, edit: 120 }
+const HOURLY_QUOTA: Record<Bucket, number> = {
+  post: 30,
+  report: 10,
+  edit: 120,
+  /**
+   * 一小时 40 条译名已经比任何真人快。它要挡的不是热心用户，是「顺序扫过
+   * 6,700 条资源、往每个空语言槽里塞一行推广」——那种写法在这个配额下要
+   * 跑一周，中间必然被 staff 看见（每一条都留了 moderationLog）。
+   */
+  translation: 40,
+}
 
 /**
  * `edit` 单独成桶，而不是「编辑不限流」。
@@ -54,7 +69,7 @@ const HOURLY_QUOTA: Record<Bucket, number> = { post: 30, report: 10, edit: 120 }
  * 收录之后，以不受限的频率翻脸改成任意内容，且不留任何痕迹。
  * T6 把 @ 通知挂到编辑上之后，它还会直接变成通知炮台。
  */
-export type Bucket = 'post' | 'report' | 'edit'
+export type Bucket = 'post' | 'report' | 'edit' | 'translation'
 
 export type RateResult =
   | { ok: true }
@@ -63,6 +78,25 @@ export type RateResult =
 const since = (seconds: number) => new Date(Date.now() - seconds * 1000)
 
 async function countSince(bucket: Bucket, actorId: string, from: Date) {
+  /**
+   * 译名没有自己的表——它就地改 `resource.title`，所以数的是它留下的审计行。
+   * 这也是 `translation_edit` 必须单独成一个 action 值的实际用处：并进
+   * status_change 的话，作者每改一次自己的资源都会吃掉别人的补译名配额。
+   */
+  if (bucket === 'translation') {
+    const [row] = await db
+      .select({ n: count() })
+      .from(schema.moderationLog)
+      .where(
+        and(
+          eq(schema.moderationLog.actorId, actorId),
+          eq(schema.moderationLog.action, 'translation_edit'),
+          gte(schema.moderationLog.createdAt, from),
+        ),
+      )
+    return row?.n ?? 0
+  }
+
   const [row] =
     bucket === 'report'
       ? await db

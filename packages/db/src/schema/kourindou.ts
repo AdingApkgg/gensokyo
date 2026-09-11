@@ -506,6 +506,13 @@ export const moderationLog = pgTable(
   (t) => [
     index('moderation_log_subject_idx').on(t.subjectKind, t.subjectId),
     index('moderation_log_created_idx').on(t.createdAt.desc()),
+    /**
+     * 补译名的限流按这张表数行（rate.ts 的 translation 桶）。限流是**每次写
+     * 都要跑一遍**的 COUNT，而这张表只增不删——没有这条索引它就是一次全表
+     * 扫描。rate.ts 开篇说的「直接数就是精确的，代价是那条为它建的索引」，
+     * 指的就是这一条。
+     */
+    index('moderation_log_actor_idx').on(t.actorId, t.createdAt.desc()),
   ],
 )
 

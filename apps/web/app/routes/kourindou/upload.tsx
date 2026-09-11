@@ -41,7 +41,7 @@ import { kindLabel, licenseLabel, licenseVariant } from '~/lib/display'
 import { EASE_SUMI, SPRING_WASHI } from '~/lib/motion'
 import { uploadImage } from '~/lib/upload'
 import { m } from '~/paraglide/messages'
-import { localizeHref } from '~/paraglide/runtime'
+import { getLocale, localizeHref } from '~/paraglide/runtime'
 import type { Route } from './+types/upload'
 
 export function meta() {
@@ -86,8 +86,25 @@ export async function action({ request }: Route.ActionArgs) {
     licenseNote: form.get('licenseNote') || undefined,
     circleNameRaw: form.get('circleNameRaw') || undefined,
     coverUrl: form.get('coverUrl') || undefined,
+    /**
+     * 简介按**投稿者当时的界面语言**归档，不按 `titleOriginalLocale`——
+     * 那一栏说的是「原题是哪种语言」，而写简介的是投稿者本人：中文用户
+     * 投一本日文同人志，原题 ja、简介 zh，这是最常见的一种投稿。
+     *
+     * 此前这里硬写 `{ zh: … }`：日文站与英文站写的简介全被归档成中文，
+     * 于是它们在自己的语言下反而读不到自己刚写的那段话。
+     * 隐藏字段带语言是仓库既有做法（见 PostForm 的 `name="locale"`）。
+     *
+     * 不在这里校验 descriptionLocale：`localizedTextSchema` 的键是
+     * `z.enum(LOCALES)`，塞进未知语言整个 parse 就失败，与任何其他
+     * 非法字段落到同一条 validation_failed 上。
+     */
     description: form.get('description')
-      ? { zh: String(form.get('description')) }
+      ? {
+          [String(form.get('descriptionLocale'))]: String(
+            form.get('description'),
+          ),
+        }
       : {},
   })
   if (!parsedResource.success) {
@@ -541,6 +558,8 @@ export default function UploadWizard() {
         circleNameRaw: circle,
         coverUrl,
         description,
+        /** 简介归档到写它的人当时用的界面语言，不是原题语言。见 action 里的注释 */
+        descriptionLocale: getLocale(),
         mirrors: JSON.stringify(usable.map(toPayload)),
       },
       { method: 'post' },

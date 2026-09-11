@@ -5,6 +5,7 @@ import {
   listResourcesQuerySchema,
   reviewResourceSchema,
   updateResourceSchema,
+  updateTranslationSchema,
 } from './schemas'
 
 /**
@@ -207,5 +208,44 @@ describe('listResourcesQuerySchema：搜索', () => {
   test('q 两端空白被 trim，纯空白等于空串', () => {
     expect(listResourcesQuerySchema.parse({ q: '  紅魔  ' }).q).toBe('紅魔')
     expect(listResourcesQuerySchema.parse({ q: '   ' }).q).toBe('')
+  })
+})
+
+describe('updateTranslationSchema：补译名', () => {
+  test('只给标题可以', () => {
+    expect(
+      updateTranslationSchema.parse({ locale: 'zh', title: '红魔乡' }),
+    ).toEqual({ locale: 'zh', title: '红魔乡' })
+  })
+
+  test('只给简介可以', () => {
+    expect(
+      updateTranslationSchema.parse({ locale: 'en', description: 'A game.' })
+        .description,
+    ).toBe('A game.')
+  })
+
+  /** 两栏都不给等于一次空写：放过去就是一条什么都没改的 moderationLog */
+  test('两栏都不给要拒', () => {
+    expect(() => updateTranslationSchema.parse({ locale: 'zh' })).toThrow()
+  })
+
+  test('空串是合法的——那是「清空这一栏」，权限另判', () => {
+    expect(
+      updateTranslationSchema.parse({ locale: 'zh', title: '' }).title,
+    ).toBe('')
+  })
+
+  test('语言必须是三语之一', () => {
+    expect(() =>
+      updateTranslationSchema.parse({ locale: 'fr', title: 'Bonjour' }),
+    ).toThrow()
+  })
+
+  /** 与 resource.title 的列宽对齐，别让 api 把 201 字的标题交给 PG 去拒 */
+  test('标题超过 200 字要拒', () => {
+    expect(() =>
+      updateTranslationSchema.parse({ locale: 'zh', title: 'x'.repeat(201) }),
+    ).toThrow()
   })
 })

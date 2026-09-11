@@ -1,11 +1,14 @@
 import { db, schema } from '@gensokyo/db'
 import {
+  applyTranslation,
   changeLicenseSchema,
   changeStatusSchema,
   createResourceSchema,
   createVersionSchema,
+  isTranslationOverwrite,
   listResourcesQuerySchema,
   updateResourceSchema,
+  updateTranslationSchema,
 } from '@gensokyo/shared'
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
@@ -13,6 +16,7 @@ import { entityIdParam, fail, validate } from '../../errors'
 import { isOwnerOrStaff, requireAuth } from '../../middleware/require'
 import { type AppEnv, canAutoPublish } from '../../middleware/session'
 import { notify } from '../../notify'
+import { assertRate } from '../../rate'
 import { autoPublishThreshold } from '../../site-config'
 import { loadVisibleTopicByResourceSlug } from '../content/visibility'
 import { makeSlug } from './slug'
@@ -311,6 +315,111 @@ export const kourindou = new Hono<AppEnv>()
             reason: '已发布资源被编辑',
           })
         }
+
+        return r
+      })
+
+      return c.json({ resource: updated })
+    },
+  )
+
+  /**
+   * 补译名。**全站唯一一个非作者也能写内容的端点。**
+   *
+   * 它不需要审核队列，全部理由只有一条：**陌生人只能填空位**。新增一个
+   * 原本不存在的译名是纯增量，写坏了由作者或 staff 覆写；而改写别人已经
+   * 写好的值是编辑他人内容，那永远要 `isOwnerOrStaff`。判据在
+   * `isTranslationOverwrite`（shared，有单测），不要在这里就地展开重写。
+   *
+   * 与 `PATCH /resources/:id` 分成两个端点也是为此：那个 schema 带着
+   * license、status、tagIds，对陌生人开放等于把治理字段一起交出去。
+   */
+  .patch(
+    '/resources/:id/translations',
+    // requireAuth 在 entityIdParam 之前：否则未登录用户能用 400/404 的差异
+    // 探测资源存在性
+    requireAuth,
+    entityIdParam,
+    validate('json', updateTranslationSchema),
+    async (c) => {
+      const actor = c.get('actor')
+      if (!actor) return fail(c, 'unauthorized', 401)
+      const id = c.req.param('id')
+      const input = c.req.valid('json')
+
+      const [row] = await db
+        .select()
+        .from(resource)
+        .where(and(eq(resource.id, id), isNull(resource.deletedAt)))
+        .limit(1)
+      if (!row) return fail(c, 'not_found', 404)
+
+      /**
+       * 白名单判可见（`=== 'published'`），不是 `!== 'delisted'`。
+       * 草稿与待审对陌生人一律 404——补译名不能成为存在性预言机。
+       */
+      const owned = isOwnerOrStaff(actor, row.uploaderId)
+      if (row.status !== 'published' && !owned) return fail(c, 'not_found', 404)
+
+      // 已下架的不接受任何编辑，与 PATCH /resources/:id 同一条规矩
+      if (row.status === 'delisted') {
+        return fail(c, 'invalid_state_transition', 409)
+      }
+
+      const overwriting =
+        isTranslationOverwrite(row.title, input.locale, input.title) ||
+        isTranslationOverwrite(row.description, input.locale, input.description)
+      if (overwriting && !owned) return fail(c, 'forbidden', 403)
+
+      /**
+       * 限流放在权限之后：被 403 挡住的请求本来就不落行，先查配额只是
+       * 白白多一次 COUNT。`translation` 是它自己的桶——与发帖共用配额的话，
+       * 补一条译名会让人发不出帖。
+       */
+      const rate = await assertRate(actor, 'translation')
+      if (!rate.ok) {
+        c.header('Retry-After', String(rate.retryAfterSeconds))
+        return fail(c, 'rate_limited', 429)
+      }
+
+      const updated = await db.transaction(async (tx) => {
+        const [r] = await tx
+          .update(resource)
+          .set({
+            title: applyTranslation(row.title, input.locale, input.title),
+            description: applyTranslation(
+              row.description,
+              input.locale,
+              input.description,
+            ),
+          })
+          .where(eq(resource.id, id))
+          .returning()
+
+        /**
+         * 审计行与写入同一个事务：这是全站唯一能回答「谁把这条资源的哪种
+         * 语言改成了什么」的地方，漏一条就永远查不回来。它同时是限流的
+         * 计数依据（rate.ts 的 translation 桶数的就是这些行）。
+         */
+        await tx.insert(schema.moderationLog).values({
+          actorId: actor.id,
+          action: 'translation_edit',
+          subjectKind: 'resource',
+          subjectId: id,
+          fromValue: {
+            locale: input.locale,
+            title: row.title?.[input.locale] ?? null,
+            description: row.description?.[input.locale] ?? null,
+          },
+          toValue: {
+            locale: input.locale,
+            ...(input.title !== undefined ? { title: input.title } : {}),
+            ...(input.description !== undefined
+              ? { description: input.description }
+              : {}),
+          },
+          reason: owned ? null : '社区补译名',
+        })
 
         return r
       })

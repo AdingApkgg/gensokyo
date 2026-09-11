@@ -95,7 +95,9 @@ function describe(n: NotificationView): {
     sub = n.subject.title
   } else if (n.subject?.kind === 'resource') {
     href = `${localizeHref(`/kourindou/${n.subject.resource.slug}`)}${n.topicId ? `${floor || '#discussion'}` : ''}`
-    sub = displayTitle(n.subject.resource)
+    // sub 与主题标题、`m.notif_removed()` 共用一个 string 槽，语言来源混杂，
+    // 挂不上一个诚实的 lang——只取 text
+    sub = displayTitle(n.subject.resource).text
   } else if (n.subject?.kind === 'removed') {
     sub = m.notif_removed()
   }

@@ -1,10 +1,11 @@
-import type { MirrorKind } from '@gensokyo/shared'
+import { LOCALES, type MirrorKind } from '@gensokyo/shared'
 import { Download, Star } from 'lucide-react'
 import { lazy, Suspense, useState } from 'react'
 import { data, Link, redirect, useFetcher, useNavigation } from 'react-router'
 import { Discussion } from '~/components/discussion/Discussion'
 import { ReportDialog } from '~/components/discussion/ReportDialog'
 import { StaticStars } from '~/components/kourindou/stars'
+import { TranslateCard } from '~/components/kourindou/translate-card'
 import { LazyBoundary } from '~/components/lazy-boundary'
 import { LiveRegion } from '~/components/live-region'
 import { Badge } from '~/components/ui/badge'
@@ -17,6 +18,7 @@ import { apiErrorCode, errorMessage } from '~/lib/api-error'
 import { discussionAction, floorParam } from '~/lib/discussion-action'
 import {
   averageRating,
+  displayDescription,
   displayTitle,
   kindLabel,
   licenseLabel,
@@ -33,7 +35,7 @@ export function meta({ loaderData }: Route.MetaArgs) {
   return [
     {
       title: loaderData?.resource
-        ? `${displayTitle(loaderData.resource)} · ${m.site_name()}`
+        ? `${displayTitle(loaderData.resource).text} · ${m.site_name()}`
         : m.detail_not_found(),
     },
   ]
@@ -83,6 +85,34 @@ export async function action({ request, params }: Route.ActionArgs) {
   const topicId = String(form.get('topicId') ?? '') || null
   const shared = await discussionAction(request, form, topicId)
   if (shared) return shared
+
+  /**
+   * 补译名。结果带 `intent` 字段——页面上的 `rateResult` 靠「有没有 intent」
+   * 把评分的返回值与其它 intent 分开，不带的话保存译名会让星条旁边冒出
+   * 一句评分错误。
+   */
+  if (intent === 'translate') {
+    const locale = LOCALES.find((l) => l === form.get('locale'))
+    if (!locale) {
+      return {
+        ok: false as const,
+        intent: 'translate' as const,
+        code: 'validation_failed',
+      }
+    }
+    const res = await api.api.kourindou.resources[':id'].translations.$patch({
+      param: { id: String(form.get('id')) },
+      json: {
+        locale,
+        title: String(form.get('title') ?? ''),
+        description: String(form.get('description') ?? ''),
+      },
+    })
+    const code = await apiErrorCode(res)
+    return code
+      ? { ok: false as const, intent: 'translate' as const, code }
+      : { ok: true as const, intent: 'translate' as const }
+  }
 
   if (intent === 'rate') {
     const score = Number(form.get('score'))
@@ -139,6 +169,8 @@ export default function ResourceDetail({
   const user = matches[0]?.loaderData?.user
   const avg = averageRating(resource.ratingSum, resource.ratingCount)
   const locale = getLocale()
+  const title = displayTitle(resource)
+  const description = displayDescription(resource)
 
   /**
    * 提交期乐观保持：从点下星到 revalidate 回来之前，星条显示刚点的那个分。
@@ -187,8 +219,11 @@ export default function ResourceDetail({
               {licenseLabel(resource.license)}
             </Badge>
           </div>
-          <h1 className="mt-2 font-heading text-2xl font-bold">
-            {displayTitle(resource)}
+          <h1
+            className="mt-2 font-heading text-2xl font-bold"
+            lang={title.lang}
+          >
+            {title.text}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {circle?.nameOriginal || resource.circleNameRaw || m.anonymous()}
@@ -229,9 +264,12 @@ export default function ResourceDetail({
         </div>
       )}
 
-      {resource.description?.[locale] && (
-        <p className="mt-6 max-w-prose leading-7 whitespace-pre-wrap">
-          {resource.description[locale]}
+      {description && (
+        <p
+          className="mt-6 max-w-prose leading-7 whitespace-pre-wrap"
+          lang={description.lang}
+        >
+          {description.text}
         </p>
       )}
 
@@ -363,6 +401,21 @@ export default function ResourceDetail({
           </Link>
         </div>
       </section>
+
+      {/* 登录用户才渲染：匿名读者是这个页面的绝大多数，给他们一张点不动的表单只是徒增首屏 */}
+      {user && (
+        <TranslateCard
+          resourceId={resource.id}
+          title={resource.title}
+          description={resource.description}
+          canOverwrite={
+            user.id === resource.uploaderId ||
+            user.role === 'moderator' ||
+            user.role === 'admin'
+          }
+          action={localizeHref(`/kourindou/${resource.slug}`)}
+        />
+      )}
 
       {user?.role === 'admin' && <AdminZone id={resource.id} />}
     </main>

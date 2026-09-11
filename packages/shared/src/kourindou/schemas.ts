@@ -88,6 +88,25 @@ export const updateResourceSchema = z.object({
 })
 export type UpdateResource = z.infer<typeof updateResourceSchema>
 
+/**
+ * 补译名。**与 `updateResourceSchema` 分开是刻意的**：这个端点对任何登录
+ * 用户开放（只限填空位），所以它能碰的字段必须在类型上就是穷举的两栏。
+ * 复用 update 的 schema 等于把 license、status、tagIds 一起交出去。
+ *
+ * 两栏都不给要拒：那是一次什么都没改的写，却会留下一条 moderationLog。
+ * 空串合法——那是「清空这一栏」，属于覆写，权限在 api 侧另判。
+ */
+export const updateTranslationSchema = z
+  .object({
+    locale: z.enum(LOCALES),
+    title: z.string().max(200).optional(),
+    description: z.string().max(2000).optional(),
+  })
+  .refine((v) => v.title !== undefined || v.description !== undefined, {
+    message: '至少要给标题或简介其中一栏',
+  })
+export type UpdateTranslation = z.infer<typeof updateTranslationSchema>
+
 export const listResourcesQuerySchema = paginationQuerySchema.extend({
   kind: z.enum(RESOURCE_KIND).optional(),
   license: z.enum(LICENSE_STATUS).optional(),

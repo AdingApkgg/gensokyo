@@ -82,8 +82,9 @@ export function TopicList({
                   }
                   viewTransition
                   className="font-medium hover:underline"
+                  lang={t.resource ? displayTitle(t.resource).lang : undefined}
                 >
-                  {t.resource ? displayTitle(t.resource) : t.title}
+                  {t.resource ? displayTitle(t.resource).text : t.title}
                 </Link>
                 {t.resource ? (
                   <Badge variant="secondary">{m.shrine_from_kourindou()}</Badge>

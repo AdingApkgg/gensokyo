@@ -310,5 +310,14 @@
   "dash_announce_done": "処理しました：{title}",
   "dash_announce_failed": "処理に失敗しました：{reason}",
   "auth_registration_closed": "現在、新規登録は受け付けていません。アカウントをお持ちの方はログインしてください。",
-  "kourindou_upload_cta": "投稿する"
+  "kourindou_upload_cta": "投稿する",
+  "translate_heading": "訳を追加",
+  "translate_hint": "空いている言語はログインしていれば誰でも補えます。既存の訳を書き換えられるのは投稿者と管理者だけです。",
+  "translate_locale": "言語",
+  "translate_has": "訳あり",
+  "translate_title_label": "タイトル",
+  "translate_desc_label": "紹介",
+  "translate_locked": "この欄には既に訳があります。書き換えられるのは投稿者と管理者だけです。",
+  "translate_submit": "訳を保存",
+  "translate_saved": "訳を保存しました"
 }

@@ -66,9 +66,11 @@ export default function Profile({ loaderData }: Route.ComponentProps) {
               const href = p.topic.resource
                 ? `${localizeHref(`/kourindou/${p.topic.resource.slug}`)}?floor=${p.floor}#p${p.floor}`
                 : `${localizeHref(`/shrine/t/${p.topic.id}`)}?floor=${p.floor}#p${p.floor}`
-              const title = p.topic.resource
+              /** 资源标题知道自己是哪种语言，版块主题标题不知道——后者不挂 lang */
+              const resTitle = p.topic.resource
                 ? displayTitle(p.topic.resource)
-                : (p.topic.title ?? '')
+                : null
+              const title = resTitle ? resTitle.text : (p.topic.title ?? '')
               return (
                 <li key={p.id} className="py-3">
                   <div className="flex flex-wrap items-baseline gap-x-2 text-sm">
@@ -79,6 +81,7 @@ export default function Profile({ loaderData }: Route.ComponentProps) {
                       to={href}
                       viewTransition
                       className="font-medium hover:underline"
+                      lang={resTitle?.lang}
                     >
                       {title}
                     </Link>

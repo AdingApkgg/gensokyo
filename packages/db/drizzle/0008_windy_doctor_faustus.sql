@@ -1,0 +1,1 @@
+CREATE INDEX "moderation_log_actor_idx" ON "moderation_log" USING btree ("actor_id","created_at" DESC NULLS LAST);

@@ -95,6 +95,7 @@ function Filter({
 function ResourceRow({ r }: { r: ResourceItem }) {
   const avg = averageRating(r.ratingSum, r.ratingCount)
   const to = localizeHref(`/kourindou/${r.slug}`)
+  const title = displayTitle(r)
   /**
    * 只给正在转场的那一行命名。同名元素在同一帧出现两个，整次 view transition
    * 会被浏览器静默放弃——所以绝不能给所有行都挂上。
@@ -130,7 +131,9 @@ function ResourceRow({ r }: { r: ResourceItem }) {
         )}
 
         <div className="min-w-0 flex-1">
-          <p className="truncate font-medium">{displayTitle(r)}</p>
+          <p className="truncate font-medium" lang={title.lang}>
+            {title.text}
+          </p>
           <p className="truncate text-muted-foreground">
             {r.circleNameRaw || m.anonymous()}
           </p>

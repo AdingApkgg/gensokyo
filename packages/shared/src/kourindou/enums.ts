@@ -140,6 +140,13 @@ export const MODERATION_ACTION = [
   'soft_delete',
   'hard_delete',
   'config_change',
+  /**
+   * 社区补译名。单独成一条而不是并进 status_change：这是全站唯一一个
+   * **非作者也能写内容**的端点，「谁把哪条资源的哪种语言改成了什么」
+   * 要能一眼翻出来，混进普通编辑里就得跟每一次上下架一起翻。
+   * 它同时是这个端点的限流依据（rate.ts 的 translation 桶数的就是它）。
+   */
+  'translation_edit',
 ] as const
 export type ModerationAction = (typeof MODERATION_ACTION)[number]
 

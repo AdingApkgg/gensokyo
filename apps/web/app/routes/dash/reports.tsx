@@ -116,11 +116,13 @@ function targetOf(r: Item): {
   if (!r.resourceSlug)
     return { label: m.dash_target_gone(), href: null, gone: true }
   return {
+    // 只取 text：label 是个会被拼进 `#3 · …` 与播报文案的裸字符串，
+    // 那种复合串上挂一个 lang 反而会给数字与提示语标错语言
     label: displayTitle({
       titleOriginal: r.resourceTitleOriginal ?? '',
       titleOriginalLocale: r.resourceTitleOriginalLocale ?? 'ja',
       title: r.resourceTitle,
-    }),
+    }).text,
     href: localizeHref(`/kourindou/${r.resourceSlug}`),
     gone: false,
   }
