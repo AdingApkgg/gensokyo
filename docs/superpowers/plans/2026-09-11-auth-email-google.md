@@ -492,6 +492,9 @@ export async function sendViaSmtp(
     port: cfg.port,
     secure: cfg.secure,
     auth: { user: cfg.user, pass: cfg.pass },
+    // 不设 pool 的话 nodemailer 每次 sendMail 都会新开一条连接再关闭——
+    // 复用 transporter 只省了重建这个 JS 配置对象，省不了握手。
+    pool: true,
   })
   await transporter.sendMail({
     from: cfg.from,
