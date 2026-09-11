@@ -1178,6 +1178,8 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Modify: `apps/api/src/modules/reports.ts`（1 处）
 - Modify: `apps/api/src/modules/uploads.ts`（1 处）
 - Modify: `apps/web/messages/{zh,ja,en}.json`
+- Modify: `apps/web/app/lib/api-error.ts`（`MESSAGES` 表补 `email_unverified` 一项——
+  三语文案齐全不代表有地方读它，这张表是唯一的读法）
 - Test: `apps/api/src/verified-guard.test.ts`
 
 **Interfaces:**
@@ -1444,14 +1446,33 @@ Expected: 全绿
 "err_email_unverified": "Please verify your email address before posting."
 ```
 
+再改 `apps/web/app/lib/api-error.ts` 的 `MESSAGES` 表——api 的 `error.code` 到
+Paraglide 文案走的是一张**显式**查找表（不是 `m['err_' + code]` 这种通用拼接），
+新码不进表就没有任何东西会读它，用户只会看到回落文案「操作没有成功，请稍后
+再试。」，而三语文案本身白加了。`check-messages` 对此**不报错、只报一条可忽略
+的警告**，这正是它会被漏掉而不被任何门禁挡住的原因。
+
+这张表现有的顺序不是字母序，是按语义分组——`self_action_forbidden` 当初就是
+被特意插在 `forbidden` 前面而不是表尾，那次提交的理由是「它是 forbidden 的一个
+更具体的变体」。`email_unverified` 同理插进 `unauthorized` 与 `forbidden` 之间：
+这正是 `requireVerified` / `requireRole` 里的检查顺序（401 未登录 → 403 未验证
+→ 403 角色不够）：
+
+```ts
+  unauthorized: () => m.err_unauthorized(),
+  email_unverified: () => m.err_email_unverified(),
+  forbidden: () => m.err_forbidden(),
+```
+
 Run: `bun run check-messages`
-Expected: PASS
+Expected: PASS，且「没有代码引用的 key」那条警告不再提到 `err_email_unverified`
+（补表前它会被点名；补完之后应该完全不提，这条警告的消失就是接上了的证据）
 
 - [ ] **Step 10: 提交**
 
 ```bash
 bun run check:fix && bun run typecheck
-git add apps/api/src apps/web/messages
+git add apps/api/src apps/web/messages apps/web/app/lib/api-error.ts
 git commit -m "feat(auth): 验证后才能写——17 个写端点挂上 requireVerified
 
 判据是「是否产出对外可见的内容」。PUT /me/handle 留在不要求验证的一侧：

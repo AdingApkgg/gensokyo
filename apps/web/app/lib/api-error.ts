@@ -15,6 +15,7 @@ const MESSAGES: Record<string, () => string> = {
   mention_limit_exceeded: () => m.err_mention_limit_exceeded(),
   validation_failed: () => m.err_validation_failed(),
   unauthorized: () => m.err_unauthorized(),
+  email_unverified: () => m.err_email_unverified(),
   forbidden: () => m.err_forbidden(),
   self_action_forbidden: () => m.err_self_action_forbidden(),
   not_found: () => m.err_not_found(),
