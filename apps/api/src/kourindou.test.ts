@@ -28,7 +28,20 @@ async function signUp(name: string): Promise<Session> {
   }
 }
 
+/**
+ * cleanupTracked 只删库里的行，Meili 里的文档要自己收：否则开发索引每跑一次
+ * 就多一批指向已删资源的僵尸文档——搜索的 total 会虚高（回库白名单挡得住行，
+ * 挡不住计数）。
+ */
+const indexed: string[] = []
 afterAll(cleanupTracked)
+afterAll(async () => {
+  if (indexed.length === 0) return
+  await meiliFetch(`/indexes/${SEARCH_INDEX}/documents/delete-batch`, {
+    method: 'POST',
+    body: JSON.stringify(indexed.splice(0)),
+  })
+})
 
 beforeAll(async () => {
   await ensureIndex()
@@ -58,6 +71,7 @@ async function createResource(s: Session, overrides = {}) {
     resource?: { id: string; slug: string; status: string }
   }
   if (body.resource) trackResource(body.resource)
+  if (body.resource) indexed.push(body.resource.id)
   return { status: res.status, ...body }
 }
 

@@ -1,8 +1,14 @@
-import { LICENSE_STATUS, RESOURCE_KIND, RESOURCE_SORT } from '@gensokyo/shared'
+import { LICENSE_STATUS, RESOURCE_KIND } from '@gensokyo/shared'
 import { Download, Star } from 'lucide-react'
-import { Link, useSearchParams, useViewTransitionState } from 'react-router'
+import {
+  Form,
+  Link,
+  useSearchParams,
+  useViewTransitionState,
+} from 'react-router'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
+import { Input } from '~/components/ui/input'
 import {
   Pagination,
   PaginationContent,
@@ -27,6 +33,7 @@ import {
   licenseVariant,
 } from '~/lib/display'
 import { pageWindow } from '~/lib/paging'
+import { effectiveSort, sortOptions } from '~/lib/search'
 import { m } from '~/paraglide/messages'
 import { localizeHref } from '~/paraglide/runtime'
 import type { Route } from './+types/list'
@@ -38,7 +45,7 @@ export function meta() {
 export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url)
   const query = Object.fromEntries(
-    ['kind', 'license', 'sort', 'page']
+    ['kind', 'license', 'sort', 'page', 'q']
       .map((k) => [k, url.searchParams.get(k)])
       .filter(([, v]) => v) as [string, string][],
   )
@@ -58,13 +65,16 @@ function Filter({
   param,
   label,
   options,
+  value,
 }: {
   param: string
   label: string
   options: { value: string; label: string }[]
+  /** 不传时按 URL 里的参数；排序传 effectiveSort() 的结果 */
+  value?: string
 }) {
   const [params, setParams] = useSearchParams()
-  const current = params.get(param) ?? '__all'
+  const current = value ?? params.get(param) ?? '__all'
 
   return (
     <Select
@@ -167,6 +177,17 @@ export default function KourindouList({ loaderData }: Route.ComponentProps) {
   const current = 'page' in loaderData ? loaderData.page : 1
   const pages = Math.max(1, Math.ceil(total / pageSize))
   const [params] = useSearchParams()
+  const q = params.get('q')
+  const kind = params.get('kind')
+  const license = params.get('license')
+  /** 清除关键词：保住筛选，丢掉 sort 与 page */
+  const clearHref = (() => {
+    const next = new URLSearchParams()
+    if (kind) next.set('kind', kind)
+    if (license) next.set('license', license)
+    const qs = next.toString()
+    return qs ? `?` : '.'
+  })()
   /** 翻页要保住 kind/license/sort：丢了筛选的翻页比没有翻页更让人困惑 */
   const pageHref = (p: number) => {
     const next = new URLSearchParams(params)
@@ -199,7 +220,38 @@ export default function KourindouList({ loaderData }: Route.ComponentProps) {
         </Button>
       </header>
 
-      <div className="mt-6 flex flex-wrap items-center gap-2">
+      {/* GET 表单会替换整个 query string：kind/license 用 hidden 保住，sort/page 刻意不保 */}
+      <Form
+        method="get"
+        role="search"
+        viewTransition
+        className="mt-6 flex items-center gap-2"
+      >
+        <Input
+          key={q ?? ''}
+          type="search"
+          name="q"
+          defaultValue={q ?? ''}
+          maxLength={100}
+          placeholder={m.search_placeholder()}
+          aria-label={m.search_placeholder()}
+          className="max-w-md"
+        />
+        {kind && <input type="hidden" name="kind" value={kind} />}
+        {license && <input type="hidden" name="license" value={license} />}
+        <Button type="submit" variant="secondary">
+          {m.search_submit()}
+        </Button>
+        {q && (
+          <Button asChild variant="ghost" size="sm">
+            <Link to={clearHref} viewTransition>
+              {m.search_clear()}
+            </Link>
+          </Button>
+        )}
+      </Form>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
         <Filter
           param="kind"
           label={m.filter_kind()}
@@ -219,7 +271,8 @@ export default function KourindouList({ loaderData }: Route.ComponentProps) {
         <Filter
           param="sort"
           label={m.filter_sort()}
-          options={RESOURCE_SORT.map((s) => ({
+          value={effectiveSort(q, params.get('sort'))}
+          options={sortOptions(q).map((s) => ({
             value: s,
             label: {
               relevance: m.sort_relevance(),
@@ -231,7 +284,7 @@ export default function KourindouList({ loaderData }: Route.ComponentProps) {
         />
         {!failed && (
           <span className="ml-auto text-sm text-muted-foreground">
-            {m.list_count({ total })}
+            {q ? m.search_result_count({ q, total }) : m.list_count({ total })}
           </span>
         )}
       </div>
@@ -240,9 +293,11 @@ export default function KourindouList({ loaderData }: Route.ComponentProps) {
         <p className="mt-16 text-center text-destructive">{m.load_error()}</p>
       ) : items.length === 0 ? (
         <div className="mt-20 text-center">
-          <p className="font-heading text-lg">{m.list_empty()}</p>
+          <p className="font-heading text-lg">
+            {q ? m.search_empty({ q }) : m.list_empty()}
+          </p>
           <p className="mt-2 text-sm text-muted-foreground">
-            {m.list_empty_hint()}
+            {q ? m.search_empty_hint() : m.list_empty_hint()}
           </p>
         </div>
       ) : (
