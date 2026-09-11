@@ -7,10 +7,13 @@ import {
 } from '@gensokyo/shared'
 import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
+import { APIError, createAuthMiddleware } from 'better-auth/api'
 import { emailOTP } from 'better-auth/plugins/email-otp'
 import { takeoverIfUnverified } from './auth/arbitrate'
 import { sendMail } from './mail'
+import type { OtpPurpose } from './mail/templates/otp'
 import { renderOtpMail } from './mail/templates/otp'
+import { assertOtpRate } from './otp-rate'
 import { registrationOpen } from './site-config'
 
 /** 10 分钟。默认的 5 分钟对「切到手机收信再切回来」偏紧 */
@@ -26,7 +29,14 @@ export const googleConfigured = () =>
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, { provider: 'pg' }),
-  emailAndPassword: { enabled: true },
+  emailAndPassword: {
+    enabled: true,
+    /**
+     * ⚠️ **默认是 `false`。** 找回密码的典型场景就是「怀疑号被盗」——
+     * 不吊销会话等于没找回：盗号者手里那个会话照样有效。
+     */
+    revokeSessionsOnPasswordReset: true,
+  },
   baseURL: process.env.BETTER_AUTH_URL,
   basePath: '/api/auth',
   // 硬编码 localhost 会让生产域名不在信任列表里、登录全废；
@@ -66,6 +76,38 @@ export const auth = betterAuth({
       },
     }),
   ],
+
+  hooks: {
+    /**
+     * 发码类端点的**按邮箱**限流。挂在这里而不是 `sendVerificationOTP`
+     * 回调里：那个回调被 `runInBackgroundOrAwait` 调用，抛错未必能传回
+     * 客户端，限流会表现成「静默不发信」。Step 1 探针已经证实
+     * `hooks.before` 里 `ctx.body` 对这两条路径都是已解析好的请求体
+     * （见 otp-rate.ts 顶部注释），不需要退回 `ctx.request?.clone().json()`
+     * 或插件回调兜底。
+     *
+     * ⚠️ 这是 better-auth 的错误信封，**不是 `fail()` 那套**——
+     * `ERROR_CODES` 里的 `rate_limited` 在这里用不上。前端在 authClient
+     * 侧按 `err.code` 查文案。两套错误码体系刻意不统一。
+     */
+    before: createAuthMiddleware(async (ctx) => {
+      const purpose =
+        ctx.path === '/email-otp/send-verification-otp'
+          ? ((ctx.body as { type?: string })?.type as OtpPurpose | undefined)
+          : ctx.path === '/email-otp/request-password-reset'
+            ? ('forget-password' as const)
+            : undefined
+      if (!purpose) return
+      const email = (ctx.body as { email?: string })?.email
+      if (!email) return
+      const verdict = await assertOtpRate(purpose, email)
+      if (verdict.ok) return
+      throw new APIError('TOO_MANY_REQUESTS', {
+        code: 'RATE_LIMITED',
+        message: `请等待 ${verdict.retryAfterSeconds} 秒后再试`,
+      })
+    }),
+  },
 
   socialProviders: googleConfigured()
     ? {
