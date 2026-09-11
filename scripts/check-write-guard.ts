@@ -2,8 +2,9 @@
  * 写闸门禁：
  *   bun run check-write-guard
  *
- * 断言：`/api` 下每一个非 GET 路由的中间件链里都出现了一道守卫
- * （`requireVerified` 或 `requireRole`），豁免必须写进下面的显式名单。
+ * 断言：`/api` 下每一个非 GET 路由的中间件链里，都有一道守卫
+ * （`requireVerified` 或 `requireRole`）排在终结 handler 之前，豁免必须写进
+ * 下面的显式名单。
  *
  * 为什么需要它：api 的测试**刻意不进 CI**（要真实的 pg/redis/Meili/MinIO），
  * 所以「新加的写端点忘了挂验证闸」这类回归在 CI 里没有任何东西会响，
@@ -23,6 +24,19 @@
  * - 子应用的前缀守卫（`.use('*', requireRole('admin'))`）是**独立的
  *   `ALL /api/admin/*` 条目**，不会并进 `PATCH /api/admin/config` 的分组。
  *   漏掉这一类会把 moderation / admin 下的 7 个写端点全部误报。
+ *
+ * ⚠️ **守卫必须排在 handler 之前，光「出现过」不够**（同样是实测驱动，不是
+ * 想当然）：Hono 按注册顺序执行中间件链，终结 handler 不调用 `next()`——
+ * `.post(p, handler, requireVerified)` 这种守卫误放在 handler 之后的写法，
+ * 在 `app.routes` 里两个函数依然都会被记录、`isGuard` 依然命中，但运行时
+ * 守卫永远执行不到，形同虚设。探针验证过（对 3 个已知的多中间件路由，
+ * 逐条打印分组内每个条目的 isGuard 结果与位置）：同一 method+path 分组内，
+ * `app.routes` 的条目严格按源码注册顺序排列，终结 handler 恒在最后一位。
+ * 所以判据从「组内出现过守卫」升级成「组内某个守卫的位置严格早于最后
+ * 一位」，且把「守卫存在但顺序错了」与「压根没挂守卫」分开报——两者的
+ * 修法不一样。前缀守卫（上一条）天然满足这个位置要求：它在子应用级别
+ * `.use('*', …)`，必然先于子应用内任何一条路由自己的 handler 执行，不需要
+ * 再检查位置。
  *
  * 只用 Bun 内置能力，不引依赖。`DATABASE_URL` 缺失时 import 不会抛错，
  * 所以裸 runner 上可跑。
@@ -71,16 +85,26 @@ for (const r of rows) {
 }
 
 const unguarded: string[] = []
+const misordered: string[] = []
 const exempt: string[] = []
 for (const [key, entries] of groups) {
   if (ALLOWED_UNVERIFIED.has(key)) {
     exempt.push(key)
     continue
   }
+  // 最后一个条目是终结 handler（探针验证过：app.routes 按注册顺序排列）。
+  // 守卫必须出现在它之前才算数——出现在最后一位等于排在了 handler 之后。
+  const lastIndex = entries.length - 1
+  const guardIndices = entries
+    .map((r, i) => (isGuard(r.handler) ? i : -1))
+    .filter((i) => i >= 0)
   const guarded =
-    entries.some((r) => isGuard(r.handler)) ||
+    guardIndices.some((i) => i < lastIndex) ||
     prefixGuards.some((p) => entries[0].path.startsWith(p))
-  if (!guarded) unguarded.push(key)
+  if (!guarded) {
+    if (guardIndices.length > 0) misordered.push(key)
+    else unguarded.push(key)
+  }
 }
 
 // 名单腐烂检查：豁免了一个已经不存在的路由，说明名单该清理了
@@ -88,7 +112,7 @@ const stale = [...ALLOWED_UNVERIFIED].filter((k) => !groups.has(k))
 
 console.info(
   `[check-write-guard] 非 GET 路由 ${groups.size} 条，已挂守卫 ${
-    groups.size - unguarded.length - exempt.length
+    groups.size - unguarded.length - misordered.length - exempt.length
   } 条，显式豁免 ${exempt.length} 条`,
 )
 for (const k of exempt) console.info(`  豁免：${k}`)
@@ -109,5 +133,17 @@ if (unguarded.length > 0) {
   )
 }
 
-if (unguarded.length > 0 || stale.length > 0) process.exit(1)
+if (misordered.length > 0) {
+  console.error(
+    '\n[check-write-guard] 下列写端点守卫挂了，但排在 handler 之后，运行时不会执行：',
+  )
+  for (const k of misordered) console.error(`  ${k}`)
+  console.error(
+    '\nHono 按注册顺序执行中间件链，终结 handler 不调用 next()——排在它之后的\n' +
+      '中间件永远跑不到。把守卫挪到 handler 之前（通常是链上第一个参数）。',
+  )
+}
+
+if (unguarded.length > 0 || misordered.length > 0 || stale.length > 0)
+  process.exit(1)
 console.info('[check-write-guard] 通过')
