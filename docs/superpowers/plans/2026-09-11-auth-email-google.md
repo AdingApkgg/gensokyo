@@ -3104,12 +3104,20 @@ Expected: PASS，4 条全绿
      * ⚠️ 这是 better-auth 的错误信封，**不是 `fail()` 那套**——
      * `ERROR_CODES` 里的 `rate_limited` 在这里用不上。前端在 authClient
      * 侧按 `err.code` 查文案。两套错误码体系刻意不统一。
+     *
+     * ⚠️ `/forget-password/email-otp` 是 better-auth **默认仍会注册**的
+     * deprecated 别名（`email-otp/index.mjs` 里 `forgetPasswordEmailOTP`
+     * 和 `requestPasswordResetEmailOTP` 一起无条件挂载），内部调用同一个
+     * `resolveOTP(..., "forget-password")`、写同一种 identifier——漏掉它
+     * 的话限流形同虚设：自查时用一次性脚本连打两次都拿到 200，
+     * `otp-rate.test.ts` 里有一条测试钉住这一点。
      */
     before: createAuthMiddleware(async (ctx) => {
       const purpose =
         ctx.path === '/email-otp/send-verification-otp'
           ? ((ctx.body as { type?: string })?.type as OtpPurpose | undefined)
-          : ctx.path === '/email-otp/request-password-reset'
+          : ctx.path === '/email-otp/request-password-reset' ||
+              ctx.path === '/forget-password/email-otp'
             ? ('forget-password' as const)
             : undefined
       if (!purpose) return
@@ -3164,6 +3172,42 @@ describe('发码端点的按邮箱限流', () => {
       body: JSON.stringify({ email: `ghost-${Date.now()}@example.com` }),
     })
     expect(res.status).toBe(200)
+  })
+
+  /**
+   * deprecated 的 `/forget-password/email-otp` 是 better-auth 默认注册的
+   * 别名端点，与 `/email-otp/request-password-reset` 调用同一个
+   * `resolveOTP(..., "forget-password")`、写同一种 identifier——如果
+   * hooks.before 只按新端点的路径匹配，这条别名会完整绕过限流（自查时
+   * 用一次性诊断脚本打过两次，两次都 200，已经删掉那份脚本）。
+   *
+   * ⚠️ 邮箱必须是**已注册**的——用不存在的邮箱会踩到另一条既有行为：
+   * better-auth 在 `findUserByEmail` 落空时会把刚创建的 verification 行
+   * 立刻 `deleteVerificationByIdentifier` 掉（不泄露邮箱是否注册过），
+   * 于是第二次请求数到的还是 0 行，测试会得到假阳性的 429 落空——
+   * 这不是限流没生效，是行被自己删了，count 天然为 0。
+   */
+  test('deprecated 的 /forget-password/email-otp 别名与新端点共享同一个限流桶', async () => {
+    const email = `legacy-${Date.now()}@example.com`
+    const signUp = await app.request('/api/auth/sign-up/email', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email, password: 'hakurei-reimu-514', name: 'x' }),
+    })
+    trackUser(((await signUp.json()) as { user?: { id: string } }).user?.id)
+
+    const first = await app.request('/api/auth/forget-password/email-otp', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email }),
+    })
+    expect(first.status).toBe(200)
+    const second = await app.request('/api/auth/forget-password/email-otp', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email }),
+    })
+    expect(second.status).toBe(429)
   })
 })
 
