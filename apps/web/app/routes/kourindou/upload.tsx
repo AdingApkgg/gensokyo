@@ -52,7 +52,9 @@ export async function loader({ request }: Route.LoaderArgs) {
   const res = await apiFor(request).api.me.$get()
   const body = await res.json()
   if (!('user' in body) || !body.user) {
-    throw redirect(localizeHref('/login'))
+    // 带 next：登录后直接回投稿页，否则从列表页点「投稿」的人登录完落在首页
+    const next = localizeHref('/kourindou/upload')
+    throw redirect(`${localizeHref('/login')}?next=${encodeURIComponent(next)}`)
   }
   return null
 }

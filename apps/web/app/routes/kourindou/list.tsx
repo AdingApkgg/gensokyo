@@ -2,6 +2,7 @@ import { LICENSE_STATUS, RESOURCE_KIND, RESOURCE_SORT } from '@gensokyo/shared'
 import { Download, Star } from 'lucide-react'
 import { Link, useSearchParams, useViewTransitionState } from 'react-router'
 import { Badge } from '~/components/ui/badge'
+import { Button } from '~/components/ui/button'
 import {
   Pagination,
   PaginationContent,
@@ -177,13 +178,25 @@ export default function KourindouList({ loaderData }: Route.ComponentProps) {
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-10">
-      <header>
-        <h1 className="font-heading text-3xl font-bold">
-          {m.kourindou_title()}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {m.kourindou_tagline()}
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="font-heading text-3xl font-bold">
+            {m.kourindou_title()}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {m.kourindou_tagline()}
+          </p>
+        </div>
+        {/*
+          投稿的唯一站内入口。此前 /kourindou/upload 没有任何链接指向它，
+          只能手输 URL。匿名也显示：投稿页的 loader 会带 ?next= 跳登录，
+          登录后直接回来，比「先找登录再找投稿」少一步。
+        */}
+        <Button asChild>
+          <Link to={localizeHref('/kourindou/upload')} viewTransition>
+            {m.kourindou_upload_cta()}
+          </Link>
+        </Button>
       </header>
 
       <div className="mt-6 flex flex-wrap items-center gap-2">

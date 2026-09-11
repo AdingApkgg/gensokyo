@@ -192,6 +192,11 @@ export function SiteHeader({ user }: { user: SessionUser | null }) {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
+                  <Link to={localizeHref('/kourindou/upload')} viewTransition>
+                    {m.kourindou_upload_cta()}
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
                   <Link to={localizeHref(`/u/${user.handle}`)} viewTransition>
                     {m.nav_profile()}
                   </Link>

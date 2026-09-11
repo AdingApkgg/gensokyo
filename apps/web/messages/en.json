@@ -307,5 +307,7 @@
   "dash_target_deleted": "Post already deleted",
   "dash_target_gone": "Target no longer exists",
   "dash_announce_done": "Handled: {title}",
-  "dash_announce_failed": "Failed: {reason}"
+  "dash_announce_failed": "Failed: {reason}",
+  "auth_registration_closed": "Registration is closed for now. If you already have an account, sign in.",
+  "kourindou_upload_cta": "Upload"
 }

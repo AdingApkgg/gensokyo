@@ -307,5 +307,7 @@
   "dash_target_deleted": "该楼层已删除",
   "dash_target_gone": "目标已不存在",
   "dash_announce_done": "已处理：{title}",
-  "dash_announce_failed": "处理失败：{reason}"
+  "dash_announce_failed": "处理失败：{reason}",
+  "auth_registration_closed": "注册暂未开放。已有账号可直接登录。",
+  "kourindou_upload_cta": "投稿"
 }
