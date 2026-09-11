@@ -105,40 +105,20 @@ describe('注册开关', () => {
     }
   })
 
-  test('开关关闭时，emailOTP 的 sign-in 路径也建不出新号', async () => {
-    // disableSignUp: true 已经挡住这条路，但这条测试钉的是「注册开关
-    // 不再依赖路径匹配」——将来谁把 disableSignUp 改回 false，
-    // validateUserInfo 仍然是最后一道闸。
-    const { db, schema } = await import('@gensokyo/db')
-    const { eq } = await import('drizzle-orm')
-    const { invalidateConfig } = await import('./site-config')
-    await db
-      .insert(schema.siteConfig)
-      .values({ key: 'registrationOpen', value: false })
-      .onConflictDoUpdate({
-        target: schema.siteConfig.key,
-        set: { value: false },
-      })
-    invalidateConfig()
-    const fresh = `otp-signup-${Date.now()}@example.com`
-    try {
-      const res = await app.request('/api/auth/sign-in/email-otp', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email: fresh, otp: '000000' }),
-      })
-      expect(res.status).toBeGreaterThanOrEqual(400)
-      const [created] = await db
-        .select({ id: schema.user.id })
-        .from(schema.user)
-        .where(eq(schema.user.email, fresh))
-        .limit(1)
-      expect(created).toBeUndefined()
-    } finally {
-      await db
-        .delete(schema.siteConfig)
-        .where(eq(schema.siteConfig.key, 'registrationOpen'))
-      invalidateConfig()
-    }
-  })
+  // emailOTP 的 sign-in 路径（disableSignUp + validateUserInfo 双重挡住建号）
+  // 在这一层**刻意不测**：实测过一条按此路径写的测试用假验证码
+  // '000000' 会在两道闸之前就被 atomicVerifyOTP 拒掉（INVALID_OTP），
+  // 所以那种写法测的是「假验证码被拒」，不是「注册开关生效」——绿灯不等于
+  // 证据，删掉了。改用真验证码同样走不通：POST
+  // /email-otp/send-verification-otp（type: 'sign-in'）在 disableSignUp
+  // 为 true 时，对不存在的邮箱会在调用我们的 sendVerificationOTP 回调之前
+  // 就短路——它统一回 200 { success: true }（防枚举），既不产生持久化的
+  // verification 行，也不触发任何发信（实测：捕获 console.info 得到 0
+  // 条命中，直接查 verification 表得到 0 行）。也就是说这条路径从公开
+  // HTTP 接口拿不到一个真验证码，没有不靠 mock 发信或不碰 better-auth
+  // 内部哈希算法就能诚实通过闸门的测试写法。这条路径的真实防线仍然是
+  // disableSignUp（挡在 send-verification-otp 这一层，比 sign-in 端点
+  // 更早）与 validateUserInfo（万一 disableSignUp 被改回 false 时的最后
+  // 一道闸，由上面 sign-up/email 那条测试直接钉住）——只是没有测试能在
+  // HTTP 层同时证明两者在 emailOTP 路径上真的生效。
 })
