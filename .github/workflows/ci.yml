@@ -23,6 +23,9 @@ jobs:
       # 那是另一个决策，与下面不跑 e2e 是同一条理由。
       - run: bunx turbo run test --filter=@gensokyo/web --filter=@gensokyo/shared
       - run: bun run check-motion-boundary
+      # api 的测试刻意不进 CI（要真实的 pg/redis/Meili/MinIO），所以
+      # 「新写端点忘了挂验证闸」在 CI 里没有别的东西会响。这条是唯一的保障。
+      - run: bun run check-write-guard
       - run: cd apps/web && bun run build
       - run: bun run check-css-layers
       - run: bun run check-bundle-size
