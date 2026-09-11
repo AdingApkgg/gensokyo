@@ -363,6 +363,12 @@ describe('限流不能毁掉用户手里的验证码', () => {
     // 只发了一封信 —— 轰炸防护仍然有效
     expect(codes.length).toBe(1)
 
+    // 被拒的那次**没有留下行**。这一条同时修掉另一个发现：小时配额数的是
+    // `verification` 的行，被拒的尝试也留行的话，攻击者连打 5 次就能把受害者
+    // 的配额填满（只发了 1 封信，却锁死一小时）。挡在 resolveOTP 之前以后，
+    // 配额数的重新是「真发出去的信」
+    expect(await countOtpRows('forget-password', email)).toBe(1)
+
     // ③ 用户输入信箱里那个码。它必须仍然有效
     const reset = await app.request('/api/auth/email-otp/reset-password', {
       method: 'POST',
