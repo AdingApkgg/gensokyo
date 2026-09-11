@@ -57,7 +57,7 @@
 | `apps/api/src/errors.ts` | `ERROR_CODES` 加 `email_unverified` |
 | `apps/api/src/middleware/require.ts` | 新增 `requireVerified`、守卫 WeakSet；`requireRole` 隐含已验证 |
 | `apps/api/src/middleware/session.ts` | `Actor` 加 `emailVerified` |
-| `apps/api/src/modules/{shrine,reports,uploads,interactions}.ts`、`modules/kourindou/index.ts` | 17 处 `requireAuth` → `requireVerified` |
+| `apps/api/src/modules/{shrine,reports,uploads,interactions,me}.ts`、`modules/kourindou/index.ts` | 18 处 `requireAuth` → `requireVerified`（含 `me.ts` 的 `PUT /handle`——2026-09-11 复审改判，见 Task 5） |
 | `apps/web/app/lib/auth-client.ts` | 全局带 `X-Gensokyo-Locale` |
 | `apps/web/app/routes/{login,register}.tsx` | Google 按钮；register 简化 |
 | `apps/web/app/routes.ts` | 加 `verify` / `forgot` |
@@ -1167,7 +1167,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-### Task 5: `requireVerified` —— 17 个写端点挂上闸
+### Task 5: `requireVerified` —— 18 个写端点挂上闸
 
 **Files:**
 - Modify: `apps/api/src/errors.ts`（`ERROR_CODES` 加 `email_unverified`）
@@ -1384,7 +1384,7 @@ export const requireRole = (min: UserRole) =>
   )
 ```
 
-- [ ] **Step 5: 17 个写端点换掉 `requireAuth`**
+- [ ] **Step 5: 18 个写端点换掉 `requireAuth`**
 
 逐个文件把下列位置的 `requireAuth` 改成 `requireVerified`，并更新各文件顶部的 import。
 
@@ -1395,14 +1395,25 @@ export const requireRole = (min: UserRole) =>
 | `modules/interactions.ts` | `PUT /resources/:slug/rating`、`PUT /resources/:slug/favorite`、`DELETE /resources/:slug/favorite` |
 | `modules/reports.ts` | `POST /` |
 | `modules/uploads.ts` | `POST /image` |
+| `modules/me.ts` | `PUT /handle` |
 
 ⚠️ **`GET /topics/:id/posts`（shrine.ts 的 `.get('/topics/:id/posts', …)`）不要动**，它是读。
-⚠️ **`modules/me.ts` 与 `modules/notifications.ts` 一个都不要动。**
+⚠️ **`modules/notifications.ts` 一个都不要动**——`POST /notifications/read` 是全站唯一的豁免
+写端点，继续留着 `requireAuth`（`GET /` 也是 `requireAuth`，它是读，本来就不在这次改动范围）。
+⚠️ **`modules/me.ts` 只动 `PUT /handle` 一处**：`GET /` 不挂任何守卫（未登录也要能返回
+`{ user: null }`），别顺手给它加上。`PUT /handle` 这里挂的是 `requireVerified` 而不是
+`requireAuth`——**2026-09-11 复审改判**：handle 是不可逆的公开标识符，同时进 `/u/:handle`
+与已发布正文的 `@`，「未验证账号没有内容可挂」只说明不挂闸不会立刻造成可见滥用，不等于
+必须不挂闸；挂 `requireVerified` 不挡任何真实用户（`/verify` 页本来就是验证在前、认领在后），
+挡的是绕开页面直接打接口抢注。详见 `apps/api/src/modules/me.ts` 中 `PUT /handle` 上方注释。
 
-改完确认 `requireAuth` 在 `modules/` 下只剩 4 处：
+改完确认 `requireAuth` 在 `modules/` 下只剩 3 行：
 
 Run: `grep -rn 'requireAuth' apps/api/src/modules --include='*.ts' | grep -v import`
-Expected: 恰好 4 行（me.ts 一处、notifications.ts 两处、以及各自的 import 已被排除）
+Expected: 恰好 3 行——`notifications.ts` 两处（`GET /`、`POST /read`，都是真实调用，未改动）、
+`me.ts` 一处（`PUT /handle` 上方注释里提到 `requireAuth` 这个词，用来对比说明为什么改用
+`requireVerified`，不是实际调用）。各文件顶部的 `import { requireAuth }` 已被 `grep -v import`
+排除
 
 - [ ] **Step 6: 跑测试确认通过**
 
@@ -2875,6 +2886,9 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
   - `decideOtpRate(cooldownHits: number, hourHits: number): OtpRateResult`
   - **复用** Task 3 的 `OtpPurpose`，不重新定义
   - `assertOtpRate(purpose: 'email-verification' | 'forget-password', email: string): Promise<OtpRateResult>`
+  - `assertOtpRateExcludingCurrent(purpose, email): Promise<OtpRateResult>`——Step 6 引入，
+    专给 `sendVerificationOTP` 回调用（那次请求自己的 verification 行已经落库，判断前要
+    先减掉这一行，见 Step 6 说明）
 
 - [ ] **Step 1: 先探一下 `ctx.body` 拿不拿得到**
 
@@ -3092,38 +3106,128 @@ Expected: PASS，4 条全绿
   },
 ```
 
-加回一个 `hooks.before`（Task 9 删掉的那个不要恢复，这是新的一道）：
+> ⚠️ **2026-09-11 review round 1 改判，直接看下面「现在的设计」**：最初的版本把
+> `forget-password` 也一起塞进 `hooks.before`、命中限流时 `throw` 429（和
+> `email-verification` 用同一段代码、按 `ctx.path` 分流）。这个设计**有一个自己
+> 引入的洞**，已经被推翻，不要照抄。
+>
+> 洞在哪：`resolveOTP` 会给**已注册**邮箱留下一行持久的 `verification` 行（第二次
+> 请求数到 ≥1 → 429），但 better-auth 自己的端点代码对**未注册**邮箱会把刚插入的
+> 那一行立刻删掉防枚举（永远 200）。连着打两次同一个地址，状态码序列是
+> `(200,429)` 还是 `(200,200)`，直接告诉外部这个邮箱有没有注册过——限流层自己
+> 变成了一个注册预言机。`identifier` 拼接格式修对之前，这个计数器是哑的，不保护
+> 也不泄露；格式修对之后，计数器第一次真的开始数到已注册邮箱的行，副作用是让
+> 这条差异第一次变得可观测。
+
+**现在的设计**：限流拆成两处，判断逻辑相同（都是 `assertOtpRate` 系），**命中限流
+之后的动作不同**：
+
+- `email-verification` 留在 `hooks.before`，命中限流照样 `throw` 429——它不需要改。
+  `POST /sign-up/email` 对已注册邮箱本来就直接抛 `USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL`：
+  单次请求、不需要连打两次，就已经把「这个邮箱有没有账号」泄露出去了。这条限流
+  关不关 429，都不会让攻击者多拿到或少拿到这个事实；而 429 对 `/verify` 页的重发
+  按钮是有用的真实反馈，所以它保持 throw。
+- `forget-password` 挪进 Task 4 已经定义过的 `emailOTP` 插件 `sendVerificationOTP`
+  回调（这里是在那个回调的开头插入限流判断，不是新建一个）。**命中限流时直接
+  `return`——不发信、不抛错**，端点该返回什么还返回什么，统一 200
+  `{ success: true }`。「被限流」与「邮箱不存在」从外部彻底不可区分，轰炸防护
+  完全没有削弱：信确实没有发出去。
+
+副作用：原来那段专门处理 deprecated 别名 `/forget-password/email-otp` 的路径匹配
+也不再需要了。回调是按**类型**（`type: 'forget-password'`）触发的，不管请求打的
+是新端点 `/email-otp/request-password-reset` 还是这条旧别名，最终都会调用同一个
+`resolveOTP(..., "forget-password")`、经过同一个回调——不用再在 `hooks.before`
+里手动枚举两条路径来防止别名绕过限流。
+
+先在 `otp-rate.ts` 里 `assertOtpRate` 之后追加一个函数：
+
+```ts
+/**
+ * 与 `assertOtpRate` 判断逻辑相同，但专给**调用时这次的 verification 行
+ * 已经被 `resolveOTP` 插入**的场景用——`sendVerificationOTP` 回调正是这样：
+ * `resolveOTP` 在端点内无条件跑在回调之前（没配 `resendStrategy: 'reuse'`，
+ * 所以每次调用都插一行新的），等回调拿到 `{ email, otp, type }` 时，这次
+ * 请求自己的那一行早就落库了。
+ *
+ * 如果直接调用 `assertOtpRate`，第一次请求也会把自己刚插入的那一行数进去，
+ * `cooldownHits` 恒 ≥ 1，`decideOtpRate` 永远判「限流」——这个坑真摔过：
+ * 新写的「状态码序列一致」测试通过了，但「两次请求只发一封信」断言却拿到
+ * 0 封（第一封也被吞了）。改用这个函数、把两个计数各减 1（减掉这次请求
+ * 自己刚插的那一行），才符合预期。
+ *
+ * 只在**明确知道本次请求已经插过一行**的调用点用这个；别的地方（包括
+ * `hooks.before` 那种插入还没发生的场景）继续用 `assertOtpRate`。
+ */
+export async function assertOtpRateExcludingCurrent(
+  purpose: OtpPurpose,
+  email: string,
+): Promise<OtpRateResult> {
+  return decideOtpRate(
+    (await countOtpRows(purpose, email, OTP_COOLDOWN_SECONDS)) - 1,
+    (await countOtpRows(purpose, email, 3600)) - 1,
+  )
+}
+```
+
+再改 `auth.ts`：Task 4 定义的 `sendVerificationOTP` 回调开头插入限流判断
+（`email`/`otp`/`type` 解构之后，`headers`/`locale` 之前）：
+
+```ts
+      sendVerificationOTP: async ({ email, otp, type }, ctx) => {
+        // 只有这两种类型会被我们触发；别的类型不该发信
+        if (type !== 'email-verification' && type !== 'forget-password') return
+        /**
+         * ⚠️ forget-password 的限流判断必须放在这里、不能放 hooks.before
+         * 里 throw 429——见本 Step 开头的改判说明（注册预言机）。命中
+         * 限流时直接 return（不发信、不抛错），endpoint 照样返回 200，
+         * 「被限流」与「邮箱不存在」从外部彻底不可区分。
+         *
+         * 必须用 `assertOtpRateExcludingCurrent`，不能用 `assertOtpRate`：
+         * `resolveOTP` 在这个回调被调用之前就已经把这次请求自己的验证码行
+         * 插进去了，直接数会把「自己这一行」也算进冷却窗，导致连第一次
+         * 请求都被误判成限流（连一封信都发不出去）。
+         */
+        if (type === 'forget-password') {
+          const verdict = await assertOtpRateExcludingCurrent(
+            'forget-password',
+            email,
+          )
+          if (!verdict.ok) return
+        }
+        const headers = ctx?.request?.headers
+        const locale = pickRequestLocale(
+          headers?.get(LOCALE_HEADER),
+          readCookie(headers?.get('cookie'), LOCALE_COOKIE),
+        )
+        await sendMail(
+          renderOtpMail(locale, type, otp, email, OTP_EXPIRES_SECONDS / 60),
+        )
+      },
+```
+
+（`assertOtpRate` 与 `assertOtpRateExcludingCurrent` 的 import 从 `./otp-rate` 补上。）
+
+加回一个 `hooks.before`（Task 9 删掉的那个不要恢复，这是新的一道，**只管
+`email-verification` 一种类型**——`forget-password` 已经在上面的回调里处理了）：
 
 ```ts
   hooks: {
     /**
-     * 发码类端点的**按邮箱**限流。挂在这里而不是 `sendVerificationOTP`
-     * 回调里：那个回调被 `runInBackgroundOrAwait` 调用，抛错未必能传回
-     * 客户端，限流会表现成「静默不发信」。
+     * `email-verification` 类型的**按邮箱**限流，只挡这一种类型。
+     * `forget-password` 的限流判断在上面 `sendVerificationOTP` 回调里，
+     * **不**在这里——原因见本 Step 开头的改判说明（注册预言机）。
      *
      * ⚠️ 这是 better-auth 的错误信封，**不是 `fail()` 那套**——
      * `ERROR_CODES` 里的 `rate_limited` 在这里用不上。前端在 authClient
      * 侧按 `err.code` 查文案。两套错误码体系刻意不统一。
-     *
-     * ⚠️ `/forget-password/email-otp` 是 better-auth **默认仍会注册**的
-     * deprecated 别名（`email-otp/index.mjs` 里 `forgetPasswordEmailOTP`
-     * 和 `requestPasswordResetEmailOTP` 一起无条件挂载），内部调用同一个
-     * `resolveOTP(..., "forget-password")`、写同一种 identifier——漏掉它
-     * 的话限流形同虚设：自查时用一次性脚本连打两次都拿到 200，
-     * `otp-rate.test.ts` 里有一条测试钉住这一点。
      */
     before: createAuthMiddleware(async (ctx) => {
-      const purpose =
-        ctx.path === '/email-otp/send-verification-otp'
-          ? ((ctx.body as { type?: string })?.type as OtpPurpose | undefined)
-          : ctx.path === '/email-otp/request-password-reset' ||
-              ctx.path === '/forget-password/email-otp'
-            ? ('forget-password' as const)
-            : undefined
-      if (!purpose) return
+      if (ctx.path !== '/email-otp/send-verification-otp') return
+      const type = (ctx.body as { type?: string })?.type
+      if (type !== 'email-verification') return
       const email = (ctx.body as { email?: string })?.email
       if (!email) return
-      const verdict = await assertOtpRate(purpose, email)
+      const verdict = await assertOtpRate('email-verification', email)
       if (verdict.ok) return
       throw new APIError('TOO_MANY_REQUESTS', {
         code: 'RATE_LIMITED',
@@ -3137,15 +3241,31 @@ Expected: PASS，4 条全绿
 
 - [ ] **Step 7: 写限流的集成测试**
 
-在 `apps/api/src/otp-rate.test.ts` 末尾追加：
+> ⚠️ **2026-09-11 review round 1 改判**：下面的 `deprecated 别名` 测试与新增的
+> 「注册预言机」测试组，断言方式与最初版本不同——最初版本对 `forget-password`
+> 断言过 `expect(second.status).toBe(429)`（连打两次拿到 429）。Step 6 已经说明
+> 为什么这个设计被推翻：429 会让「已注册但被限流」与「未注册」在外部产生两种
+> 不同的状态码，等于把限流层变成注册预言机。**现在 `forget-password` 命中限流
+> 永远还是 200**，只是不真的发信；下面的测试因此不再断言状态码差异，改成断言
+> 「两次请求只真的发出一封信」——用 `spyOn(console, 'info')` 观察 console
+> transport 有没有真的打印出邮件，这是**唯一**能从外部区分"发了"与"没发"的
+> 办法（两者的 HTTP 响应完全相同）。
+
+把文件顶部的 import 换成（`bun run check:fix` 会自动把散落的 import 合并成这样，
+不用手动分两处写）：
 
 ```ts
-import { afterAll } from 'bun:test'
+import { afterAll, describe, expect, spyOn, test } from 'bun:test'
 import { app } from './app'
+import { countOtpRows, decideOtpRate, OTP_HOURLY_QUOTA } from './otp-rate'
 import { cleanupTracked, trackUser } from './testing'
 
 afterAll(cleanupTracked)
+```
 
+在 `describe('decideOtpRate', …)` 之后追加三个 `describe` 块：
+
+```ts
 describe('发码端点的按邮箱限流', () => {
   test('连着要两次验证码，第二次被冷却窗挡住', async () => {
     const email = `rate-${Date.now()}@example.com`
@@ -3157,37 +3277,49 @@ describe('发码端点的按邮箱限流', () => {
     trackUser(((await signUp.json()) as { user?: { id: string } }).user?.id)
     // 注册本身已经发过一次码（sendVerificationOnSignUp），所以下面这次
     // 必然落在冷却窗里
-    const again = await app.request('/api/auth/email-otp/send-verification-otp', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email, type: 'email-verification' }),
-    })
+    const again = await app.request(
+      '/api/auth/email-otp/send-verification-otp',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email, type: 'email-verification' }),
+      },
+    )
     expect(again.status).toBe(429)
   })
 
   test('找回密码对不存在的邮箱也返回成功 —— 不泄露邮箱是否注册过', async () => {
-    const res = await app.request('/api/auth/email-otp/request-password-reset', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email: `ghost-${Date.now()}@example.com` }),
-    })
+    const res = await app.request(
+      '/api/auth/email-otp/request-password-reset',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: `ghost-${Date.now()}@example.com` }),
+      },
+    )
     expect(res.status).toBe(200)
   })
 
   /**
    * deprecated 的 `/forget-password/email-otp` 是 better-auth 默认注册的
    * 别名端点，与 `/email-otp/request-password-reset` 调用同一个
-   * `resolveOTP(..., "forget-password")`、写同一种 identifier——如果
-   * hooks.before 只按新端点的路径匹配，这条别名会完整绕过限流（自查时
-   * 用一次性诊断脚本打过两次，两次都 200，已经删掉那份脚本）。
+   * `resolveOTP(..., "forget-password")`、写同一种 identifier、且共享
+   * 同一个 `sendVerificationOTP` 回调——如果限流判断漏挡了某条路径，这
+   * 条别名会完整绕过限流（自查时用一次性诊断脚本打过两次，两次都 200，
+   * 已经删掉那份脚本）。
+   *
+   * ⚠️ round 2（修「注册预言机」）之后，forget-password 命中限流**不再
+   * 吐 429**——统一回 200、只是静默不发信（见 auth.ts 的
+   * `sendVerificationOTP` 回调注释）。所以这条测试改成断言「两次请求只
+   * 真的发出一封信」，不再断言状态码差异；状态码不可区分这件事由
+   * 「找回密码限流不能变成注册预言机」那组测试钉住。
    *
    * ⚠️ 邮箱必须是**已注册**的——用不存在的邮箱会踩到另一条既有行为：
    * better-auth 在 `findUserByEmail` 落空时会把刚创建的 verification 行
-   * 立刻 `deleteVerificationByIdentifier` 掉（不泄露邮箱是否注册过），
-   * 于是第二次请求数到的还是 0 行，测试会得到假阳性的 429 落空——
-   * 这不是限流没生效，是行被自己删了，count 天然为 0。
+   * 立刻 `deleteVerificationByIdentifier` 掉，回调根本不会被调用，两次
+   * 请求都不会发信，「只发一封」这条断言就失去意义（恒为 0 而不是 1）。
    */
-  test('deprecated 的 /forget-password/email-otp 别名与新端点共享同一个限流桶', async () => {
+  test('deprecated 的 /forget-password/email-otp 别名与新端点共享同一个限流桶（两次都 200，但只真的发一封信）', async () => {
     const email = `legacy-${Date.now()}@example.com`
     const signUp = await app.request('/api/auth/sign-up/email', {
       method: 'POST',
@@ -3196,18 +3328,129 @@ describe('发码端点的按邮箱限流', () => {
     })
     trackUser(((await signUp.json()) as { user?: { id: string } }).user?.id)
 
-    const first = await app.request('/api/auth/forget-password/email-otp', {
+    const logs: string[] = []
+    const spy = spyOn(console, 'info').mockImplementation((...args) => {
+      logs.push(args.map(String).join(' '))
+    })
+    let firstStatus: number
+    let secondStatus: number
+    try {
+      const first = await app.request('/api/auth/forget-password/email-otp', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      firstStatus = first.status
+      const second = await app.request('/api/auth/forget-password/email-otp', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      secondStatus = second.status
+    } finally {
+      spy.mockRestore()
+    }
+
+    expect(firstStatus).toBe(200)
+    expect(secondStatus).toBe(200)
+    const mails = logs.filter(
+      (l) => l.includes('[mail:console]') && l.includes(email),
+    )
+    expect(mails.length).toBe(1)
+  })
+})
+
+describe('找回密码限流不能变成注册预言机', () => {
+  /**
+   * Review round 1 的 Important 发现：`resolveOTP` 会给已注册邮箱留下一行
+   * 持久的 verification 行（第二次请求数到 ≥1 → 429），但对未注册邮箱，
+   * 端点自己会把刚插入的行立刻 `deleteVerificationByIdentifier` 掉（防
+   * 枚举），于是第二次请求数到的还是 0 行 → 200。连打两次就能靠状态码
+   * 序列 (200,429) vs (200,200) 反推邮箱是否注册——这是限流层自己引入的
+   * 新洞：identifier 格式修对之前，计数器是哑的，没有保护也没有泄露；
+   * 修对之后才第一次真的开始数到已注册邮箱的行，副作用是让这个差异变得
+   * 可观测。
+   *
+   * 修法：forget-password 的限流判断从 hooks.before 的 429 throw 挪进
+   * `sendVerificationOTP` 回调——命中限流时只是不发信、直接 return，
+   * endpoint 该返回什么还返回什么（统一 200 { success: true }），「被限流」
+   * 与「邮箱不存在」从外部彻底不可区分。email-verification 类型**不**这样
+   * 改，见 auth.ts 里 hooks.before 的注释——结论是 sign-up 端点已经用
+   * `USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL` 直接、单次请求地泄露了同一个
+   * 事实，这里关不关都不影响攻击者能拿到的信息，而 /verify 页的重发按钮
+   * 需要真实的 429 反馈。
+   */
+  test('已注册与未注册邮箱连打两次 request-password-reset，状态码序列必须完全一致', async () => {
+    const registeredEmail = `oracle-reg-${Date.now()}@example.com`
+    const signUp = await app.request('/api/auth/sign-up/email', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({
+        email: registeredEmail,
+        password: 'hakurei-reimu-514',
+        name: 'x',
+      }),
     })
-    expect(first.status).toBe(200)
-    const second = await app.request('/api/auth/forget-password/email-otp', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email }),
+    trackUser(((await signUp.json()) as { user?: { id: string } }).user?.id)
+    const unregisteredEmail = `oracle-ghost-${Date.now()}@example.com`
+
+    const logs: string[] = []
+    const spy = spyOn(console, 'info').mockImplementation((...args) => {
+      logs.push(args.map(String).join(' '))
     })
-    expect(second.status).toBe(429)
+    let regStatuses: number[]
+    let ghostStatuses: number[]
+    try {
+      const regFirst = await app.request(
+        '/api/auth/email-otp/request-password-reset',
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ email: registeredEmail }),
+        },
+      )
+      const regSecond = await app.request(
+        '/api/auth/email-otp/request-password-reset',
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ email: registeredEmail }),
+        },
+      )
+      regStatuses = [regFirst.status, regSecond.status]
+
+      const ghostFirst = await app.request(
+        '/api/auth/email-otp/request-password-reset',
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ email: unregisteredEmail }),
+        },
+      )
+      const ghostSecond = await app.request(
+        '/api/auth/email-otp/request-password-reset',
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ email: unregisteredEmail }),
+        },
+      )
+      ghostStatuses = [ghostFirst.status, ghostSecond.status]
+    } finally {
+      spy.mockRestore()
+    }
+
+    // 核心属性：限流命中（已注册但被挡）与邮箱未注册，外部必须看到同一种
+    // 响应序列——这条断言就是「注册预言机」是否还存在的直接检验
+    expect(regStatuses).toEqual(ghostStatuses)
+    expect(regStatuses).toEqual([200, 200])
+
+    // 轰炸防护仍然有效：已注册邮箱两次请求只真的发出一封信，
+    // 第二次被限流悄悄吞掉（console 传输让「有没有发信」可观测）
+    const regMails = logs.filter(
+      (l) => l.includes('[mail:console]') && l.includes(registeredEmail),
+    )
+    expect(regMails.length).toBe(1)
   })
 })
 
@@ -3238,7 +3481,8 @@ describe('countOtpRows 的 identifier 拼接与 better-auth 实际写库一致',
 })
 ```
 
-（`countOtpRows` 要从 `./otp-rate` 一并 import。）
+（`spyOn` 用来观察 console transport 有没有真的打印出邮件——这是外部唯一能区分
+「发了」与「静默没发」的办法，因为两种情况的 HTTP 响应完全相同。）
 
 - [ ] **Step 8: 跑全套并提交**
 
@@ -3654,7 +3898,7 @@ Expected: 全绿（这两个不进 CI，只能本地跑）
 - 第 2 条（`validateUserInfo` 拒绝时的 `code`）按 Task 9 Step 1 的实测结果填上
   实际值并标为结案。
 - 第 3 条（国内邮箱送达率）**保持开放**——它是产品风险不是实现风险，只有
-  上线后拿真实邮箱试过才能结案。上线检查表第 5 项就是它。
+  上线后拿真实邮箱试过才能结案。上线检查表第 6 项就是它。
 
 - [ ] **Step 7: 提交**
 
@@ -3694,11 +3938,33 @@ spec §8.1 列了一个**单列的可选任务**：把 better-auth 的限流接�
 
 1. **先配齐环境变量再 migrate**：`MAIL_TRANSPORT` / `MAIL_FROM` / 对应通道的凭据 /
    `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`。漏了不报错，只是行为不对。
-2. **Google Cloud Console 里加生产回调 URI**：`https://<域名>/api/auth/callback/google`。
-3. **migrate 跑完确认老账号都刷成了已验证**：
+2. **⚠️ 必须由人完成，代理未验证——在 Google Cloud Console 建 OAuth 2.0 客户端
+   （Web application），登记授权重定向 URI。** 这一步要求在用户自己的 Google
+   Cloud 账号里创建凭据并完成人工授权，是对用户账号的外部写操作，代理不代劳。
+   重定向 URI：开发是 `http://localhost:3000/api/auth/callback/google`
+   （`BETTER_AUTH_URL` 指向的是 **web** 的 origin，`apps/web/vite.config.ts`
+   再把 `/api` 代理到 3001，api 自己的端口不会被浏览器直接访问；填 3001 会在
+   真正走这一步时拿到 `redirect_uri_mismatch`），生产是
+   `https://<域名>/api/auth/callback/google`。
+3. **⚠️ 必须由人完成，代理未验证——用真实 Gmail 走一遍完整授权，并演练一次
+   抢注场景。** 步骤：① 用同一个 Gmail 在站内注册一个密码账号且**不验证**，
+   记下密码；② 用 Google 登录同一个邮箱；③ 登录成功后回登录页，用第 ① 步
+   那个密码尝试登录，应当**失败**（密码已被仲裁作废）。核对
+   `psql "$DATABASE_URL" -c $'select provider_id from account where user_id = \'<那个 id>\''`
+   应只剩 `google` 一行。
+   代理在本次执行中做过的是**替代验证，不能代替这一步**：无凭据时
+   `googleEnabled` 为 `false`；**假凭据**下 `googleEnabled` 为 `true` 且
+   `POST /api/auth/sign-in/social`（JSON body `{"provider":"google"}`）响应体
+   的 `url` 与 `Location` 头指向 `accounts.google.com`、`redirect_uri` 正确
+   等于 `${BETTER_AUTH_URL}/api/auth/callback/google`；仲裁函数
+   `takeoverIfUnverified` 的四条单测（`arbitrate.test.ts`：接管 / 已验证不动 /
+   无密码不动 / 用户不存在不抛错），并做过「功能被阉割则正向测试变红」的
+   变异验证。这些都不需要真实 Google 账号，也就都验证不到真实 OAuth 授权
+   与抢注场景本身。
+4. **migrate 跑完确认老账号都刷成了已验证**：
    `select email_verified, count(*) from "user" group by 1` 应只有一行 `t`。
-4. **上线后实际注册一个账号、收一封真信**。这一步不能用日志代替——
+5. **上线后实际注册一个账号、收一封真信**。这一步不能用日志代替——
    `MAIL_TRANSPORT` 没传进容器时会默认成 `console`，表现是「所有验证码都进了
    容器日志，一封信都没发出去」，而这在日志里看起来一切正常。
-5. **特别留意国内邮箱**：拿一个 QQ 邮箱和一个 163 邮箱各注册一次。收不到就是
+6. **特别留意国内邮箱**：拿一个 QQ 邮箱和一个 163 邮箱各注册一次。收不到就是
    spec §8.3 第 3 条那个风险成真了，改 `MAIL_TRANSPORT=smtp` 换国内服务商。

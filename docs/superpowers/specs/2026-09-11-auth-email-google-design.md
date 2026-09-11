@@ -436,7 +436,13 @@ better-auth 的限流默认存进程内存，多进程部署下等于各算各�
    **但子应用的 `.use('*', requireRole(...))` 是独立的 `ALL /api/admin/*` 条目，
    不会并进各路由自己的分组**——门禁必须对这类条目做前缀匹配，否则
    moderation / admin 下的 7 个写端点会被全部误报。实施计划已按实测形状写。
-2. `validateUserInfo` 拒绝时前端拿到的 `code` 形状（§5.2）。**实测，别默认不用改。**
+2. ~~`validateUserInfo` 拒绝时前端拿到的 `code` 形状（§5.2）~~ —— **2026-09-11 实测结案。**
+   状态 403，body `{ code: 'REGISTRATION_CLOSED', message: 'REGISTRATION_CLOSED' }`——
+   与原来的 `APIError` 形状相比，`code` 与 `status` 都不变，只有 `message` 从
+   `'registration is closed'` 变成了与 `code` 相同的字符串（没传 `errorDescription`
+   时 better-auth 回落成 `error` 本身，前端不读 `message`，不受影响）。`register.tsx`
+   已经按 `err.code === 'REGISTRATION_CLOSED'` 判断，**不需要改动**。实测见
+   `apps/api/src/auth.test.ts`「注册开关」describe 块里的实测值注释。
 3. Resend 对国内邮箱（QQ / 163 / 126）的真实送达率。这是**产品风险不是实现风险**：
    故障模式是静默丢弃或进垃圾箱，而 Resend 后台显示 `delivered`——没有告警，
    表现为「一部分用户注册完就卡在验证页，且只有他们自己知道」。两个 transport

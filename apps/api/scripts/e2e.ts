@@ -10,11 +10,17 @@
  * M4 博丽神社追加九项：楼层连续与并发不撞号、下架后的两道闸门（P0-5 / P0-1）、
  * purge 后通知仍在（P0-11）、@ 提及与上限、限流、帖子举报闭环（P0-7）、版主不能改他人正文。
  *
+ * M6 认证追加两项：注册 → 取码 → 验证 → 发帖的完整闭环（验证码从 console
+ * transport 的 stdout 截获，e2e 与 api 同进程，直接拦 `console.info` 就行）；
+ * 未验证账号写操作被拒——403 与 `error.code === 'email_unverified'`，这是本次
+ * 里程碑「验证后才能写」的核心承诺。
+ *
  * 结束时会清掉本次造的账号与内容；`E2E_KEEP=1` 可保留以便排查。
  */
 import { db, schema } from '@gensokyo/db'
 import { eq, inArray } from 'drizzle-orm'
 import { app } from '../src/app'
+import { markVerified } from '../src/testing'
 
 let pass = 0
 let fail = 0
@@ -25,22 +31,33 @@ const check = (name: string, ok: boolean, detail = '') => {
 
 const stamp = Date.now()
 const signUp = async (name: string) => {
+  const email = `e2e-${stamp}-${Math.random().toString(36).slice(2, 8)}@example.com`
   const res = await app.request('/api/auth/sign-up/email', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      email: `e2e-${stamp}-${Math.random().toString(36).slice(2, 8)}@example.com`,
-      password: 'hakurei-reimu-514',
-      name,
-    }),
+    body: JSON.stringify({ email, password: 'hakurei-reimu-514', name }),
   })
   const body = (await res.json()) as { user?: { id: string } }
   return {
     cookie: res.headers.get('set-cookie') ?? '',
     id: body.user?.id as string,
+    email,
   }
 }
 type Session = Awaited<ReturnType<typeof signUp>>
+
+/**
+ * 「验证后才能写」（M6）上线后，大多数既有场景关心的是「验证过的账号能不能
+ * 写」，不是验证流程本身——直接写库标记已验证（同 `apps/api/src/testing.ts`
+ * 的 `markVerified`），避免给下面每一个账号都重放一次 OTP 流程。真实的验证
+ * 闭环由文件末尾「认证」一节的两条链路单独跑一遍：一条走完整的取码 → 验证，
+ * 一条刻意不验证、断言写操作被拒——那一条比这条更重要。
+ */
+const verifiedSignUp = async (name: string) => {
+  const s = await signUp(name)
+  await markVerified(s.id)
+  return s
+}
 
 const send = (s: Session | null, method: string, body?: unknown) => ({
   method,
@@ -53,9 +70,9 @@ const send = (s: Session | null, method: string, body?: unknown) => ({
 
 async function main() {
   // --- 账号 ---
-  const author = await signUp('E2E 投稿者')
-  const reader = await signUp('E2E 读者')
-  const staff = await signUp('E2E 审核员')
+  const author = await verifiedSignUp('E2E 投稿者')
+  const reader = await verifiedSignUp('E2E 读者')
+  const staff = await verifiedSignUp('E2E 审核员')
   await app.request('/api/me', { headers: { cookie: staff.cookie } })
   await db
     .update(schema.userProfile)
@@ -314,7 +331,7 @@ async function main() {
   check('发版块主题', topicRes.status === 201)
 
   const posters = await Promise.all(
-    [1, 2, 3, 4].map((i) => signUp(`E2E 并发 ${i}`)),
+    [1, 2, 3, 4].map((i) => verifiedSignUp(`E2E 并发 ${i}`)),
   )
   const concurrent = await Promise.all(
     posters.map((p, i) =>
@@ -339,7 +356,7 @@ async function main() {
 
   // --- @ 提及产生通知；提及超过 10 人被拒 ---
   const authorHandle = await handleOf(author)
-  const mentioner = await signUp('E2E 提及者')
+  const mentioner = await verifiedSignUp('E2E 提及者')
   const mention = await app.request(
     `/api/shrine/topics/${tb.id}/posts`,
     send(mentioner, 'POST', { bodyMd: `@${authorHandle} 你好` }),
@@ -355,7 +372,7 @@ async function main() {
     mention.status === 201 &&
       ib.items.some((n) => n.kind === 'mention' && n.topicId === tb.id),
   )
-  const spammer = await signUp('E2E 提及过多')
+  const spammer = await verifiedSignUp('E2E 提及过多')
   const tooMany = await app.request(
     `/api/shrine/topics/${tb.id}/posts`,
     send(spammer, 'POST', {
@@ -379,7 +396,7 @@ async function main() {
     again.status === 429 && !!again.headers.get('retry-after'),
     `status=${again.status}`,
   )
-  const linker = await signUp('E2E 外链')
+  const linker = await verifiedSignUp('E2E 外链')
   const link = await app.request(
     `/api/shrine/topics/${tb.id}/posts`,
     send(linker, 'POST', { bodyMd: '看这个 https://example.org/x' }),
@@ -463,7 +480,7 @@ async function main() {
   check('版主编辑他人楼层 → 403', edit.status === 403)
 
   // --- purge → 作者收到 resource_deleted，且通知在 purge 之后仍在（P0-11）---
-  const admin = await signUp('E2E 站长')
+  const admin = await verifiedSignUp('E2E 站长')
   await app.request('/api/me', { headers: { cookie: admin.cookie } })
   await db
     .update(schema.userProfile)
@@ -494,6 +511,81 @@ async function main() {
     `status=${purge.status}`,
   )
 
+  // ================= 认证（M6）=================
+  // --- 注册 → 取码 → 验证 → 发帖：证明整条闭环真的走得通，不只是「有这个功能」 ---
+  const mailLogs: string[] = []
+  const originalInfo = console.info
+  console.info = (...args: unknown[]) => {
+    mailLogs.push(args.map(String).join(' '))
+  }
+  let otpFlow: Session
+  try {
+    otpFlow = await signUp('E2E 验证闭环')
+  } finally {
+    console.info = originalInfo
+  }
+  const otpMail = mailLogs.find(
+    (l) => l.includes('[mail:console]') && l.includes(otpFlow.email),
+  )
+  // 模板形状固定：提示语之后空一行、验证码独占一行且缩进 4 格、再空一行
+  // （apps/api/src/mail/templates/otp.ts 的 renderOtpMail）。按这个形状精确
+  // 摘取，不用宽松的 \b\d{6}\b——邮箱地址本身带时间戳与随机后缀，两者都可能
+  // 出现连续数字，宽松匹配有极小概率截到假验证码。
+  const otp = otpMail?.match(/\n {4}(\d{6})\n/)?.[1] ?? ''
+
+  /**
+   * ⚠️ better-auth 的 origin-check 中间件只在请求**带 cookie**时才校验 Origin
+   * （`origin-check.mjs` 的 `useCookies = headers.has('cookie')`），这是本
+   * 脚本第一处带 cookie 打 `/api/auth/*` 的调用——上面的 sign-up 是匿名请求，
+   * 从不带 cookie，从没触发过这条检查。`bun test` 下 `NODE_ENV=test` 会让
+   * better-auth 自动跳过这项校验（`create-context.mjs` 的
+   * `skipOriginCheck: ... isTest() ? true : false`），`email-otp.test.ts`
+   * 因此不用管它；但 `bun run e2e` 是普通脚本进程，没有这层豁免，缺 Origin
+   * 会直接 403 `MISSING_OR_NULL_ORIGIN`。补一个在 `TRUSTED_ORIGINS` 里的
+   * Origin，模拟真实浏览器请求本来就会带的这个头。
+   */
+  const verifyRes = await app.request('/api/auth/email-otp/verify-email', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      cookie: otpFlow.cookie,
+      origin: process.env.BETTER_AUTH_URL ?? 'http://localhost:3000',
+    },
+    body: JSON.stringify({ email: otpFlow.email, otp }),
+  })
+
+  const otpTopicRes = await app.request(
+    '/api/shrine/topics',
+    send(otpFlow, 'POST', {
+      boardSlug: 'meta',
+      title: `E2E 验证后发帖 ${stamp}`,
+      bodyMd: '验证后发帖',
+    }),
+  )
+  const otb = (await otpTopicRes.json()) as { id: string }
+  check(
+    '注册 → 取码 → 验证 → 发帖，全链路走通',
+    otp.length === 6 && verifyRes.status === 200 && otpTopicRes.status === 201,
+    `otp=${otp || '(未截获)'} verify=${verifyRes.status} post=${otpTopicRes.status}`,
+  )
+
+  // --- 未验证不能发帖——这是本次里程碑「验证后才能写」的核心承诺，比上面那条更重要 ---
+  const unverified = await signUp('E2E 未验证')
+  const blocked = await app.request(
+    '/api/shrine/topics',
+    send(unverified, 'POST', {
+      boardSlug: 'meta',
+      title: `E2E 未验证发帖 ${stamp}`,
+      bodyMd: '不该发得出去',
+    }),
+  )
+  const blockedBody = (await blocked.json()) as { error?: { code: string } }
+  check(
+    '未验证账号发帖 → 403 email_unverified',
+    blocked.status === 403 && blockedBody.error?.code === 'email_unverified',
+    `status=${blocked.status} code=${blockedBody.error?.code}`,
+  )
+
   // --- 清理：本次造的一切 ---
   if (!process.env.E2E_KEEP) {
     const ids = [
@@ -504,6 +596,8 @@ async function main() {
       mentioner,
       spammer,
       linker,
+      otpFlow,
+      unverified,
       ...posters,
     ].map((s) => s.id)
     // report.reporter_id / post.author_id 都是 set null：不先删会留下孤儿
@@ -511,7 +605,9 @@ async function main() {
     await db
       .delete(schema.notification)
       .where(inArray(schema.notification.userId, ids))
-    await db.delete(schema.topic).where(eq(schema.topic.id, tb.id))
+    await db
+      .delete(schema.topic)
+      .where(inArray(schema.topic.id, [tb.id, otb.id]))
     await db.delete(schema.resource).where(eq(schema.resource.id, resource.id))
     await db.delete(schema.user).where(inArray(schema.user.id, ids))
     console.log('已清理本次 e2e 数据（E2E_KEEP=1 可保留）')

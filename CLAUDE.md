@@ -50,6 +50,51 @@
   - 版块 slug 是对外 URL，六值闭合在 `packages/shared/src/shrine/enums.ts`，DB 侧由一条 CHECK 兜底（不建 `board` 表）
   - **测试必须接 `@gensokyo/db/testing`（`packages/db/src/testing.ts`）的 track/cleanup**——测试打的是共享开发库，不是一次性容器。删账号前要先删它发的 `report`：`reporter_id` 是 ON DELETE SET NULL，留下的孤儿 open 举报会永远堆在 `/dash/reports`（真攒过 59 条）
   - 开场内容（六篇引导帖 + 站规）的编辑源是 `docs/product/2026-08-30-shrine-seed-content.md`，生成到 `seed-shrine-content.ts` 后由 `bun run seed:shrine` 入库；幂等键是「版块 + 标题 + 种子账号」，**改正文重跑即可，改标题会当成新帖**
+- 认证（邮箱验证 / Google / 找回密码，M6，已完成）约定：
+  - **「验证后才能写」只有一个强制点**：`requireVerified`（`requireRole` 隐含它）。
+    判据是「是否产出对外可见的内容」。**新增任何非 GET 路由必须回答「它挂的是
+    哪一个」**——`bun run check-write-guard` 把这条钉成断言，它枚举 `app.routes`
+    做**函数身份**比对（守卫登记在 `middleware/require.ts` 的 WeakSet 里），
+    所以改路径改文件名都不会让它失灵。豁免写在脚本顶部，**往那里加一行就是
+    一次安全决策**（现在只有 1 条：`POST /api/notifications/read`）。子应用的
+    `.use('*', requireRole(...))` 在 `app.routes` 里是独立的 `ALL /api/admin/*`
+    条目、不并进各路由分组，所以前缀守卫要单独匹配。**守卫还必须排在终结
+    handler 之前**——Hono 按注册顺序执行中间件链，`.post(p, handler,
+    requireVerified)` 这种笔误在 `app.routes` 里守卫依然「出现过」，但运行时
+    永远执行不到；门禁按「分组内最后一位是终结 handler」这条实测事实，把
+    「没挂」与「挂了但排序错」分开报
+  - **注册开关只有一个强制点**：`user.validateUserInfo` 的 `create-user` 分支。
+    它横跨每一种认证方式，所以「加了新登录方式要记得再判一次」这件事不存在。
+    **不要退回按路径拦 `/sign-up/email`**
+  - **emailOTP 插件有三个默认值是为「快速跑通」调的，不是为生产调的**：
+    `storeOTP` 默认 `'plain'`（验证码明文躺在 `verification` 表）、`disableSignUp`
+    默认 `false`（等于多一条绕过注册开关的注册路径）、
+    `emailAndPassword.revokeSessionsOnPasswordReset` 默认 `false`（找回密码不吊销
+    会话）。配置块里每一项都要能说出为什么
+  - **Google 撞车仲裁挂在 `databaseHooks.account.create.after`**，位置由 better-auth
+    的实现顺序决定：`linkAccount → 本钩子 → emailVerified=true → createSession`。
+    所以钩子里 `emailVerified` 还是 false（能当判据）、session 还没建（吊销全部会话
+    不会误伤刚登录的人）、链接已成功（不存在密码删了但没接上的锁死）。
+    它依赖 `requireLocalEmailVerified: false`，而那个选项**已 deprecated**，
+    升级 better-auth 后仲裁失效、退回「拒绝链接」——朝安全方向的退化，
+    `arbitrate.test.ts` 会在那时变红
+  - **mail 模块不在模块顶层读 env**：它被 `auth.ts` → `app.ts` 传递引用，而测试
+    导入的正是 app。顶层读会让整个 api 测试套件因缺 `RESEND_API_KEY` 而起不来，
+    症状表现成「测试挂了」。启动即炸由 `env.ts`（只被 index.ts import）负责
+  - 发信只有一个出口 `sendMail()`（`mail/index.ts`），三个 transport 由
+    `MAIL_TRANSPORT` 选。**console 通道不是玩具**：e2e 靠它取验证码
+  - 邮件语言从 `LOCALE_HEADER` 头（`x-gensokyo-locale`）取，回落 Paraglide cookie
+    再回落 `zh`。**不读 `Accept-Language`**——那是浏览器语言，不是站内选的界面语言
+  - OTP 的按邮箱限流在 `otp-rate.ts`，数 `verification` 表的行（索引本来就有）。
+    插件自带的是按 IP 的，挡不住换 IP 轰炸同一个受害者邮箱。**找回密码命中限流
+    不能抛错**——`resolveOTP` 给已注册邮箱留一行持久的行，给未注册邮箱的行会被
+    better-auth 自己删掉防枚举，抛 429 会让两者产生外部可分辨的状态码序列，
+    等于限流层自己变成注册预言机。挂载点因此分两处：`email-verification` 留在
+    `hooks.before` 照样 429（sign-up 早已用 `USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL`
+    泄露过同一个事实，429 不多泄露什么，且 `/verify` 重发按钮需要它）；
+    `forget-password` 挪进 `sendVerificationOTP` 回调，命中限流静默 `return`、
+    endpoint 统一回 200
+  - **better-auth 路由的错误信封与 `fail()` 的 `ERROR_CODES` 是两套，不要统一**
 - 动效与样式约定（T0 已落地，详见 `docs/superpowers/specs/2026-09-05-motion-atmosphere-design.md`）：
   - **卡片不能用 `border-*` 表达状态**：`card.tsx` 只有 `ring-1 ring-foreground/10`，Tailwind preflight 是 `border: 0 solid`，改 border 颜色是**空操作**。首页与六版块网格曾因此三处 hover 与「当前版块」高亮全部无效。一律用 `ring-*`
   - `prefers-reduced-motion` 兜底在 `app.css` **文件末尾、不带任何 `@layer`**：**归零 `--tw-enter-*` / `--tw-exit-*` 变量**，不用 `animation: none`（Radix 靠 `animationend` 卸载弹层，掐掉动画会让弹层卡住），也不用 `transition-duration: .01ms !important`（会连颜色过渡一起杀）。**不能放 `@layer base`**——设这些变量非零值的工具类在 `@layer utilities`，Tailwind v4 层序 theme→base→components→utilities 晚层恒胜，放 `base` 会被 `utilities` 完全盖过而失效（T0 曾犯过这个错，最终审查在生产构建产物上实测抓出）；**也不能放 `@layer utilities`**——我们的 `*` 特异性 0,0,0 仍输给工具类选择器 0,1,0。未分层的常规声明胜过任何分层声明，这是唯一有效的位置。`bun run check-css-layers`（读构建产物）把这条钉成断言
@@ -81,5 +126,5 @@
   - **dash 列表的乐观移除**（`lib/dash-pending.ts`，有单测）：在途行当帧从 `visible` 里摘掉，退场动画与网络往返重叠。**盯梢集合是并集不是在途集**——`fetcher.data` 恰好在它变回 idle 的那一帧才有，而那一帧它已不在在途集里；只渲染在途集的话盯梢组件会在拿到结果的同一次提交里卸载，effect 永远不触发，播报永远是空的（实测踩过）。两个 dash 页面各用各的 fetcher key 前缀（`review:` / `report:`），action 返回形状不同，串了会读到对方的 data
   - **Browser pane 里测不了动画**：标签页常是 `visibilityState: hidden`，rAF 不触发，motion 走自己的帧循环所以 opacity/layout 动画全部冻在起点（`AnimatePresence` 会把退场元素永远扣在 DOM 里，看起来像组件坏了）。验证要改成**机制测试**：读 FLIP 起点的 transform（非单位矩阵即投影已接上）、对照 loaderData 与 DOM 的条数、读 `[role=alert]`/`[data-slot=live-region]` 的文本；`transition-colors` 会卡在过渡起点，读真值前先注入 `transition:none`。凡是浏览器里读不到的推导（如 `reduce ?` 守卫）抽成纯函数写单测
   - CI 在 `.github/workflows/ci.yml`，跑 check / typecheck / check-messages / build / check-css-layers / check-bundle-size，以及 **web 与 shared 两个包的 test**。`api` / `db` / `api-client` 的测试与 `e2e` 都要真实的 postgres/redis/Meili/MinIO，**刻意不进 CI**——接它们是另一个决策
-- 常用脚本：`bun run e2e`（端到端验收 40 项，跑完自清理，`E2E_KEEP=1` 保留）、`check-messages`（三语 key 审计）、`reindex`（Meili 全量重建）、`gc:images`（未引用图片巡检，带白名单熔断）、`seed:shrine`（开场内容）、`seed:demo*`（演示数据）
+- 常用脚本：`bun run e2e`（端到端验收 42 项，跑完自清理，`E2E_KEEP=1` 保留）、`check-messages`（三语 key 审计）、`check-write-guard`（写端点验证闸门禁，枚举 `app.routes` 做函数身份比对）、`reindex`（Meili 全量重建）、`gc:images`（未引用图片巡检，带白名单熔断）、`seed:shrine`（开场内容）、`seed:demo*`（演示数据）
 - 设计文档：docs/superpowers/specs/；产品文档：docs/product/；实施计划：docs/superpowers/plans/；调研与审计：docs/superpowers/research/；legacy/ 是只读参考

@@ -22,6 +22,20 @@ x-app-env: &app-env
   S3_BUCKET: ${S3_BUCKET}
   # 对外读取的基地址：经 Caddy 的 /img 反代，不直接暴露 MinIO
   S3_PUBLIC_BASE_URL: ${PUBLIC_URL}/img/${S3_BUCKET}
+  # 认证（M6）：邮件发信与 Google 登录。漏传不报错，只是行为不对——
+  # MAIL_TRANSPORT 没传进容器时会默认成 console，生产上所有验证码都会打进
+  # 容器日志、一封信都发不出去；GOOGLE_CLIENT_ID/SECRET 缺一个则 Google 登录
+  # 按钮整体不出现（googleEnabled: false），不是报错，是静默降级。
+  MAIL_TRANSPORT: ${MAIL_TRANSPORT}
+  MAIL_FROM: ${MAIL_FROM}
+  RESEND_API_KEY: ${RESEND_API_KEY}
+  SMTP_HOST: ${SMTP_HOST}
+  SMTP_PORT: ${SMTP_PORT}
+  SMTP_USER: ${SMTP_USER}
+  SMTP_PASS: ${SMTP_PASS}
+  SMTP_SECURE: ${SMTP_SECURE}
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+  GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
 
 services:
   postgres:
