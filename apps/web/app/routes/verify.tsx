@@ -21,7 +21,14 @@ export function meta() {
  * 注册后的补全页。它同时服务两类人——邮箱密码注册的走「验证码 → 认领 handle」
  * 两段，Google 注册的邮箱天生已验证、只剩认领那一段。
  *
- * 写操作被 403 挡住时，前端也把人引到这里。
+ * 写操作被 403 `email_unverified` 挡住时，也从错误提示里的链接进这里
+ * （`components/error-text.tsx`）。
+ *
+ * ⚠️ **这一页不在加载时自动发码**，两个理由：一是每次刷新都要烧掉一次按邮箱
+ * 的小时配额（5 次/小时），二是进这一页的人未必需要新码——刚注册完的人信箱
+ * 里已经有一封了。所以文案（`auth_verify_sent`）写成「填入你收到的码」而不是
+ * 「码已经发出去了」：后者对「注册后关掉标签页、第二天回来」的人是**假话**，
+ * 而那正是最需要这一页的人。要码的人自己点那个按钮。
  */
 export async function loader({ request }: Route.LoaderArgs) {
   // SSR 取会话要手动转发 cookie
@@ -147,9 +154,14 @@ export default function Verify({ loaderData }: Route.ComponentProps) {
               <Button type="submit" disabled={pending}>
                 {m.auth_verify_submit()}
               </Button>
+              {/*
+                outline 而不是 ghost：这一页**不会**在加载时自动发码，所以
+                对「手里没有码」的人来说它才是这一页真正的第一步，得看起来
+                像个按钮。ghost 在一段说明文字下面像另一行说明
+              */}
               <Button
                 type="button"
-                variant="ghost"
+                variant="outline"
                 onClick={onResend}
                 disabled={pending}
               >

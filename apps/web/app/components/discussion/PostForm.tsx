@@ -1,9 +1,9 @@
 import { lazy, Suspense, useEffect, useId, useRef, useState } from 'react'
 import { useFetcher } from 'react-router'
+import { ErrorText } from '~/components/error-text'
 import { LazyBoundary } from '~/components/lazy-boundary'
 import { Button } from '~/components/ui/button'
 import { Textarea } from '~/components/ui/textarea'
-import { errorMessage } from '~/lib/api-error'
 import type { DiscussionResult } from '~/lib/discussion-action'
 import { uploadImage } from '~/lib/upload'
 import { m } from '~/paraglide/messages'
@@ -296,7 +296,7 @@ export function PostForm({
       )}
       {error && (
         <p role="alert" className="text-sm text-destructive">
-          {errorMessage(error)}
+          <ErrorText code={error} />
         </p>
       )}
 

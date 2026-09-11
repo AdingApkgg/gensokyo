@@ -2,6 +2,7 @@ import type { NotificationView } from '@gensokyo/shared'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useEffect, useState } from 'react'
 import { Link, redirect, useFetcher, useSearchParams } from 'react-router'
+import { ErrorText } from '~/components/error-text'
 import { LiveRegion } from '~/components/live-region'
 import { RelativeTime } from '~/components/relative-time'
 import { Button } from '~/components/ui/button'
@@ -14,7 +15,7 @@ import {
   PaginationPrevious,
 } from '~/components/ui/pagination'
 import { apiFor } from '~/lib/api'
-import { apiErrorCode, errorMessage } from '~/lib/api-error'
+import { apiErrorCode } from '~/lib/api-error'
 import { displayTitle, reportReasonLabel } from '~/lib/display'
 import { EASE_FUDE, EASE_SUMI } from '~/lib/motion'
 import { pageWindow } from '~/lib/paging'
@@ -192,7 +193,7 @@ export default function Notifications({ loaderData }: Route.ComponentProps) {
           同一句话播两遍比不播更糟。 */}
       {failCode && (
         <p role="alert" className="mb-4 text-sm text-destructive">
-          {errorMessage(failCode)}
+          <ErrorText code={failCode} />
         </p>
       )}
       <header className="flex items-center gap-4">

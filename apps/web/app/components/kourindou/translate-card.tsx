@@ -1,13 +1,13 @@
 import { LOCALES, type Locale, type LocalizedText } from '@gensokyo/shared'
 import { useState } from 'react'
 import { useFetcher } from 'react-router'
+import { ErrorText } from '~/components/error-text'
 import { LiveRegion } from '~/components/live-region'
 import { Button } from '~/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { Input } from '~/components/ui/input'
 import { Label } from '~/components/ui/label'
 import { Textarea } from '~/components/ui/textarea'
-import { errorMessage } from '~/lib/api-error'
 import { m } from '~/paraglide/messages'
 
 /**
@@ -163,7 +163,7 @@ export function TranslateCard({
           </Button>
           {result?.ok === false && (
             <p role="alert" className="text-xs text-destructive">
-              {errorMessage(result.code)}
+              <ErrorText code={result.code} />
             </p>
           )}
         </div>

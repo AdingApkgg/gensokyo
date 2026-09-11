@@ -1,6 +1,7 @@
 import { REPORT_REASON } from '@gensokyo/shared'
 import { useEffect, useState } from 'react'
 import { useFetcher } from 'react-router'
+import { ErrorText } from '~/components/error-text'
 import { Button } from '~/components/ui/button'
 import {
   Dialog,
@@ -19,7 +20,6 @@ import {
   SelectValue,
 } from '~/components/ui/select'
 import { Textarea } from '~/components/ui/textarea'
-import { errorMessage } from '~/lib/api-error'
 import { reportReasonLabel } from '~/lib/display'
 import { m } from '~/paraglide/messages'
 
@@ -89,7 +89,7 @@ export function ReportDialog({
             />
             {fetcher.data && !fetcher.data.ok && (
               <p role="alert" className="text-sm text-destructive">
-                {errorMessage(fetcher.data.code)}
+                <ErrorText code={fetcher.data.code} />
               </p>
             )}
           </div>

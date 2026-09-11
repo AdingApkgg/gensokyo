@@ -4,6 +4,7 @@ import { lazy, Suspense, useState } from 'react'
 import { data, Link, redirect, useFetcher, useNavigation } from 'react-router'
 import { Discussion } from '~/components/discussion/Discussion'
 import { ReportDialog } from '~/components/discussion/ReportDialog'
+import { ErrorText } from '~/components/error-text'
 import { StaticStars } from '~/components/kourindou/stars'
 import { TranslateCard } from '~/components/kourindou/translate-card'
 import { LazyBoundary } from '~/components/lazy-boundary'
@@ -354,7 +355,7 @@ export default function ResourceDetail({
               role="alert"
               className="mt-1 text-right text-xs text-destructive"
             >
-              {errorMessage(rateError)}
+              <ErrorText code={rateError} />
             </p>
           )}
           <LiveRegion>

@@ -2,6 +2,7 @@ import { BOARD_SLUGS, isBoardSlug } from '@gensokyo/shared'
 import { useEffect, useState } from 'react'
 import { Form, redirect, useNavigation } from 'react-router'
 import { Markdown } from '~/components/discussion/Markdown'
+import { ErrorText } from '~/components/error-text'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { Label } from '~/components/ui/label'
@@ -14,7 +15,7 @@ import {
 } from '~/components/ui/select'
 import { Textarea } from '~/components/ui/textarea'
 import { apiFor } from '~/lib/api'
-import { apiErrorCode, errorMessage } from '~/lib/api-error'
+import { apiErrorCode } from '~/lib/api-error'
 import { boardLabel } from '~/lib/display'
 import { m } from '~/paraglide/messages'
 import { getLocale, localizeHref } from '~/paraglide/runtime'
@@ -206,7 +207,7 @@ export default function NewTopic({
         )}
         {actionData && !actionData.ok && (
           <p role="alert" className="text-sm text-destructive">
-            {errorMessage(actionData.code)}
+            <ErrorText code={actionData.code} />
           </p>
         )}
         <Button

@@ -20,6 +20,7 @@ import {
 import { AnimatePresence, motion, Reorder, useDragControls } from 'motion/react'
 import { useEffect, useId, useRef, useState } from 'react'
 import { Link, redirect, useFetcher } from 'react-router'
+import { ErrorText } from '~/components/error-text'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
@@ -36,7 +37,7 @@ import { Separator } from '~/components/ui/separator'
 import { Textarea } from '~/components/ui/textarea'
 import UploadProgress from '~/components/upload-progress'
 import { apiFor } from '~/lib/api'
-import { apiErrorCode, errorMessage } from '~/lib/api-error'
+import { apiErrorCode } from '~/lib/api-error'
 import { kindLabel, licenseLabel, licenseVariant } from '~/lib/display'
 import { EASE_SUMI, SPRING_WASHI } from '~/lib/motion'
 import { uploadImage } from '~/lib/upload'
@@ -814,7 +815,7 @@ export default function UploadWizard() {
                 </p>
                 {result?.ok === false && (
                   <p className="text-sm text-destructive">
-                    {errorMessage(result.code)}
+                    <ErrorText code={result.code} />
                   </p>
                 )}
               </div>
