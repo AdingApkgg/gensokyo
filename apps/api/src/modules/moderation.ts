@@ -11,6 +11,7 @@ import { entityIdParam, fail, validate } from '../errors'
 import { requireRole } from '../middleware/require'
 import type { AppEnv } from '../middleware/session'
 import { notify } from '../notify'
+import { syncResource } from '../search'
 import { canTransition } from './kourindou/status'
 
 const { resource, userProfile, moderationLog, report, user, post, topic } =
@@ -146,6 +147,7 @@ export const moderation = new Hono<AppEnv>()
         }
       })
 
+      void syncResource(id)
       return c.json({ status: to, struck: striking })
     },
   )

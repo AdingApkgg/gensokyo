@@ -13,6 +13,7 @@ import { entityIdParam, fail, validate } from '../../errors'
 import { isOwnerOrStaff, requireAuth } from '../../middleware/require'
 import { type AppEnv, canAutoPublish } from '../../middleware/session'
 import { notify } from '../../notify'
+import { syncResource } from '../../search'
 import { autoPublishThreshold } from '../../site-config'
 import { loadVisibleTopicByResourceSlug } from '../content/visibility'
 import { makeSlug } from './slug'
@@ -315,6 +316,7 @@ export const kourindou = new Hono<AppEnv>()
         return r
       })
 
+      void syncResource(id)
       return c.json({ resource: updated })
     },
   )
@@ -351,6 +353,7 @@ export const kourindou = new Hono<AppEnv>()
       .where(eq(resource.id, id))
       .returning({ status: resource.status })
 
+    void syncResource(id)
     return c.json({ status: updated?.status ?? to, autoPublished: auto })
   })
 
@@ -425,6 +428,7 @@ export const kourindou = new Hono<AppEnv>()
         }
       })
 
+      void syncResource(id)
       return c.json({ status: to })
     },
   )
@@ -466,6 +470,7 @@ export const kourindou = new Hono<AppEnv>()
         })
       })
 
+      void syncResource(id)
       return c.json({ license: input.license })
     },
   )
@@ -585,5 +590,7 @@ export const kourindou = new Hono<AppEnv>()
       })
     })
 
+    // downloads 排序读的是索引里的计数
+    void syncResource(row.id)
     return c.redirect(file.url, 302)
   })

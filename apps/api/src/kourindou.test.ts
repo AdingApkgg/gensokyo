@@ -3,6 +3,7 @@ import { db, schema } from '@gensokyo/db'
 import { cleanupTracked, trackResource, trackUser } from '@gensokyo/db/testing'
 import { eq } from 'drizzle-orm'
 import { app } from './app'
+import { ensureIndex, flushSyncs, meiliFetch, SEARCH_INDEX } from './search'
 
 type Session = { cookie: string; userId: string }
 
@@ -21,6 +22,10 @@ async function signUp(name: string): Promise<Session> {
 }
 
 afterAll(cleanupTracked)
+
+beforeAll(async () => {
+  await ensureIndex()
+})
 
 const json = (s: Session, body: unknown) => ({
   method: 'POST',
@@ -519,5 +524,64 @@ describe('审计回归：单标签筛选', () => {
   test('?tag=th06 单个标签不再 400', async () => {
     const res = await app.request('/api/kourindou/resources?tag=th06')
     expect(res.status).toBe(200)
+  })
+})
+
+/** 直接读 Meili 里的文档：404 表示不在索引里 */
+async function indexedDoc(id: string) {
+  return meiliFetch<{ id: string; titles: string[] }>(
+    `/indexes/${SEARCH_INDEX}/documents/${id}`,
+  ).catch((err: { status?: number }) =>
+    err.status === 404 ? null : Promise.reject(err),
+  )
+}
+
+describe('搜索索引同步', () => {
+  test('发布后文档进索引，下架后文档被删', async () => {
+    const veteran = await signUp('索引作者')
+    await makeTrusted(veteran)
+    const { resource } = await createResource(veteran, {
+      titleOriginal: `東方紅魔郷 ${crypto.randomUUID().slice(0, 8)}`,
+    })
+    const id = resource?.id as string
+
+    // 草稿不进索引
+    await flushSyncs()
+    expect(await indexedDoc(id)).toBeNull()
+
+    await app.request(`/api/kourindou/resources/${id}/submit`, {
+      method: 'POST',
+      headers: { cookie: veteran.cookie },
+    })
+    await flushSyncs()
+    expect((await indexedDoc(id))?.id).toBe(id)
+
+    await app.request(
+      `/api/kourindou/resources/${id}/status`,
+      json(veteran, { to: 'delisted', reason: '自查后发现社团禁止转载' }),
+    )
+    await flushSyncs()
+    expect(await indexedDoc(id)).toBeNull()
+  })
+
+  test('编辑标题后索引里的标题跟着变', async () => {
+    const veteran = await signUp('改名作者')
+    await makeTrusted(veteran)
+    const { resource } = await createResource(veteran)
+    const id = resource?.id as string
+    await app.request(`/api/kourindou/resources/${id}/submit`, {
+      method: 'POST',
+      headers: { cookie: veteran.cookie },
+    })
+    await flushSyncs()
+
+    const res = await app.request(`/api/kourindou/resources/${id}`, {
+      method: 'PATCH',
+      headers: { cookie: veteran.cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ titleOriginal: '東方妖々夢 体験版' }),
+    })
+    expect(res.status).toBe(200)
+    await flushSyncs()
+    expect((await indexedDoc(id))?.titles[0]).toBe('東方妖々夢 体験版')
   })
 })
