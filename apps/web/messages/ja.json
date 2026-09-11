@@ -337,5 +337,13 @@
   "translate_desc_label": "紹介",
   "translate_locked": "この欄には既に訳があります。書き換えられるのは投稿者と管理者だけです。",
   "translate_submit": "訳を保存",
-  "translate_saved": "訳を保存しました"
+  "translate_saved": "訳を保存しました",
+  "auth_forgot_link": "パスワードをお忘れですか？",
+  "auth_forgot_title": "パスワードの再設定",
+  "auth_forgot_lead": "メールアドレスを入力すると、確認コードをお送りします。",
+  "auth_forgot_sent": "このメールアドレスが登録済みであれば、確認コードを送信しました。",
+  "auth_forgot_new_password": "新しいパスワード",
+  "auth_forgot_submit": "再設定する",
+  "auth_forgot_done": "パスワードを再設定しました。新しいパスワードでログインしてください。",
+  "auth_forgot_failed": "コードが正しくないか、有効期限が切れています。"
 }

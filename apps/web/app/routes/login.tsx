@@ -72,6 +72,13 @@ export default function Login({ loaderData }: Route.ComponentProps) {
               <Label htmlFor="password">{m.auth_password()}</Label>
               <Input id="password" name="password" type="password" required />
             </div>
+            <Link
+              to={localizeHref('/forgot')}
+              viewTransition
+              className="text-right text-xs text-muted-foreground hover:text-foreground"
+            >
+              {m.auth_forgot_link()}
+            </Link>
             {error && (
               <p className="text-sm text-destructive">
                 {m.auth_error_generic()}

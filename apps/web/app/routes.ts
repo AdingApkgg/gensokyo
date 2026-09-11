@@ -22,6 +22,7 @@ export default [
     route('login', 'routes/login.tsx'),
     route('register', 'routes/register.tsx'),
     route('verify', 'routes/verify.tsx'),
+    route('forgot', 'routes/forgot.tsx'),
     route('kourindou', 'routes/kourindou/list.tsx'),
     route('kourindou/upload', 'routes/kourindou/upload.tsx'),
     route('kourindou/:slug', 'routes/kourindou/detail.tsx'),

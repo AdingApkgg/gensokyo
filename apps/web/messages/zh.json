@@ -337,5 +337,13 @@
   "translate_desc_label": "简介",
   "translate_locked": "这一栏已有译名，只有投稿者与管理员能改写。",
   "translate_submit": "保存译名",
-  "translate_saved": "译名已保存"
+  "translate_saved": "译名已保存",
+  "auth_forgot_link": "忘记密码？",
+  "auth_forgot_title": "重置密码",
+  "auth_forgot_lead": "填入你的邮箱，我们会发一个验证码过去。",
+  "auth_forgot_sent": "如果这个邮箱注册过，验证码已经发出了。",
+  "auth_forgot_new_password": "新密码",
+  "auth_forgot_submit": "重置密码",
+  "auth_forgot_done": "密码已重置，请用新密码登录。",
+  "auth_forgot_failed": "验证码不对或已过期。"
 }

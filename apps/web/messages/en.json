@@ -337,5 +337,13 @@
   "translate_desc_label": "Description",
   "translate_locked": "This language already has a translation. Only the uploader and staff can change it.",
   "translate_submit": "Save translation",
-  "translate_saved": "Translation saved"
+  "translate_saved": "Translation saved",
+  "auth_forgot_link": "Forgot your password?",
+  "auth_forgot_title": "Reset your password",
+  "auth_forgot_lead": "Enter your email and we'll send you a code.",
+  "auth_forgot_sent": "If that address has an account, the code is on its way.",
+  "auth_forgot_new_password": "New password",
+  "auth_forgot_submit": "Reset password",
+  "auth_forgot_done": "Your password is reset. Sign in with it now.",
+  "auth_forgot_failed": "That code is wrong or expired."
 }
