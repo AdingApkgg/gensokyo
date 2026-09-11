@@ -20,11 +20,24 @@ const { resource, topic } = schema
  */
 
 /**
- * 单类型上限。站点目前 110 条资源 / 117 条主题，而 sitemap 协议的上限是
- * 50,000 条——这个数不是为了省，是为了让「有一天真的爆了」表现成**清单被
- * 截断**（可发现、可分片修），而不是一次超时或一份 50MB 的响应。
+ * 单类型上限，取 **sitemap 协议自身的 50,000 条**。
+ *
+ * 这个数不能按手头开发库的行数拍：初版取 5,000 是照开发库的 110 条定的，
+ * 上线当天就把生产的 6,696 条资源截掉了 1,696 条——而截断没有任何症状，
+ * 正好把这层 SEO 要解决的问题重新制造了一遍。50,000 是「再往上这份文件
+ * 无论如何都不再是一份合法 sitemap」的那个点，越过它要做的是 sitemap
+ * index 分片，而不是再调大一次常量。
  */
-const MAX = 5_000
+const MAX = 50_000
+
+/** 触顶不能无声。它是这个端点唯一一种「返回 200 但结果是错的」的失败 */
+const warnIfCapped = (kind: string, n: number) => {
+  if (n >= MAX) {
+    console.warn(
+      `[sitemap] ${kind} 触到 ${MAX} 条上限，清单已被截断——该上 sitemap index 分片了`,
+    )
+  }
+}
 
 export const sitemap = new Hono<AppEnv>().get('/', async (c) => {
   const [resources, topics] = await Promise.all([
@@ -48,5 +61,7 @@ export const sitemap = new Hono<AppEnv>().get('/', async (c) => {
       .limit(MAX),
   ])
 
+  warnIfCapped('resources', resources.length)
+  warnIfCapped('topics', topics.length)
   return c.json({ resources, topics })
 })
