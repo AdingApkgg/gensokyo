@@ -3,7 +3,14 @@ import { db, schema } from '@gensokyo/db'
 import { cleanupTracked, trackResource, trackUser } from '@gensokyo/db/testing'
 import { eq } from 'drizzle-orm'
 import { app } from './app'
-import { ensureIndex, flushSyncs, meiliFetch, SEARCH_INDEX } from './search'
+import {
+  ensureIndex,
+  flushSyncs,
+  meiliFetch,
+  SEARCH_COLUMNS,
+  SEARCH_INDEX,
+  toDoc,
+} from './search'
 
 type Session = { cookie: string; userId: string }
 
@@ -583,5 +590,132 @@ describe('搜索索引同步', () => {
     expect(res.status).toBe(200)
     await flushSyncs()
     expect((await indexedDoc(id))?.titles[0]).toBe('東方妖々夢 体験版')
+  })
+})
+
+describe('搜索查询', () => {
+  /** 建一条带唯一标记的已发布资源，返回 id 与标记 */
+  async function published(s: Session, overrides = {}) {
+    const token = crypto.randomUUID().slice(0, 8)
+    const { resource } = await createResource(s, {
+      titleOriginal: `東方紅魔郷 ${token}`,
+      ...overrides,
+    })
+    const id = resource?.id as string
+    await app.request(`/api/kourindou/resources/${id}/submit`, {
+      method: 'POST',
+      headers: { cookie: s.cookie },
+    })
+    await flushSyncs()
+    return { id, token }
+  }
+
+  const search = async (qs: string) => {
+    const res = await app.request(`/api/kourindou/resources?${qs}`)
+    const body = (await res.json()) as {
+      items: { id: string }[]
+      total: number
+    }
+    return {
+      status: res.status,
+      engine: res.headers.get('x-search-engine'),
+      body,
+    }
+  }
+
+  let veteran: Session
+  beforeAll(async () => {
+    veteran = await signUp('搜索作者')
+    await makeTrusted(veteran)
+  })
+
+  test('发布后能搜到，且是 Meili 服务的', async () => {
+    const { id, token } = await published(veteran)
+    const r = await search(`q=${token}`)
+    expect(r.status).toBe(200)
+    expect(r.engine).toBe('meili')
+    expect(r.body.items.map((i) => i.id)).toContain(id)
+  })
+
+  test('简体查询命中繁体/日文标题（Meili 原生简繁跨匹配）', async () => {
+    const { id } = await published(veteran)
+    const r = await search(
+      `q=${encodeURIComponent('东方红魔乡')}&uploaderId=${veteran.userId}&pageSize=100`,
+    )
+    expect(r.engine).toBe('meili')
+    expect(r.body.items.map((i) => i.id)).toContain(id)
+  })
+
+  test('下架后搜不到', async () => {
+    const { id, token } = await published(veteran)
+    await app.request(
+      `/api/kourindou/resources/${id}/status`,
+      json(veteran, { to: 'delisted', reason: '自查后发现社团禁止转载' }),
+    )
+    await flushSyncs()
+    const r = await search(`q=${token}`)
+    expect(r.engine).toBe('meili')
+    expect(r.body.items.map((i) => i.id)).not.toContain(id)
+  })
+
+  test('索引残留已下架资源的文档时，Postgres 白名单挡住它', async () => {
+    const { id, token } = await published(veteran)
+    await app.request(
+      `/api/kourindou/resources/${id}/status`,
+      json(veteran, { to: 'delisted', reason: '社团要求下架' }),
+    )
+    await flushSyncs()
+    // 模拟同步失败：把已下架的行硬塞回索引
+    const [row] = await db
+      .select(SEARCH_COLUMNS)
+      .from(schema.resource)
+      .where(eq(schema.resource.id, id))
+      .limit(1)
+    if (!row) throw new Error('row missing')
+    await meiliFetch(`/indexes/${SEARCH_INDEX}/documents`, {
+      method: 'POST',
+      body: JSON.stringify([toDoc(row, [])]),
+    })
+    await flushSyncs()
+
+    const r = await search(`q=${token}`)
+    expect(r.engine).toBe('meili')
+    expect(r.body.items.map((i) => i.id)).not.toContain(id)
+  })
+
+  test('筛选透传到 Meili：同一标记只命中 music', async () => {
+    const token = crypto.randomUUID().slice(0, 8)
+    const game = await published(veteran, {
+      titleOriginal: `東方 ${token}`,
+      kind: 'game',
+    })
+    const music = await published(veteran, {
+      titleOriginal: `東方 ${token}`,
+      kind: 'music',
+    })
+    const r = await search(`q=${token}&kind=music`)
+    expect(r.engine).toBe('meili')
+    const ids = r.body.items.map((i) => i.id)
+    expect(ids).toContain(music.id)
+    expect(ids).not.toContain(game.id)
+  })
+
+  test('Meili 不可用时降级 ILIKE，搜索不停机', async () => {
+    const { id, token } = await published(veteran)
+    const saved = process.env.MEILI_HOST
+    process.env.MEILI_HOST = 'http://127.0.0.1:1'
+    try {
+      const r = await search(`q=${token}`)
+      expect(r.status).toBe(200)
+      expect(r.engine).toBe('pg')
+      expect(r.body.items.map((i) => i.id)).toContain(id)
+    } finally {
+      process.env.MEILI_HOST = saved
+    }
+  })
+
+  test('无 q 的普通列表不带 x-search-engine 头', async () => {
+    const res = await app.request('/api/kourindou/resources')
+    expect(res.headers.get('x-search-engine')).toBeNull()
   })
 })
