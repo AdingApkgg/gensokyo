@@ -30,6 +30,9 @@ export function trackResource<T extends { id: string }>(r: T): T {
   return r
 }
 
+/** 已登记但尚未清理的资源 id 快照。给上层在 cleanupTracked 之外再做一次收尾（如删搜索索引里的文档）*/
+export const trackedResourceIds = (): string[] => [...resources]
+
 /**
  * 只用于直接建的**版块**主题。资源主题不用记：它随 resource 级联删。
  */

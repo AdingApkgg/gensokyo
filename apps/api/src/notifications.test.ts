@@ -1,14 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { db, schema } from '@gensokyo/db'
-import {
-  cleanupTracked,
-  trackResource,
-  trackTopic,
-  trackUser,
-} from '@gensokyo/db/testing'
 import { and, eq } from 'drizzle-orm'
 import { app } from './app'
 import { notify } from './notify'
+import { cleanupTracked, trackResource, trackTopic, trackUser } from './testing'
 
 type Session = { cookie: string; userId: string; handle: string }
 
