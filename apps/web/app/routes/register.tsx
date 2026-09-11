@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
+import { GoogleButton } from '~/components/google-button'
 import { Alert, AlertDescription } from '~/components/ui/alert'
 import { Button } from '~/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
@@ -27,10 +28,14 @@ export async function loader({ request }: Route.LoaderArgs) {
     const res = await apiFor(request).api.config.$get()
     const body = (await res.json()) as {
       config?: { registrationOpen?: unknown }
+      googleEnabled?: boolean
     }
-    return { registrationOpen: body.config?.registrationOpen !== false }
+    return {
+      registrationOpen: body.config?.registrationOpen !== false,
+      googleEnabled: body.googleEnabled === true,
+    }
   } catch {
-    return { registrationOpen: true }
+    return { registrationOpen: true, googleEnabled: false }
   }
 }
 
@@ -94,45 +99,48 @@ export default function Register({ loaderData }: Route.ComponentProps) {
               </Link>
             </div>
           ) : (
-            <form onSubmit={onSubmit} className="grid gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="name">{m.auth_name()}</Label>
-                <Input id="name" name="name" required maxLength={32} />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="email">{m.auth_email()}</Label>
-                <Input id="email" name="email" type="email" required />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="password">{m.auth_password()}</Label>
-                <Input
-                  id="password"
-                  name="password"
-                  type="password"
-                  required
-                  minLength={8}
-                />
-              </div>
-              {error === 'generic' && (
-                <p className="text-sm text-destructive">
-                  {m.auth_error_generic()}
-                </p>
-              )}
-              <Button type="submit" disabled={pending}>
-                {m.auth_register()}
-              </Button>
-              <Link
-                to={
-                  next
-                    ? `${localizeHref('/login')}?next=${encodeURIComponent(next)}`
-                    : localizeHref('/login')
-                }
-                viewTransition
-                className="text-center text-sm text-muted-foreground hover:text-foreground"
-              >
-                {m.auth_have_account()}
-              </Link>
-            </form>
+            <>
+              <form onSubmit={onSubmit} className="grid gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="name">{m.auth_name()}</Label>
+                  <Input id="name" name="name" required maxLength={32} />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="email">{m.auth_email()}</Label>
+                  <Input id="email" name="email" type="email" required />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="password">{m.auth_password()}</Label>
+                  <Input
+                    id="password"
+                    name="password"
+                    type="password"
+                    required
+                    minLength={8}
+                  />
+                </div>
+                {error === 'generic' && (
+                  <p className="text-sm text-destructive">
+                    {m.auth_error_generic()}
+                  </p>
+                )}
+                <Button type="submit" disabled={pending}>
+                  {m.auth_register()}
+                </Button>
+                <Link
+                  to={
+                    next
+                      ? `${localizeHref('/login')}?next=${encodeURIComponent(next)}`
+                      : localizeHref('/login')
+                  }
+                  viewTransition
+                  className="text-center text-sm text-muted-foreground hover:text-foreground"
+                >
+                  {m.auth_have_account()}
+                </Link>
+              </form>
+              {loaderData.googleEnabled && <GoogleButton next={next} />}
+            </>
           )}
         </CardContent>
       </Card>

@@ -1,19 +1,36 @@
 import { useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
+import { GoogleButton } from '~/components/google-button'
 import { Button } from '~/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card'
 import { Input } from '~/components/ui/input'
 import { Label } from '~/components/ui/label'
+import { apiFor } from '~/lib/api'
 import { authClient } from '~/lib/auth-client'
 import { safeNext } from '~/lib/links'
 import { m } from '~/paraglide/messages'
 import { localizeHref } from '~/paraglide/runtime'
+import type { Route } from './+types/login'
 
 export function meta() {
   return [{ title: `${m.auth_login()} · ${m.site_name()}` }]
 }
 
-export default function Login() {
+/**
+ * 只为了知道 Google 配没配。读不到时按「没配」处理——宁可少显示一个按钮，
+ * 也别显示一个点下去必然失败的按钮。
+ */
+export async function loader({ request }: Route.LoaderArgs) {
+  try {
+    const res = await apiFor(request).api.config.$get()
+    const body = (await res.json()) as { googleEnabled?: boolean }
+    return { googleEnabled: body.googleEnabled === true }
+  } catch {
+    return { googleEnabled: false }
+  }
+}
+
+export default function Login({ loaderData }: Route.ComponentProps) {
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const [error, setError] = useState(false)
@@ -71,6 +88,7 @@ export default function Login() {
               {m.auth_no_account()}
             </Link>
           </form>
+          {loaderData.googleEnabled && <GoogleButton next={next} />}
         </CardContent>
       </Card>
     </main>

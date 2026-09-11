@@ -326,6 +326,8 @@
   "dash_announce_done": "已处理：{title}",
   "dash_announce_failed": "处理失败：{reason}",
   "auth_registration_closed": "注册暂未开放。已有账号可直接登录。",
+  "auth_continue_google": "用 Google 继续",
+  "auth_or": "或",
   "kourindou_upload_cta": "投稿",
   "translate_heading": "补充译名",
   "translate_hint": "空着的语言任何登录用户都能补。改写已有译名只有投稿者与管理员可以。",

@@ -326,6 +326,8 @@
   "dash_announce_done": "Handled: {title}",
   "dash_announce_failed": "Failed: {reason}",
   "auth_registration_closed": "Registration is closed for now. If you already have an account, sign in.",
+  "auth_continue_google": "Continue with Google",
+  "auth_or": "or",
   "kourindou_upload_cta": "Upload",
   "translate_heading": "Add a translation",
   "translate_hint": "Any signed-in reader can fill a language that is still empty. Only the uploader and staff can rewrite an existing translation.",
