@@ -1,5 +1,7 @@
 import { mailConfig } from './config'
 import { sendViaConsole } from './transports/console'
+import { sendViaResend } from './transports/resend'
+import { sendViaSmtp } from './transports/smtp'
 
 export type Mail = {
   to: string
@@ -19,8 +21,9 @@ export async function sendMail(msg: Mail): Promise<void> {
   switch (cfg.transport) {
     case 'console':
       return sendViaConsole(cfg, msg)
-    default:
-      // resend / smtp 在 Task 2 接上
-      throw new Error(`未实现的邮件通道：${cfg.transport}`)
+    case 'resend':
+      return sendViaResend(cfg, msg)
+    case 'smtp':
+      return sendViaSmtp(cfg, msg)
   }
 }

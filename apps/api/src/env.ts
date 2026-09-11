@@ -32,3 +32,12 @@ export const env = z
     MEILI_MASTER_KEY: z.string().min(1),
   })
   .parse(process.env)
+
+import { parseMailEnv } from './mail/config'
+
+/**
+ * 邮件通道的校验单独跑：它是三分支联合，塞不进上面那个扁平 object。
+ * 放在这里意味着它与 DATABASE_URL 们享受同一条承诺——**缺配置在监听端口
+ * 之前就炸**。而 mail 模块自己仍然是惰性的，测试不受影响。
+ */
+export const mailEnv = parseMailEnv(process.env)
