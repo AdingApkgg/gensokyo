@@ -43,13 +43,20 @@ import type { OtpPurpose } from './mail/templates/otp'
  * 进 CI）是刻意的：它与 `verification` 表的行形状耦合，搬过去等于把一个概念
  * 劈成两个包，读的人要跳两处才看得全。这里接受「测试不进 CI」。
  *
- * 挂载点：`auth.ts` 的 `hooks.before`，不是 `sendVerificationOTP` 回调。
- * Step 1 探针已经证实 `hooks.before` 里 `ctx.body` 对
- * `/email-otp/send-verification-otp` 与 `/email-otp/request-password-reset`
- * 都是**已解析好的请求体**（打印出了完整的 `{ email, type }` /
- * `{ email }`），不需要 `ctx.request?.clone().json()` 兜底。选 `hooks.before`
- * 而不是回调，是因为回调被插件用 `runInBackgroundOrAwait` 调用，那里抛错
- * 未必能传回客户端——限流会表现成「静默不发信」而不是明确的 429。
+ * 挂载点**分两处**，不是同一个（round 2 之后）：`email-verification` 挂
+ * `auth.ts` 的 `hooks.before`，命中限流直接 throw 429——Step 1 探针证实
+ * `hooks.before` 里 `ctx.body` 对 `/email-otp/send-verification-otp` 是
+ * **已解析好的请求体**，不需要 `ctx.request?.clone().json()` 兜底。
+ * `forget-password` **不能**走同一条路：`hooks.before` 里 throw 429 会让
+ * 「限流命中」与「邮箱未注册」变成两种外部可分辨的响应，等于把限流层
+ * 变成一个注册预言机（round 1 review 发现，详见 `auth.ts` 里两处注释与
+ * `task-12-report.md`）。所以它挂在 `emailOTP` 配置的 `sendVerificationOTP`
+ * 回调里，命中限流时静默 `return`（不发信、不抛错），统一回 200。
+ *
+ * 回调本身是被插件用 `runInBackgroundOrAwait` 调用的——那里即使抛错也
+ * 未必能传回客户端，这是 `email-verification` 不走回调、而是走
+ * `hooks.before` 抛真 429 的原因（它需要给 `/verify` 页的重发按钮传回
+ * 真实的失败反馈）。
  */
 
 /** 冷却窗：防连点与重复提交 */
@@ -119,5 +126,33 @@ export async function assertOtpRate(
   return decideOtpRate(
     await countOtpRows(purpose, email, OTP_COOLDOWN_SECONDS),
     await countOtpRows(purpose, email, 3600),
+  )
+}
+
+/**
+ * 与 `assertOtpRate` 判断逻辑相同，但专给**调用时这次的 verification 行
+ * 已经被 `resolveOTP` 插入**的场景用——better-auth 的 `sendVerificationOTP`
+ * 回调正是这样：`resolveOTP` 在端点内无条件跑在回调之前（我们没配
+ * `resendStrategy: 'reuse'`，所以每次调用都插一行新的，不管最终发不发
+ * 信），等回调拿到 `{ email, otp, type }` 时，这次请求自己的那一行早就
+ * 落库了。
+ *
+ * 如果这里直接调用 `assertOtpRate`，第一次请求也会把自己刚插入的那一行
+ * 数进去，`cooldownHits` 恒 ≥ 1，`decideOtpRate` 永远判「限流」——这个
+ * 坑是真摔过的：round 2 修注册预言机时，新写的「状态码序列一致」测试
+ * 通过了，但「两次请求只发一封信」断言却拿到 0 封（第一封也被吞了），
+ * 改用这个函数、把两个计数各减 1（减掉这次请求自己刚插的那一行）之后
+ * 才符合预期。
+ *
+ * 只在**明确知道本次请求已经插过一行**的调用点用这个；别的地方（包括
+ * `hooks.before` 那种插入还没发生的场景）继续用 `assertOtpRate`。
+ */
+export async function assertOtpRateExcludingCurrent(
+  purpose: OtpPurpose,
+  email: string,
+): Promise<OtpRateResult> {
+  return decideOtpRate(
+    (await countOtpRows(purpose, email, OTP_COOLDOWN_SECONDS)) - 1,
+    (await countOtpRows(purpose, email, 3600)) - 1,
   )
 }
