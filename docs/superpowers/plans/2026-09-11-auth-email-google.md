@@ -2649,17 +2649,20 @@ export const publicConfig = new Hono<AppEnv>().get('/', async (c) => {
 - [ ] **Step 7: 配置 Google Cloud Console 并手动验一次**
 
 1. 在 Google Cloud Console 建 OAuth 2.0 客户端（Web application）。
-2. 授权重定向 URI 填 `http://localhost:3001/api/auth/callback/google`（开发）与
+2. 授权重定向 URI 填 `http://localhost:3000/api/auth/callback/google`（开发）与
    `https://<生产域名>/api/auth/callback/google`（生产）。
 3. 把 `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` 写进 `.env`。
-4. `bun run dev`，浏览器打开
-   `http://localhost:3000/api/auth/sign-in/social?provider=google`（或等 Task 11 的按钮），
-   走完一次授权。
+4. `bun run dev`。`/api/auth/sign-in/social` 是 **POST** 端点（JSON body
+   `{"provider":"google"}`，响应体里的 `url` 才是要跳转的地址，不是 3xx 跳转），
+   不能直接在地址栏打开——等 Task 11 的按钮，或在 devtools 里手动
+   `fetch` 一次再 `location.href = url`，走完一次授权。
 
 Expected: 回到站点且已登录；`psql "$DATABASE_URL" -c $'select email, email_verified from "user" order by created_at desc limit 1'` 显示 `email_verified` 为 `t`。
 
-> ⚠️ **重定向 URI 用的是 api 的端口 3001，不是 web 的 3000**——`BETTER_AUTH_URL`
-> 指向 api。填错的表现是 Google 那边报 `redirect_uri_mismatch`。
+> ⚠️ **重定向 URI 用的是 web 的端口 3000，不是 api 的端口 3001**——`BETTER_AUTH_URL`
+> 指向的是浏览器实际打交道的公网/web 源；`apps/web/vite.config.ts` 把 `/api`
+> 代理到 3001，api 自己的端口不会被浏览器直接访问。填错的表现是 Google 那边
+> 报 `redirect_uri_mismatch`。
 
 - [ ] **Step 8: 手动验一次抢注仲裁**
 

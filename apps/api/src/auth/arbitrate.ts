@@ -29,6 +29,13 @@ import { and, eq } from 'drizzle-orm'
  * 装回来（better-auth 在没有 credential 行时会自动创建一行）；抢注者读不到
  * 那个邮箱，走不了这条路。
  *
+ * 两次 delete 必须包在同一个事务里：这个钩子对每个 account 行**只触发一次**，
+ * 若断线或死锁恰好夹在删密码与删会话之间，用户就会卡在「密码已删、会话还
+ * 在」——正是这个设计要杜绝的状态——而且没有重试能补救：重试 Google 登录
+ * 会命中已链接账号的 token 刷新分支（`link-account.mjs` 135–181 行），
+ * 不会再走 `createWithHooks`，本函数也就不会被第二次调用。宁可两个 delete
+ * 都不生效，也不要只生效一半。
+ *
  * ⚠️ **依赖 `accountLinking.requireLocalEmailVerified: false`**，而那个选项
  * 已标 deprecated、下个小版本会变成无条件。升级 better-auth 之后本函数不再
  * 被触发，行为退回「拒绝链接」——是**朝安全方向的退化**，不是开天窗，但
@@ -42,18 +49,20 @@ export async function takeoverIfUnverified(userId: string): Promise<boolean> {
     .limit(1)
   if (!row || row.emailVerified) return false
 
-  const removed = await db
-    .delete(schema.account)
-    .where(
-      and(
-        eq(schema.account.userId, userId),
-        eq(schema.account.providerId, 'credential'),
-      ),
-    )
-    .returning({ id: schema.account.id })
-  // 没有密码可删 = 不是抢注，别顺手吊销人家的会话
-  if (removed.length === 0) return false
+  return await db.transaction(async (tx) => {
+    const removed = await tx
+      .delete(schema.account)
+      .where(
+        and(
+          eq(schema.account.userId, userId),
+          eq(schema.account.providerId, 'credential'),
+        ),
+      )
+      .returning({ id: schema.account.id })
+    // 没有密码可删 = 不是抢注，别顺手吊销人家的会话
+    if (removed.length === 0) return false
 
-  await db.delete(schema.session).where(eq(schema.session.userId, userId))
-  return true
+    await tx.delete(schema.session).where(eq(schema.session.userId, userId))
+    return true
+  })
 }
