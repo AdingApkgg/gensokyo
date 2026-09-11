@@ -7,6 +7,14 @@
  */
 import { app } from './app'
 import './env'
+import { ensureIndex } from './search'
+
+/**
+ * 新部署的 Meili 从零起也要拿到带 filterable 设置的空索引，否则第一次带筛选
+ * 的搜索会因「属性不可过滤」报错而全部降级。失败只记日志：搜索有 ILIKE 兜底，
+ * 不该因为 Meili 没起来而让 api 起不来。
+ */
+void ensureIndex().catch((err) => console.error('[search] 索引初始化失败', err))
 
 export default {
   port: 3001,

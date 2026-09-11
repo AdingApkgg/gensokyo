@@ -27,5 +27,8 @@ export const env = z
      * 后者会拒绝执行——两种都不该等到运行时才发现。
      */
     S3_PUBLIC_BASE_URL: z.url(),
+    /** 搜索。缺了它 api 每次带 q 的请求都会降级到 ILIKE 并刷一条 error 日志 */
+    MEILI_HOST: z.url(),
+    MEILI_MASTER_KEY: z.string().min(1),
   })
   .parse(process.env)

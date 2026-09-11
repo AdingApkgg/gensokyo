@@ -4,54 +4,28 @@
  *   bun run reindex
  *
  * 这个脚本无论如何都要存在——换 Meili 版本、改索引 schema、灾后恢复都靠它。
- * 正因为它存在，M3 才不需要 search_outbox 表和 worker：索引写失败就等下一次
- * 全量重建，比"outbox 表 + 重试语义"简单，而且能自愈 outbox 处理不了的故障
- * （比如索引 schema 变了）。
+ * 正因为它存在，才不需要 search_outbox 表和 worker：写路径的同步失败就等
+ * 下一次全量重建，比"outbox 表 + 重试语义"简单，而且能自愈 outbox 处理不了
+ * 的故障（比如索引 schema 变了）。生产每夜 cron 跑一次。
  *
- * 用裸 fetch 而不是 meilisearch-js：一个脚本不值得引一个依赖。
+ * 文档映射与索引设置在 src/search.ts，这里不另存一份。
  */
 import { db, schema } from '@gensokyo/db'
 import { and, eq, isNull } from 'drizzle-orm'
+import {
+  awaitIndexing,
+  ensureIndex,
+  meiliFetch,
+  SEARCH_COLUMNS,
+  SEARCH_INDEX,
+  toDoc,
+} from '../src/search'
 
-const HOST = (process.env.MEILI_HOST ?? 'http://localhost:57700').replace(
-  /\/$/,
-  '',
-)
-const KEY = process.env.MEILI_MASTER_KEY ?? ''
-const INDEX = 'resources'
-
-const meili = async (path: string, init?: RequestInit) => {
-  const res = await fetch(`${HOST}${path}`, {
-    ...init,
-    headers: {
-      'content-type': 'application/json',
-      ...(KEY ? { authorization: `Bearer ${KEY}` } : {}),
-      ...init?.headers,
-    },
-  })
-  if (!res.ok) {
-    throw new Error(`meili ${path} → ${res.status} ${await res.text()}`)
-  }
-  return res.json()
-}
+const BATCH = 1_000
 
 async function main() {
   const rows = await db
-    .select({
-      id: schema.resource.id,
-      slug: schema.resource.slug,
-      titleOriginal: schema.resource.titleOriginal,
-      title: schema.resource.title,
-      description: schema.resource.description,
-      kind: schema.resource.kind,
-      license: schema.resource.license,
-      circleNameRaw: schema.resource.circleNameRaw,
-      coverUrl: schema.resource.coverUrl,
-      downloadCount: schema.resource.downloadCount,
-      ratingSum: schema.resource.ratingSum,
-      ratingCount: schema.resource.ratingCount,
-      createdAt: schema.resource.createdAt,
-    })
+    .select(SEARCH_COLUMNS)
     .from(schema.resource)
     .where(
       and(
@@ -66,48 +40,28 @@ async function main() {
       tagId: schema.resourceTag.tagId,
     })
     .from(schema.resourceTag)
-
   const tagsOf = new Map<string, string[]>()
   for (const t of tags) {
     tagsOf.set(t.resourceId, [...(tagsOf.get(t.resourceId) ?? []), t.tagId])
   }
 
-  const docs = rows.map((r) => ({
-    ...r,
-    // 三语标题摊平成可检索的字符串数组：Meili 不便直接搜 jsonb 的值
-    titles: [r.titleOriginal, ...Object.values(r.title ?? {})].filter(Boolean),
-    descriptions: Object.values(r.description ?? {}).filter(Boolean),
-    tagIds: tagsOf.get(r.id) ?? [],
-    rating: r.ratingCount ? r.ratingSum / r.ratingCount : 0,
-    createdAt: new Date(r.createdAt).getTime(),
-  }))
+  const docs = rows.map((r) => toDoc(r, tagsOf.get(r.id) ?? []))
 
-  await meili(`/indexes/${INDEX}`, {
-    method: 'PUT',
-    body: JSON.stringify({ primaryKey: 'id' }),
-  }).catch(() => {
-    // 已存在时 PUT 会失败，无所谓
-  })
-
-  await meili(`/indexes/${INDEX}/settings`, {
-    method: 'PATCH',
-    body: JSON.stringify({
-      searchableAttributes: ['titles', 'circleNameRaw', 'descriptions', 'slug'],
-      filterableAttributes: ['kind', 'license', 'tagIds'],
-      sortableAttributes: ['createdAt', 'downloadCount', 'rating'],
-    }),
-  })
-
+  await ensureIndex()
   // 全量重建：先清空，避免已下架的资源留在索引里
-  await meili(`/indexes/${INDEX}/documents`, { method: 'DELETE' })
-  if (docs.length) {
-    await meili(`/indexes/${INDEX}/documents`, {
+  await meiliFetch(`/indexes/${SEARCH_INDEX}/documents`, { method: 'DELETE' })
+  for (let i = 0; i < docs.length; i += BATCH) {
+    await meiliFetch(`/indexes/${SEARCH_INDEX}/documents`, {
       method: 'POST',
-      body: JSON.stringify(docs),
+      timeoutMs: 30_000,
+      body: JSON.stringify(docs.slice(i, i + BATCH)),
     })
   }
+  await awaitIndexing(60_000)
 
-  console.log(`reindexed ${docs.length} published resources into "${INDEX}"`)
+  console.log(
+    `reindexed ${docs.length} published resources into "${SEARCH_INDEX}"`,
+  )
 }
 
 await main()
