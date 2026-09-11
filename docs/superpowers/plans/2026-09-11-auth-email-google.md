@@ -3842,11 +3842,15 @@ Expected: 全绿（这两个不进 CI，只能本地跑）
   GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
 ```
 
-> ⚠️ 漏一个的表现与 `SITE_URL` 那次一样：**不报错，只是行为不对**——
-> `MAIL_TRANSPORT` 没传进容器时会默认成 `console`，于是生产上所有验证码
-> 都打进了容器日志、一封信都没发出去，而用户只看到「卡在验证页」。
+> ⚠️ 与 `SITE_URL` 那次**不一样**：邮件这组漏一个，**api 容器起不来**。
+> Compose 把宿主未设置的变量替换成**空串**，而 `parseMailEnv` 的
+> `?? 'console'` 与 `.default()` 只认 `undefined`，`MAIL_TRANSPORT=''`
+> 过不了 discriminatedUnion——所以它是启动崩溃，不是「悄悄回落成 console、
+> 验证码全进日志」。`MAIL_TRANSPORT=smtp` 时 `SMTP_SECURE` 同样要显式给值。
+> （Google 那两个才是「不报错、静默降级」：按钮不出现而已。）
 >
-> 上线后**必须实际注册一个账号收一封信**才算验完。
+> 上线后**必须实际注册一个账号收一封信**才算验完——那一步验的是送达
+> （域名验证 / SPF / 额度 / 垃圾箱），不是配置有没有填。
 
 - [ ] **Step 5: 更新 CLAUDE.md**
 
@@ -3937,7 +3941,15 @@ spec §8.1 列了一个**单列的可选任务**：把 better-auth 的限流接�
 按 `prod-deploy-procedure` 的顺序（rsync → build → **单独 migrate** → up -d），另加：
 
 1. **先配齐环境变量再 migrate**：`MAIL_TRANSPORT` / `MAIL_FROM` / 对应通道的凭据 /
-   `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`。漏了不报错，只是行为不对。
+   `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`。两组的漏配表现**相反**，别记混：
+   - **邮件那组漏了，api 容器直接起不来**（启动即抛 ZodError，healthcheck 红）。
+     机制是 Compose 把宿主未设置的变量替换成**空串**，而 `parseMailEnv` 的
+     `?? 'console'` 与 `.default()` 只认 `undefined`——`MAIL_TRANSPORT=''`
+     过不了 discriminatedUnion。所以**不存在**「悄悄回落成 console、验证码全进
+     日志」这种形态：容器起不来就是在喊「邮件没配」。`MAIL_TRANSPORT=smtp`
+     时 `SMTP_SECURE` 同样要显式给 `true`/`false`，留空即崩。
+   - **Google 那两个漏了不报错**：登录按钮整体不出现（`googleEnabled: false`），
+     静默降级。
 2. **⚠️ 必须由人完成，代理未验证——在 Google Cloud Console 建 OAuth 2.0 客户端
    （Web application），登记授权重定向 URI。** 这一步要求在用户自己的 Google
    Cloud 账号里创建凭据并完成人工授权，是对用户账号的外部写操作，代理不代劳。
@@ -3963,8 +3975,10 @@ spec §8.1 列了一个**单列的可选任务**：把 better-auth 的限流接�
    与抢注场景本身。
 4. **migrate 跑完确认老账号都刷成了已验证**：
    `select email_verified, count(*) from "user" group by 1` 应只有一行 `t`。
-5. **上线后实际注册一个账号、收一封真信**。这一步不能用日志代替——
-   `MAIL_TRANSPORT` 没传进容器时会默认成 `console`，表现是「所有验证码都进了
-   容器日志，一封信都没发出去」，而这在日志里看起来一切正常。
+5. **上线后实际注册一个账号、收一封真信**。这一步防的**不是**「漏配
+   `MAIL_TRANSPORT`」——那个会让容器直接起不来（见第 1 条），根本走不到这里。
+   它防的是配置对了、进程也起来了，但信仍然没到人手上：域名没验证 / SPF
+   DKIM 没配 / 发信额度用尽 / 被对方服务商静默丢弃或丢进垃圾箱。这些在
+   容器日志里全都是「发送成功」，只有真的去收一次信才看得见。
 6. **特别留意国内邮箱**：拿一个 QQ 邮箱和一个 163 邮箱各注册一次。收不到就是
    spec §8.3 第 3 条那个风险成真了，改 `MAIL_TRANSPORT=smtp` 换国内服务商。

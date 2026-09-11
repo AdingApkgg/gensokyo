@@ -22,10 +22,18 @@ x-app-env: &app-env
   S3_BUCKET: ${S3_BUCKET}
   # 对外读取的基地址：经 Caddy 的 /img 反代，不直接暴露 MinIO
   S3_PUBLIC_BASE_URL: ${PUBLIC_URL}/img/${S3_BUCKET}
-  # 认证（M6）：邮件发信与 Google 登录。漏传不报错，只是行为不对——
-  # MAIL_TRANSPORT 没传进容器时会默认成 console，生产上所有验证码都会打进
-  # 容器日志、一封信都发不出去；GOOGLE_CLIENT_ID/SECRET 缺一个则 Google 登录
-  # 按钮整体不出现（googleEnabled: false），不是报错，是静默降级。
+  # 认证（M6）：邮件发信与 Google 登录。
+  #
+  # ⚠️ 邮件那几个变量**必须存在且非空**，漏填的表现是 api 容器**起不来**
+  # （启动即抛 ZodError、healthcheck 一直红、滚动更新停在这里），不是
+  # 「行为不对但跑得下去」。机制：Compose 把宿主未设置的变量替换成**空串**，
+  # 而 parseMailEnv 的 `?? 'console'` 与 `.default()` 只认 undefined——
+  # `MAIL_TRANSPORT=''` 过不了 discriminatedUnion。所以「没传就默认成
+  # console、验证码悄悄进日志」这种事不会发生；看到容器起不来先查这几个。
+  # 同理 MAIL_TRANSPORT=smtp 时 SMTP_SECURE 也要显式给 true/false，留空即崩。
+  #
+  # Google 那两个相反：缺一个则登录按钮整体不出现（googleEnabled: false），
+  # 不报错，是静默降级。
   MAIL_TRANSPORT: ${MAIL_TRANSPORT}
   MAIL_FROM: ${MAIL_FROM}
   RESEND_API_KEY: ${RESEND_API_KEY}

@@ -8,6 +8,24 @@ import { z } from 'zod'
  * 传递引用，而测试导入的正是 app；顶层读 env 会让整个 api 测试套件因为缺一个
  * 生产变量而起不来，且症状表现成「测试挂了」，没人会想到是邮件模块。
  * 真正的「启动即炸」由 `env.ts`（只被 index.ts import）调 parseMailEnv 达成。
+ *
+ * ⚠️ **空串不等于「没配」，它会让进程起不来——这是刻意保留的行为。**
+ * `?? 'console'` 与 `.default()` 都只对 `undefined` 生效，而 Docker Compose
+ * 把**未设置**的变量替换成**空串**（`MAIL_TRANSPORT: ${MAIL_TRANSPORT}` 在
+ * 宿主没导出该变量时传进容器的是 `MAIL_TRANSPORT=''`）。于是：
+ *
+ * - `parseMailEnv({})` → console（本地 shell 里真的没这个变量，dev 与测试）
+ * - `parseMailEnv({ MAIL_TRANSPORT: '' })` → **抛错**（compose 漏填）
+ *
+ * 后者正是我们要的：生产上漏配邮件通道，容器**起不来**（healthcheck 红、
+ * 滚动更新停住），而不是静默退回 console 把所有验证码打进日志、看起来一切
+ * 正常。`deploy/.env.example` 与 `deploy/compose.yml` 的注释按「必须存在且
+ * 非空」写，就是这条。
+ *
+ * 同一条规则对 `SMTP_SECURE` 一视同仁：它的 `.default('false')` 只在调用方
+ * **整个键都不给**时兜底（本地 / 测试），compose 下漏填拿到的是空串、照样
+ * 抛错。**不给它开空串豁免**——开了就得给 `MAIL_TRANSPORT` 也开，那等于把
+ * 上面那个「起不来」换回「静默 console」。
  */
 const bool = z
   .enum(['true', 'false'])

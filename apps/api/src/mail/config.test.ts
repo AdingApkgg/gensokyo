@@ -59,4 +59,36 @@ describe('parseMailEnv', () => {
     // 静默回落会让生产上一个拼错的值表现成「邮件发不出去但没有报错」
     expect(() => parseMailEnv({ MAIL_TRANSPORT: 'sendgrid' })).toThrow()
   })
+
+  /**
+   * 空串不是「没配」。Docker Compose 把**未设置**的变量替换成空串，所以
+   * `deploy/compose.yml` 里漏填 `MAIL_TRANSPORT` 时容器拿到的是
+   * `MAIL_TRANSPORT=''`——而 `?? 'console'` 与 `.default()` 都只认
+   * `undefined`。
+   *
+   * 这两条钉的是**运维文档里承诺的失败形态**：漏配 = 进程起不来，不是
+   * 「静默回落到 console、验证码全进日志」。deploy/.env.example 与
+   * deploy/compose.yml 的注释按这个写；谁要是给空串开豁免让它回落成
+   * console，这两条会先红。
+   */
+  test("MAIL_TRANSPORT='' 抛错 —— compose 漏填是启动崩溃，不是静默 console", () => {
+    expect(() => parseMailEnv({ MAIL_TRANSPORT: '' })).toThrow()
+  })
+
+  test("smtp 的 SMTP_SECURE='' 同样抛错 —— 空串豁免不能只给一半变量开", () => {
+    const base = {
+      MAIL_TRANSPORT: 'smtp',
+      MAIL_FROM: 'a <a@b.c>',
+      SMTP_HOST: 'h',
+      SMTP_PORT: '465',
+      SMTP_USER: 'u',
+      SMTP_PASS: 'p',
+    }
+    // 整个键不给 → default 生效（本地与测试走这条）
+    const cfg = parseMailEnv(base)
+    if (cfg.transport !== 'smtp') throw new Error('分支判断错了')
+    expect(cfg.secure).toBe(false)
+    // 键在、值是空串 → 抛错（compose 走这条）
+    expect(() => parseMailEnv({ ...base, SMTP_SECURE: '' })).toThrow()
+  })
 })
