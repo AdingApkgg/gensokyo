@@ -135,6 +135,11 @@ services:
       NODE_ENV: production
       # SSR 侧走内网直连；浏览器侧是同源相对路径，由 Caddy 分流
       API_URL: http://api:3001
+      # canonical / hreflang / sitemap / robots 里的绝对网址。
+      # **不给就是错的**：回落值取自 request.url，而 Caddy 到 web 这一跳是
+      # 明文 HTTP，于是整站的规范网址会向搜索引擎声明成 http://——站点是
+      # https，两者不一致等于让 canonical 指向一个会 301 的地址。
+      SITE_URL: ${PUBLIC_URL}
 
   caddy:
     image: caddy:2-alpine
