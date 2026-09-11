@@ -10,6 +10,7 @@ import { moderation } from './modules/moderation'
 import { notifications } from './modules/notifications'
 import { reports } from './modules/reports'
 import { profiles, shrine } from './modules/shrine'
+import { sitemap } from './modules/sitemap'
 import { uploads } from './modules/uploads'
 
 export const app = new Hono<AppEnv>()
@@ -25,6 +26,7 @@ export const app = new Hono<AppEnv>()
   .route('/shrine', shrine)
   .route('/shrine/users', profiles)
   .route('/reports', reports)
+  .route('/sitemap', sitemap)
   .route('/notifications', notifications)
   .route('/moderation', moderation)
   .route('/admin', admin)

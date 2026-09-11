@@ -8,13 +8,17 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
+  useLocation,
+  useRouteLoaderData,
 } from 'react-router'
 import type { Route } from './+types/root'
 import { SiteFooter } from './components/site-footer'
 import { SiteHeader } from './components/site-header'
 import { SPRING_WASHI } from './lib/motion'
+import { siteOrigin } from './lib/origin'
+import { alternates, canonicalPath } from './lib/seo'
 import { m } from './paraglide/messages'
-import { getLocale } from './paraglide/runtime'
+import { getLocale, locales } from './paraglide/runtime'
 import { paraglideMiddleware } from './paraglide/server'
 import './app.css'
 
@@ -26,6 +30,13 @@ const htmlLang: Record<string, string> = {
   zh: 'zh-CN',
   ja: 'ja',
   en: 'en',
+}
+
+/** Open Graph 要的是下划线形式的 `语言_地区`，与 BCP 47 的写法不通用 */
+const ogLocale: Record<string, string> = {
+  zh: 'zh_CN',
+  ja: 'ja_JP',
+  en: 'en_US',
 }
 
 export const links: Route.LinksFunction = () => [
@@ -49,6 +60,55 @@ const themeInit = `(() => {
   } catch {}
 })()`
 
+/**
+ * canonical + 三语 hreflang + og:locale。
+ *
+ * **挂在 Layout 而不是各路由的 `meta`**：RR 的叶子 `meta` 会整体替换 root 的，
+ * 而全站几乎每个路由都导出了自己的 `meta`——写在 root 的 meta 里等于不生效。
+ * 逐个路由补则是十五处、且漏掉的表现是「什么都不发生」（与 `viewTransition`
+ * 同一类无法门禁的漂移）。放这里只有一处。
+ *
+ * 拿不到 origin（root loader 失败、文档级错误页）时整块不渲染：一个指向
+ * `undefined` 的 canonical 比没有 canonical 糟得多。
+ */
+function SeoLinks() {
+  const data = useRouteLoaderData<typeof loader>('root')
+  const location = useLocation()
+  const origin = data?.origin
+  if (!origin) return null
+
+  const locale = getLocale()
+  const { canonical, alternates: alts } = alternates(
+    canonicalPath(location.pathname, location.search),
+    origin,
+    locale,
+  )
+  return (
+    <>
+      <link rel="canonical" href={canonical} />
+      {alts.map((a) => (
+        <link
+          key={a.hrefLang}
+          rel="alternate"
+          hrefLang={a.hrefLang}
+          href={a.href}
+        />
+      ))}
+      <meta property="og:locale" content={ogLocale[locale] ?? 'zh_CN'} />
+      {locales
+        .filter((l) => l !== locale)
+        .map((l) => (
+          <meta
+            key={l}
+            property="og:locale:alternate"
+            content={ogLocale[l] ?? l}
+          />
+        ))}
+      <meta property="og:url" content={canonical} />
+    </>
+  )
+}
+
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang={htmlLang[getLocale()] ?? 'zh-CN'} suppressHydrationWarning>
@@ -58,6 +118,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <Meta />
+        <SeoLinks />
         <Links />
       </head>
       <body>
@@ -70,15 +131,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export async function loader({ request }: Route.LoaderArgs) {
+  /**
+   * origin 从这里出去，因为 canonical/hreflang 要在**客户端导航之后**也
+   * 正确——Layout 在浏览器里也会重新渲染，那时没有 request 可读。
+   */
+  const origin = siteOrigin(request)
   const client = createClient(process.env.API_URL ?? 'http://localhost:3001', {
     headers: { cookie: request.headers.get('cookie') ?? '' },
   })
   try {
     const res = await client.api.me.$get()
     const { user } = await res.json()
-    return { user }
+    return { user, origin }
   } catch {
-    return { user: null }
+    return { user: null, origin }
   }
 }
 

@@ -7,6 +7,15 @@ import {
 } from '@react-router/dev/routes'
 
 export default [
+  /**
+   * 两份给爬虫的东西，**故意在 `:locale?` 之外**：全站只有一份 sitemap，
+   * 三语互链写在每个条目内部；robots 同理。放进前缀里会得到
+   * `/ja/sitemap.xml` 这种既存在又没人引用的网址。
+   *
+   * 静态段在 RR 的排序里压过动态段，所以它们不会被 `:locale?` 抢走。
+   */
+  route('sitemap.xml', 'routes/sitemap[.]xml.ts'),
+  route('robots.txt', 'routes/robots[.]txt.ts'),
   ...prefix(':locale?', [
     index('routes/home.tsx'),
     route('ui', 'routes/ui.tsx'),
