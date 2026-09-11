@@ -18,7 +18,7 @@ import {
 import { and, count, desc, eq, isNull, sql } from 'drizzle-orm'
 import { type Context, Hono } from 'hono'
 import { entityIdParam, fail, validate } from '../errors'
-import { isOwnerOrStaff, isSelf, requireAuth } from '../middleware/require'
+import { isOwnerOrStaff, isSelf, requireVerified } from '../middleware/require'
 import type { Actor, AppEnv } from '../middleware/session'
 import { notify, resolveMentions } from '../notify'
 import { assertRate, type Bucket, canPostLinks, hasExternalLink } from '../rate'
@@ -216,7 +216,7 @@ export const shrine = new Hono<AppEnv>()
   // ------------------------------------------------------------ 发主题
   .post(
     '/topics',
-    requireAuth,
+    requireVerified,
     validate('json', createTopicSchema),
     async (c) => {
       const actor = c.get('actor')
@@ -290,7 +290,7 @@ export const shrine = new Hono<AppEnv>()
   })
 
   // ------------------------------------------------------------ 删主题
-  .delete('/topics/:id', requireAuth, entityIdParam, async (c) => {
+  .delete('/topics/:id', requireVerified, entityIdParam, async (c) => {
     const actor = c.get('actor')
     if (!actor) return fail(c, 'unauthorized', 401)
 
@@ -395,7 +395,7 @@ export const shrine = new Hono<AppEnv>()
 
   .post(
     '/topics/:id/posts',
-    requireAuth,
+    requireVerified,
     entityIdParam,
     validate('json', createPostSchema),
     async (c) => {
@@ -437,7 +437,7 @@ export const shrine = new Hono<AppEnv>()
    */
   .patch(
     '/posts/:id',
-    requireAuth,
+    requireVerified,
     entityIdParam,
     validate('json', updatePostSchema),
     async (c) => {
@@ -470,7 +470,7 @@ export const shrine = new Hono<AppEnv>()
    * 删楼。作者删自己的不需要理由；**staff 删他人的必须给**——
    * 理由同时是三样东西：审计的可过滤类别、申诉的依据、以及要不要记违规的判据。
    */
-  .delete('/posts/:id', requireAuth, entityIdParam, async (c) => {
+  .delete('/posts/:id', requireVerified, entityIdParam, async (c) => {
     const actor = c.get('actor')
     if (!actor) return fail(c, 'unauthorized', 401)
 

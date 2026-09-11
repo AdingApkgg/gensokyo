@@ -3,7 +3,12 @@ import { db, schema } from '@gensokyo/db'
 import { eq } from 'drizzle-orm'
 import { app } from './app'
 import { invalidateConfig } from './site-config'
-import { cleanupTracked, trackResource, trackUser } from './testing'
+import {
+  cleanupTracked,
+  markVerified,
+  trackResource,
+  trackUser,
+} from './testing'
 
 type Session = { cookie: string; id: string }
 
@@ -15,10 +20,9 @@ async function signUp(name: string): Promise<Session> {
     body: JSON.stringify({ email, password: 'hakurei-reimu-514', name }),
   })
   const body = (await res.json()) as { user?: { id: string } }
-  return {
-    cookie: res.headers.get('set-cookie') ?? '',
-    id: trackUser(body.user?.id),
-  }
+  const id = trackUser(body.user?.id)
+  await markVerified(id)
+  return { cookie: res.headers.get('set-cookie') ?? '', id }
 }
 
 afterAll(cleanupTracked)

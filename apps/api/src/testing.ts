@@ -1,10 +1,26 @@
+import { db, schema } from '@gensokyo/db'
 import {
   cleanupTracked as cleanupDb,
   trackedResourceIds,
 } from '@gensokyo/db/testing'
+import { eq } from 'drizzle-orm'
 import { meiliFetch, SEARCH_INDEX } from './search'
 
 export { trackResource, trackTopic, trackUser } from '@gensokyo/db/testing'
+
+/**
+ * 把测试账号标成已验证。**测试里凡是要写东西的账号都要调它一次**——
+ * 「验证后才能写」上线之后，不调的话每个写操作都会拿到 403。
+ *
+ * 直接写库而不是走验证码流程：那条流程有自己的测试（email-otp.test.ts），
+ * 在别的测试里重跑一遍只是让每个文件都多几十行噪音。
+ */
+export async function markVerified(userId: string): Promise<void> {
+  await db
+    .update(schema.user)
+    .set({ emailVerified: true })
+    .where(eq(schema.user.id, userId))
+}
 
 /**
  * api 测试的收尾入口。**测试文件一律从这里拿 `cleanupTracked`**，别直接引

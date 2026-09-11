@@ -210,6 +210,7 @@
   "admin_reset_strikes_hint": "违规记录只增不减，且会在门槛判断之前就否掉发外链与即发即审——把门槛调成 0 也救不回来。误判只能从这里撤销，会写进审计。",
   "admin_strikes_reset_done": "违规已清零。",
   "err_duplicate_slug": "已经存在了：这个名字或这条记录已被占用。",
+  "err_email_unverified": "请先验证邮箱后再发布内容。",
   "err_invalid_state_transition": "现在的状态不允许这个操作。",
   "shrine_latest": "最新",
   "shrine_boards": "版块",

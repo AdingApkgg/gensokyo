@@ -3,7 +3,13 @@ import { db, schema } from '@gensokyo/db'
 import { and, eq } from 'drizzle-orm'
 import { app } from './app'
 import { notify } from './notify'
-import { cleanupTracked, trackResource, trackTopic, trackUser } from './testing'
+import {
+  cleanupTracked,
+  markVerified,
+  trackResource,
+  trackTopic,
+  trackUser,
+} from './testing'
 
 type Session = { cookie: string; userId: string; handle: string }
 
@@ -19,7 +25,9 @@ async function signUp(name: string): Promise<Session> {
   // 惰性建档 + 拿派生 handle
   const me = await app.request('/api/me', { headers: { cookie } })
   const { user } = (await me.json()) as { user: { handle: string } }
-  return { cookie, userId: trackUser(body.user?.id), handle: user.handle }
+  const userId = trackUser(body.user?.id)
+  await markVerified(userId)
+  return { cookie, userId, handle: user.handle }
 }
 
 afterAll(cleanupTracked)

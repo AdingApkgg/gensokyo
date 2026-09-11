@@ -13,7 +13,7 @@ import {
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { entityIdParam, fail, validate } from '../../errors'
-import { isOwnerOrStaff, requireAuth } from '../../middleware/require'
+import { isOwnerOrStaff, requireVerified } from '../../middleware/require'
 import { type AppEnv, canAutoPublish } from '../../middleware/session'
 import { notify } from '../../notify'
 import { assertRate } from '../../rate'
@@ -243,7 +243,7 @@ export const kourindou = new Hono<AppEnv>()
   // ---------------------------------------------------------------- 写
   .post(
     '/resources',
-    requireAuth,
+    requireVerified,
     validate('json', createResourceSchema),
     async (c) => {
       const actor = c.get('actor')
@@ -303,7 +303,7 @@ export const kourindou = new Hono<AppEnv>()
   .patch(
     '/resources/:id',
     entityIdParam,
-    requireAuth,
+    requireVerified,
     validate('json', updateResourceSchema),
     async (c) => {
       const actor = c.get('actor')
@@ -387,9 +387,9 @@ export const kourindou = new Hono<AppEnv>()
    */
   .patch(
     '/resources/:id/translations',
-    // requireAuth 在 entityIdParam 之前：否则未登录用户能用 400/404 的差异
+    // requireVerified 在 entityIdParam 之前：否则未登录用户能用 400/404 的差异
     // 探测资源存在性
-    requireAuth,
+    requireVerified,
     entityIdParam,
     validate('json', updateTranslationSchema),
     async (c) => {
@@ -487,7 +487,7 @@ export const kourindou = new Hono<AppEnv>()
   )
 
   /** 投稿：信任达标直接发布，否则进审核队列 */
-  .post('/resources/:id/submit', entityIdParam, requireAuth, async (c) => {
+  .post('/resources/:id/submit', entityIdParam, requireVerified, async (c) => {
     const actor = c.get('actor')
     if (!actor) return fail(c, 'unauthorized', 401)
     const id = c.req.param('id')
@@ -526,7 +526,7 @@ export const kourindou = new Hono<AppEnv>()
   .post(
     '/resources/:id/status',
     entityIdParam,
-    requireAuth,
+    requireVerified,
     validate('json', changeStatusSchema),
     async (c) => {
       const actor = c.get('actor')
@@ -602,7 +602,7 @@ export const kourindou = new Hono<AppEnv>()
   .patch(
     '/resources/:id/license',
     entityIdParam,
-    requireAuth,
+    requireVerified,
     validate('json', changeLicenseSchema),
     async (c) => {
       const actor = c.get('actor')
@@ -644,7 +644,7 @@ export const kourindou = new Hono<AppEnv>()
   .post(
     '/resources/:id/versions',
     entityIdParam,
-    requireAuth,
+    requireVerified,
     validate('json', createVersionSchema),
     async (c) => {
       const actor = c.get('actor')

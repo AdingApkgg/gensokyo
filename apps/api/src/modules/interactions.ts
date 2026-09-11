@@ -3,7 +3,7 @@ import { rateSchema } from '@gensokyo/shared'
 import { and, eq, isNull, sql } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { fail, validate } from '../errors'
-import { requireAuth } from '../middleware/require'
+import { requireVerified } from '../middleware/require'
 import type { AppEnv } from '../middleware/session'
 import { syncResource } from '../search'
 
@@ -28,7 +28,7 @@ async function publishedResource(slug: string) {
 export const interactions = new Hono<AppEnv>()
   .put(
     '/resources/:slug/rating',
-    requireAuth,
+    requireVerified,
     validate('json', rateSchema),
     async (c) => {
       const actor = c.get('actor')
@@ -75,7 +75,7 @@ export const interactions = new Hono<AppEnv>()
     },
   )
 
-  .put('/resources/:slug/favorite', requireAuth, async (c) => {
+  .put('/resources/:slug/favorite', requireVerified, async (c) => {
     const actor = c.get('actor')
     if (!actor) return fail(c, 'unauthorized', 401)
     const row = await publishedResource(c.req.param('slug'))
@@ -88,7 +88,7 @@ export const interactions = new Hono<AppEnv>()
     return c.json({ favorited: true })
   })
 
-  .delete('/resources/:slug/favorite', requireAuth, async (c) => {
+  .delete('/resources/:slug/favorite', requireVerified, async (c) => {
     const actor = c.get('actor')
     if (!actor) return fail(c, 'unauthorized', 401)
     const row = await publishedResource(c.req.param('slug'))

@@ -1,6 +1,6 @@
 import { type Context, Hono } from 'hono'
 import { fail } from '../errors'
-import { requireAuth } from '../middleware/require'
+import { requireVerified } from '../middleware/require'
 import type { Actor, AppEnv } from '../middleware/session'
 import { isImagePurpose, MAX_IMAGE_BYTES, putImage } from '../storage'
 
@@ -96,7 +96,7 @@ const MULTIPART_SLACK = 64 * 1024
  */
 export const uploads = new Hono<AppEnv>().post(
   '/image',
-  requireAuth,
+  requireVerified,
   async (c) => {
     const actor = c.get('actor')
     if (!actor) return fail(c, 'unauthorized', 401)

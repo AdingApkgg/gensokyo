@@ -24,6 +24,8 @@ export const ERROR_CODES = [
   'mention_limit_exceeded',
   /** 新账号发站外链接被拒。冷启动期阈值设 0，出事再收紧 */
   'link_not_allowed',
+  /** 邮箱未验证。**403 不是 401**——登录是有效的，只是还不能写 */
+  'email_unverified',
   'internal',
 ] as const
 

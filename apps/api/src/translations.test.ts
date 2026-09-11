@@ -2,7 +2,12 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { db, schema } from '@gensokyo/db'
 import { and, eq } from 'drizzle-orm'
 import { app } from './app'
-import { cleanupTracked, trackResource, trackUser } from './testing'
+import {
+  cleanupTracked,
+  markVerified,
+  trackResource,
+  trackUser,
+} from './testing'
 
 /**
  * 补译名端点。它是全站唯一一个**非作者也能写内容**的写端点，所以这组测试
@@ -22,10 +27,9 @@ async function signUp(name: string): Promise<Session> {
     body: JSON.stringify({ email, password: 'hakurei-reimu-514', name }),
   })
   const body = (await res.json()) as { user?: { id: string } }
-  return {
-    cookie: res.headers.get('set-cookie') ?? '',
-    userId: trackUser(body.user?.id),
-  }
+  const userId = trackUser(body.user?.id)
+  await markVerified(userId)
+  return { cookie: res.headers.get('set-cookie') ?? '', userId }
 }
 
 afterAll(cleanupTracked)

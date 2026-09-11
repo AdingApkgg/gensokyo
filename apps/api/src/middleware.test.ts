@@ -5,7 +5,7 @@ import { Hono } from 'hono'
 import { app } from './app'
 import { requireAuth, requireRole } from './middleware/require'
 import { type AppEnv, sessionMiddleware } from './middleware/session'
-import { cleanupTracked, trackUser } from './testing'
+import { cleanupTracked, markVerified, trackUser } from './testing'
 
 /**
  * 中间件挂在一个本地 app 上测，不往生产 app 里塞测试路由。
@@ -26,7 +26,9 @@ async function signUp(name: string) {
   })
   const cookie = res.headers.get('set-cookie') ?? ''
   const body = (await res.json()) as { user?: { id: string } }
-  return { cookie, userId: trackUser(body.user?.id) }
+  const userId = trackUser(body.user?.id)
+  await markVerified(userId)
+  return { cookie, userId }
 }
 
 afterAll(cleanupTracked)

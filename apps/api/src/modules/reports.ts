@@ -3,7 +3,7 @@ import { createReportSchema } from '@gensokyo/shared'
 import { and, eq, isNull } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { fail, isUniqueViolation, validate } from '../errors'
-import { requireAuth } from '../middleware/require'
+import { requireVerified } from '../middleware/require'
 import type { AppEnv } from '../middleware/session'
 import { assertRate } from '../rate'
 import { loadVisibleTopic } from './content/visibility'
@@ -25,7 +25,7 @@ const uuidLike = (s: string) =>
  */
 export const reports = new Hono<AppEnv>().post(
   '/',
-  requireAuth,
+  requireVerified,
   validate('json', createReportSchema),
   async (c) => {
     const actor = c.get('actor')

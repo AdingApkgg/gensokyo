@@ -8,7 +8,7 @@ import {
   UPLOAD_LIMIT_IP,
 } from './modules/uploads'
 import { deleteObject } from './storage'
-import { cleanupTracked, trackUser } from './testing'
+import { cleanupTracked, markVerified, trackUser } from './testing'
 
 /** 最小的合法 PNG（1x1 透明像素） */
 const PNG = Uint8Array.from([
@@ -32,10 +32,9 @@ async function signUp() {
     }),
   })
   const body = (await res.json()) as { user?: { id: string } }
-  return {
-    cookie: res.headers.get('set-cookie') ?? '',
-    userId: trackUser(body.user?.id),
-  }
+  const userId = trackUser(body.user?.id)
+  await markVerified(userId)
+  return { cookie: res.headers.get('set-cookie') ?? '', userId }
 }
 
 /**

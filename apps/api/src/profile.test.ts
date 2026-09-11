@@ -2,7 +2,13 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { db, schema } from '@gensokyo/db'
 import { eq } from 'drizzle-orm'
 import { app } from './app'
-import { cleanupTracked, trackResource, trackTopic, trackUser } from './testing'
+import {
+  cleanupTracked,
+  markVerified,
+  trackResource,
+  trackTopic,
+  trackUser,
+} from './testing'
 
 type Session = { cookie: string; userId: string; handle: string }
 
@@ -17,7 +23,9 @@ async function signUp(name: string): Promise<Session> {
   const cookie = res.headers.get('set-cookie') ?? ''
   const me = await app.request('/api/me', { headers: { cookie } })
   const { user } = (await me.json()) as { user: { handle: string } }
-  return { cookie, userId: trackUser(body.user?.id), handle: user.handle }
+  const userId = trackUser(body.user?.id)
+  await markVerified(userId)
+  return { cookie, userId, handle: user.handle }
 }
 
 afterAll(cleanupTracked)

@@ -2,7 +2,12 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { db, schema } from '@gensokyo/db'
 import { eq } from 'drizzle-orm'
 import { app } from './app'
-import { cleanupTracked, trackResource, trackUser } from './testing'
+import {
+  cleanupTracked,
+  markVerified,
+  trackResource,
+  trackUser,
+} from './testing'
 
 /**
  * sitemap 的数据源。它是**匿名可读**的，所以这组用例钉住的只有一条：
@@ -20,10 +25,9 @@ async function signUp(name: string): Promise<Session> {
     body: JSON.stringify({ email, password: 'hakurei-reimu-514', name }),
   })
   const body = (await res.json()) as { user?: { id: string } }
-  return {
-    cookie: res.headers.get('set-cookie') ?? '',
-    userId: trackUser(body.user?.id),
-  }
+  const userId = trackUser(body.user?.id)
+  await markVerified(userId)
+  return { cookie: res.headers.get('set-cookie') ?? '', userId }
 }
 
 afterAll(cleanupTracked)
