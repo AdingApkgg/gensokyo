@@ -7,7 +7,6 @@ import {
 } from '@gensokyo/shared'
 import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
-import { APIError, createAuthMiddleware } from 'better-auth/api'
 import { emailOTP } from 'better-auth/plugins/email-otp'
 import { sendMail } from './mail'
 import { renderOtpMail } from './mail/templates/otp'
@@ -58,7 +57,7 @@ export const auth = betterAuth({
       },
     }),
   ],
-  hooks: {
+  user: {
     /**
      * 注册开关的**唯一**强制点。
      *
@@ -66,19 +65,18 @@ export const auth = betterAuth({
      * 把它关了三个月，任何人照样能注册。开关必须挡在 better-auth 的入口
      * 而不是注册页：页面只是提示，`POST /api/auth/sign-up/email` 才是门。
      *
-     * 只拦 `/sign-up/email`：登录、登出、改密码不受影响；将来加社交登录
-     * 时它的注册路径（`/callback/*` 里的首次登录）要另判，这里不会自动覆盖。
+     * 这个钩子「在 create-user / link-account / OAuth 的 sign-in 之前触发，
+     * 横跨每一种认证方式」。此前按路径拦 `/sign-up/email`，每加一种登录
+     * 方式就要记得再判一次——而「记得」不是一种机制。挪到这里之后，
+     * Google 登录（首次登录即建号）自动受这道闸约束，不必再判一次。
      *
      * 配置走进程内 60s 缓存，后台写入时 `invalidateConfig()` 立即失效；
      * 多进程部署最多陈旧一个 TTL，对「关注册」这件事可以接受。
      */
-    before: createAuthMiddleware(async (ctx) => {
-      if (ctx.path !== '/sign-up/email') return
+    validateUserInfo: async ({ source }) => {
+      if (source.action !== 'create-user') return
       if (await registrationOpen()) return
-      throw new APIError('FORBIDDEN', {
-        code: 'REGISTRATION_CLOSED',
-        message: 'registration is closed',
-      })
-    }),
+      return { error: 'REGISTRATION_CLOSED' }
+    },
   },
 })
