@@ -8,12 +8,21 @@ import {
 import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { emailOTP } from 'better-auth/plugins/email-otp'
+import { takeoverIfUnverified } from './auth/arbitrate'
 import { sendMail } from './mail'
 import { renderOtpMail } from './mail/templates/otp'
 import { registrationOpen } from './site-config'
 
 /** 10 分钟。默认的 5 分钟对「切到手机收信再切回来」偏紧 */
 export const OTP_EXPIRES_SECONDS = 600
+
+/**
+ * Google 凭据是**可选**的：本地开发不该因为没申请 OAuth 应用就跑不起来。
+ * 两个都配齐才注册这个 provider，前端靠 `GET /api/config` 的 googleEnabled
+ * 决定要不要显示按钮。
+ */
+export const googleConfigured = () =>
+  Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, { provider: 'pg' }),
@@ -57,6 +66,41 @@ export const auth = betterAuth({
       },
     }),
   ],
+
+  socialProviders: googleConfigured()
+    ? {
+        google: {
+          clientId: process.env.GOOGLE_CLIENT_ID as string,
+          clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+        },
+      }
+    : {},
+
+  account: {
+    accountLinking: {
+      enabled: true,
+      trustedProviders: ['google'],
+      /**
+       * ⚠️ 把仲裁权接管过来。默认 true 时 better-auth 会直接**拒绝**链接到
+       * 未验证的本地账号——那是安全的，但用户会卡死且没有出路。
+       * 我们改成放行链接，再由 databaseHooks 里的 takeoverIfUnverified
+       * 把抢注者的密码与会话清掉。见 auth/arbitrate.ts 的长注释。
+       */
+      requireLocalEmailVerified: false,
+    },
+  },
+
+  databaseHooks: {
+    account: {
+      create: {
+        after: async (account) => {
+          if (account.providerId !== 'google') return
+          await takeoverIfUnverified(account.userId)
+        },
+      },
+    },
+  },
+
   user: {
     /**
      * 注册开关的**唯一**强制点。

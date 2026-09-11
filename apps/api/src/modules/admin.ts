@@ -9,6 +9,7 @@ import {
 } from '@gensokyo/shared'
 import { and, desc, eq, ilike, inArray, isNotNull, or } from 'drizzle-orm'
 import { Hono } from 'hono'
+import { googleConfigured } from '../auth'
 import { entityIdParam, fail, userIdParam, validate } from '../errors'
 import { requireRole } from '../middleware/require'
 import type { AppEnv } from '../middleware/session'
@@ -345,5 +346,11 @@ export const publicConfig = new Hono<AppEnv>().get('/', async (c) => {
     .where(inArray(siteConfig.key, [...PUBLIC_CONFIG_KEYS]))
   return c.json({
     config: Object.fromEntries(rows.map((r) => [r.key, r.value])),
+    /**
+     * **不放进 config 里**：那是 site_config 表的白名单键，由 admin 写；
+     * 这个是进程配置，admin 改不了。混在一起会让「后台能改的东西」这条
+     * 边界变糊。
+     */
+    googleEnabled: googleConfigured(),
   })
 })
