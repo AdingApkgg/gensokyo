@@ -1,4 +1,5 @@
 import { LOCALE_HEADER } from '@gensokyo/shared'
+import { emailOTPClient } from 'better-auth/client/plugins'
 import { createAuthClient } from 'better-auth/react'
 import { getLocale } from '~/paraglide/runtime'
 
@@ -16,4 +17,6 @@ export const authClient = createAuthClient({
      */
     headers: { [LOCALE_HEADER]: getLocale() },
   },
+  // authClient.emailOtp.verifyEmail() / sendVerificationOtp() / resetPassword() 的来源
+  plugins: [emailOTPClient()],
 })
